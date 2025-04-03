@@ -1,5 +1,6 @@
 /* styles.css */
-/* Basic Reset & Defaults */
+
+/* --- Basic Reset & Defaults --- */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -40,12 +41,13 @@ input:focus, select:focus, textarea:focus {
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
-/* General Button Styles */
+/* --- General Button Styles --- */
 .btn {
     padding: 8px 15px;
     border-radius: 4px;
     font-weight: 500;
     border: 1px solid transparent;
+    white-space: nowrap; /* Prevent wrapping inside buttons */
 }
 
 .btn-primary {
@@ -115,7 +117,7 @@ button:disabled {
     background-color: #fff;
 }
 
-/* Sidebar */
+/* --- Sidebar --- */
 .sidebar {
     width: 280px; /* Fixed width */
     flex-shrink: 0;
@@ -158,7 +160,8 @@ button:disabled {
     padding: 10px 20px;
     cursor: pointer;
     border-bottom: 1px solid #f1f5f9; /* Tailwind slate-100 */
-    transition: background-color 0.15s;
+    transition: background-color 0.15s, border-left-color 0.15s;
+    border-left: 3px solid transparent; /* Placeholder for selection border */
 }
 .flow-list-item:last-child {
     border-bottom: none;
@@ -212,25 +215,31 @@ button:disabled {
     color: #6b7280;
     font-style: italic;
 }
+.error { /* General error message styling */
+    padding: 15px 20px;
+    color: #dc2626; /* Tailwind red-600 */
+    font-weight: 500;
+}
 
-/* Workspace */
+/* --- Workspace --- */
 .workspace {
     flex: 1; /* Take remaining horizontal space */
     display: flex;
     flex-direction: column;
     overflow: hidden; /* Prevent workspace scrollbars */
     position: relative; /* For positioning variables panel and messages */
+    background-color: #fff; /* Workspace background */
 }
 
 .workspace-header {
     display: flex;
-    /* justify-content: space-between; */ /* Removed for better control */
     align-items: center;
+    flex-wrap: wrap; /* Allow items to wrap on smaller screens */
     padding: 15px 20px;
     border-bottom: 1px solid #e5e7eb;
     background: #fff;
     flex-shrink: 0;
-    gap: 20px; /* Add gap between elements */
+    gap: 10px 20px; /* Row gap, column gap */
 }
 
 .workspace-header h2 {
@@ -241,11 +250,12 @@ button:disabled {
     overflow: hidden;
     text-overflow: ellipsis;
     flex-grow: 1; /* Allow title to take available space */
+    min-width: 150px; /* Prevent title from becoming too small */
 }
 
 .workspace-view-controls {
-    /* Styles for the view toggle button container */
-    margin-left: auto; /* Push view toggle towards the right */
+    /* Container for the view toggle button */
+    margin-left: auto; /* Push view toggle towards the right by default */
 }
 
 .workspace-controls {
@@ -253,57 +263,37 @@ button:disabled {
     gap: 10px;
     margin-left: 10px; /* Space between view toggle and other controls */
 }
+/* Ensure workspace controls don't stack vertically unnecessarily */
+.workspace-view-controls, .workspace-controls {
+    flex-shrink: 0; /* Prevent controls from shrinking */
+}
 
-.workspace-controls .btn {
+.workspace-controls .btn { /* Specific styling for header control buttons */
     background-color: #f9fafb; /* Tailwind gray-50 */
     border-color: #d1d5db; /* Tailwind gray-300 */
     color: #374151; /* Tailwind gray-700 */
+    display: inline-flex; /* Align icon and text */
+    align-items: center;
+    gap: 4px;
 }
 .workspace-controls .btn:hover {
     background-color: #f3f4f6; /* Tailwind gray-100 */
     border-color: #9ca3af; /* Tailwind gray-400 */
 }
+.workspace-controls .btn .toggle-icon {
+    font-size: 0.8em; /* Smaller triangle */
+    line-height: 1;
+}
 
+/* Workspace Content Area */
 .workspace-content {
     flex: 1;
-    overflow: hidden; /* Container for builder should hide overflow */
-    position: relative; /* For positioning info overlay */
+    overflow: hidden; /* Container should hide overflow */
+    position: relative; /* For positioning info overlay and absolute elements within views */
     background-color: #f9fafb; /* Light background for the editing area */
-    display: flex; /* Use flex to manage child layout */
-    flex-direction: column; /* Stack info overlay and builder/visualizer */
+    display: flex;
+    flex-direction: column;
 }
-
-/* View Mode Styling */
-.view-mode {
-    display: none; /* Hide both views initially */
-    flex: 1; /* Allow active view to fill space */
-    overflow: hidden; /* Contain view's own scrolling */
-}
-.view-mode.active {
-    display: flex; /* Show the active view (use flex for internal layout) */
-     flex-direction: column; /* Default direction */
-}
-#flow-builder-mount {
-     /* Builder mount point already uses flex column */
-}
-#flow-visualizer-mount {
-    position: relative; /* Needed for absolute positioning of nodes/lines */
-    overflow: auto; /* Allow panning/scrolling if content exceeds view */
-    background-color: #e9ecef; /* Slightly different background for visualizer */
-    background-image: radial-gradient(#cbd5e1 1px, transparent 0); /* Subtle grid */
-    background-size: 20px 20px;
-    cursor: grab; /* Indicate panning possibility */
-}
-#flow-visualizer-mount:active {
-    cursor: grabbing;
-}
-.visualizer-canvas {
-    position: relative; /* Container for absolutely positioned nodes */
-    width: 2000px; /* Example large canvas size */
-    height: 1500px;
-    transform-origin: 0 0; /* For potential zooming */
-}
-
 
 .placeholder-message {
     flex: 1;
@@ -316,8 +306,59 @@ button:disabled {
     padding: 40px;
 }
 
+/* --- View Mode Styling --- */
+.view-mode {
+    display: none; /* Hide both views initially */
+    flex: 1; /* Allow active view to fill space */
+    overflow: hidden; /* Contain view's own scrolling */
+    height: 100%; /* Ensure view modes take full height */
+}
+.view-mode.active {
+    display: flex; /* Show the active view (use flex for internal layout) */
+    flex-direction: column; /* Default direction */
+}
 
-/* Runner Panel */
+/* List/Editor View Mount */
+#flow-builder-mount {
+     /* Builder component manages its internal layout */
+}
+
+/* Node-Graph View Mount */
+#flow-visualizer-mount {
+    position: relative; /* Needed for absolute positioning of canvas/SVG */
+    overflow: auto; /* Enable panning/scrolling */
+    background-color: #f8f9fa; /* Lighter gray background */
+    /* Subtle grid using background gradients */
+    background-image:
+        linear-gradient(to right, #e9ecef 1px, transparent 1px),
+        linear-gradient(to bottom, #e9ecef 1px, transparent 1px);
+    background-size: 25px 25px; /* Grid size */
+    cursor: grab; /* Indicate panning possibility */
+    height: 100%; /* Ensure it fills its container */
+    width: 100%;
+}
+#flow-visualizer-mount:active {
+    cursor: grabbing; /* Indicate panning active */
+}
+
+.visualizer-canvas {
+    position: relative; /* Container for absolutely positioned nodes */
+    /* Width/Height set dynamically by JS based on content */
+    transform-origin: 0 0; /* For potential future zooming */
+}
+.visualizer-canvas.nodes-dragging {
+    /* Optional: Style canvas differently during node drag */
+}
+/* Error message within visualizer mount */
+#flow-visualizer-mount .error-message {
+    padding: 20px;
+    color: #dc3545;
+    text-align: center;
+    font-weight: 500;
+}
+
+
+/* --- Runner Panel --- */
 .runner-panel {
     width: 350px; /* Fixed width */
     flex-shrink: 0;
@@ -330,7 +371,7 @@ button:disabled {
 
 .runner-header {
     padding: 15px 20px;
-    font-size: 1.3em;
+    /* font-size: 1.3em; */ /* Removed to rely on h2 */
     border-bottom: 1px solid #e5e7eb;
     flex-shrink: 0;
     display: flex;
@@ -339,7 +380,7 @@ button:disabled {
 }
 .runner-header h2 {
     margin: 0;
-    font-size: 1em; /* Match parent font size */
+    font-size: 1.2em; /* Slightly smaller than sidebar */
     color: #1f2937;
 }
 
@@ -369,7 +410,7 @@ button:disabled {
     flex: 1; /* Take remaining space */
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: hidden; /* Prevent container itself from scrolling */
 }
 .runner-results-container h3 {
     padding: 10px 20px;
@@ -377,11 +418,13 @@ button:disabled {
     border-bottom: 1px solid #e5e7eb;
     flex-shrink: 0;
     margin: 0;
+    background-color: #fff; /* Header background */
 }
 .runner-results-list {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: auto; /* Allow results list to scroll */
     padding: 10px 20px;
+    background-color: #f8fafc; /* Slightly different background */
 }
 
 .result-item {
@@ -410,19 +453,21 @@ button:disabled {
     font-size: 0.85em;
     font-weight: 500;
     white-space: nowrap;
+    text-transform: uppercase;
 }
 .result-status.success { background-color: #dcfce7; color: #166534; /* Tailwind green */ }
 .result-status.error { background-color: #fee2e2; color: #991b1b; /* Tailwind red */ }
 .result-status.running { background-color: #ffedd5; color: #9a3412; /* Tailwind orange */ animation: pulse-orange 1.5s infinite; }
 .result-status.skipped { background-color: #e5e7eb; color: #4b5563; /* Tailwind gray */ }
 .result-status.pending { background-color: #e0f2fe; color: #075985; /* Tailwind sky */}
+.result-status.stopped { background-color: #fff3cd; color: #664d03; /* Tailwind yellow */ }
+
 
 @keyframes pulse-orange {
   0% { background-color: #ffedd5; } /* orange-100 */
   50% { background-color: #fed7aa; } /* orange-200 */
   100% { background-color: #ffedd5; }
 }
-
 
 .result-details {
     font-size: 0.9em;
@@ -433,12 +478,13 @@ button:disabled {
 .result-details strong { font-weight: 500; color: #374151; }
 
 .result-body {
-    background-color: #f9fafb;
+    background-color: #fff; /* White background for code */
     border: 1px solid #f1f5f9;
     border-radius: 4px;
     padding: 10px;
     max-height: 200px;
     overflow: auto;
+    margin-top: 5px;
 }
 .result-body pre {
     white-space: pre-wrap;
@@ -446,6 +492,7 @@ button:disabled {
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.9em;
     color: #1f2937;
+    line-height: 1.4;
 }
 .result-error {
     color: #dc2626;
@@ -453,24 +500,20 @@ button:disabled {
     margin-top: 5px;
     white-space: pre-wrap; /* Allow error messages to wrap */
     word-wrap: break-word;
+    padding: 5px;
+    background-color: #fee2e2;
+    border-radius: 3px;
 }
 .no-results {
     color: #6b7280;
     font-style: italic;
     padding: 15px 0;
+    text-align: center;
 }
 
+/* --- Builder Component Styles --- */
 
-/* --- Styles Imported/Adapted from flowModal.css --- */
-
-/* Replicate modal structure for builder component layout */
-.flow-modal-body {
-    flex: 1;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
+/* Flow Info Overlay (Managed by Builder) */
 .flow-info-overlay {
     position: absolute; /* Relative to workspace-content */
     top: 0;
@@ -485,11 +528,14 @@ button:disabled {
     overflow-y: auto;
     box-sizing: border-box;
     display: none; /* Initially hidden, controlled by JS */
+    transition: max-height 0.3s ease-out; /* Add transition */
 }
 .flow-info-overlay.open {
     display: block;
+    max-height: 75%; /* Ensure height is constrained */
 }
 
+/* Form Elements */
 .form-group {
   margin-bottom: 15px;
 }
@@ -507,8 +553,23 @@ button:disabled {
   font-size: 0.9em;
   margin-top: 5px;
   margin-bottom: 0;
+  line-height: 1.3;
+}
+.json-validation-error {
+    color: #dc2626;
+    margin-top: 5px;
+    font-size: 0.9em;
+    display: none; /* Shown by JS */
+}
+.loop-var-validation-error {
+    color: #dc2626;
+    margin-top: 5px;
+    font-size: 0.9em;
+    display: none; /* Shown by JS */
 }
 
+
+/* Collapsibles (Used in Info Overlay) */
 .collapsible-header {
   display: flex;
   justify-content: space-between;
@@ -535,9 +596,9 @@ button:disabled {
   border: 1px solid transparent;
   border-top: none;
   border-radius: 0 0 4px 4px;
-  padding: 0 10px;
+  padding: 0 15px; /* Match toggle padding */
   box-sizing: border-box;
-  margin-top: -1px;
+  margin-top: -1px; /* Overlap border */
 }
 
 .collapsible-header.active {
@@ -546,28 +607,28 @@ button:disabled {
 .collapsible-header.active .toggle-icon {
     transform: rotate(180deg);
 }
-/* Corrected: Use direct sibling selector (+) or general sibling (~) */
 .collapsible-header.active + .collapsible-content {
   border-color: #ddd;
-  padding: 10px;
-  max-height: 300px; /* Adjust as needed */
+  padding: 15px;
+  max-height: 400px; /* Allow more height */
   overflow-y: auto;
   border-top: none;
 }
 
-/* Flow Builder Section Layout (within #flow-builder-mount) */
+/* Main Builder Layout (Steps List + Editor Panel) */
 .flow-builder-section {
-  flex: 1; /* Takes remaining vertical space in mount point */
+  flex: 1;
   display: flex;
-  overflow: hidden; /* Prevents section itself from scrolling */
+  overflow: hidden;
 }
 .flow-steps-panel {
   width: 40%;
-  min-width: 250px; /* Minimum width */
+  min-width: 250px;
+  max-width: 400px; /* Max width for steps list */
   border-right: 1px solid #e0e0e0;
   display: flex;
   flex-direction: column;
-  overflow: hidden; /* Contain scrolling */
+  overflow: hidden;
 }
 .flow-steps-panel h3 {
   margin: 0;
@@ -575,24 +636,38 @@ button:disabled {
   border-bottom: 1px solid #e0e0e0;
   font-size: 1.1rem;
   flex-shrink: 0;
+  background-color: #f8f9fa; /* Light header */
 }
 .flow-steps-container {
   flex: 1;
   overflow-y: auto;
-  padding: 15px 20px;
+  padding: 15px; /* Consistent padding */
+}
+.empty-flow-message {
+    padding: 20px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
 }
 .flow-steps-actions {
-  padding: 10px;
+  padding: 10px 15px;
   border-top: 1px solid #e0e0e0;
   text-align: center;
   flex-shrink: 0;
+  background-color: #f8f9fa; /* Light footer */
+}
+.flow-steps-actions .btn-add-step {
+    width: 100%;
 }
 
+/* Editor Panel */
 .step-editor-panel {
   width: 60%;
+  flex: 1; /* Take remaining space */
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background-color: #fff; /* White background for editor */
 }
 
 .step-editor-placeholder {
@@ -608,15 +683,15 @@ button:disabled {
 
 .step-editor-container {
   flex: 1;
-  display: none; /* Initially hidden */
+  display: none; /* Hidden until step selected */
   flex-direction: column;
-  overflow: hidden; /* Contain internal scrolling */
+  overflow: hidden; /* Contains editor scrolling */
 }
 .step-editor-container.visible {
-    display: flex;
+    display: flex; /* Show when step selected */
 }
 
-.step-editor {
+.step-editor { /* Container for content + actions */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -627,9 +702,29 @@ button:disabled {
   overflow-y: auto;
   padding: 15px 20px;
 }
+.editor-header {
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+.editor-header h3 {
+    margin: 0;
+    color: #333;
+    font-size: 1.2em;
+}
+.step-save-message {
+    display: none;
+    color: #198754;
+    background-color: #d1e7dd;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin: 10px 0;
+    font-weight: bold;
+    font-size: 0.95em;
+}
 .step-editor-actions {
   flex-shrink: 0;
-  padding: 10px 20px;
+  padding: 15px 20px;
   background: #f8f9fa;
   border-top: 1px solid #e0e0e0;
   display: flex;
@@ -637,11 +732,10 @@ button:disabled {
   gap: 10px;
 }
 
-
-/* Variables Panel (Positioned relative to workspace) */
+/* --- Variables Panel --- */
 .variables-panel {
   position: absolute;
-  bottom: 10px; /* Position above bottom edge */
+  bottom: 10px;
   left: 10px;
   right: 10px;
   background: white;
@@ -649,15 +743,17 @@ button:disabled {
   border-radius: 4px;
   box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
   display: none; /* Controlled by JS */
-  max-height: 250px;
+  max-height: 250px; /* Limit height */
   overflow-y: auto;
-  z-index: 100; /* Above workspace content */
+  z-index: 100;
+  transition: max-height 0.3s ease-out; /* Add transition */
 }
 .variables-panel.visible {
   display: block;
+  max-height: 250px;
 }
 .variables-container {
-  padding: 15px;
+  padding: 0; /* Padding handled by table/message */
 }
 .variables-table {
   width: 100%;
@@ -665,17 +761,18 @@ button:disabled {
 }
 .variables-table th,
 .variables-table td {
-  padding: 8px 10px;
+  padding: 8px 15px; /* Consistent padding */
   text-align: left;
   border-bottom: 1px solid #eee;
   font-size: 13px;
+  vertical-align: top;
 }
 .variables-table th {
   font-weight: 600;
   color: #333;
   background-color: #f9f9f9;
   position: sticky;
-  top: -1px;
+  top: -1px; /* Stick to top inside scrollable panel */
   z-index: 1;
 }
 .variables-table tr:last-child td {
@@ -685,20 +782,21 @@ button:disabled {
   font-family: 'Courier New', Courier, monospace;
   font-weight: 500;
   color: #0056b3;
+  word-break: break-all;
 }
 .var-origin { color: #555; }
-.var-path { font-family: 'Courier New', Courier, monospace; color: #777; }
+.var-path { font-family: 'Courier New', Courier, monospace; color: #777; word-break: break-all; }
 .no-variables-message { padding: 15px; text-align: center; color: #888; font-style: italic; }
 
 
-/* Flow Step Styling (List View) */
+/* --- Flow Step Styling (List View) --- */
 .flow-step {
   margin-bottom: 10px;
   border: 1px solid #e5e7eb;
   border-radius: 4px;
   background: #ffffff;
   transition: all 0.2s ease;
-  position: relative;
+  position: relative; /* For nested absolute positioning if needed */
 }
 .flow-step:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -709,6 +807,7 @@ button:disabled {
   box-shadow: 0 0 0 1px #3b82f6, 0 2px 8px rgba(59, 130, 246, 0.1);
   background: #f0f9ff;
 }
+/* Colored left border */
 .flow-step-request { border-left: 4px solid #4caf50; }
 .flow-step-condition { border-left: 4px solid #ff9800; }
 .flow-step-loop { border-left: 4px solid #9c27b0; }
@@ -719,7 +818,10 @@ button:disabled {
   align-items: center;
   cursor: pointer;
   user-select: none;
-  border-bottom: 1px solid #f1f3f5;
+  border-bottom: 1px solid #f1f3f5; /* Light separator */
+}
+.flow-step.selected .flow-step-header {
+    border-bottom-color: #cfefff; /* Match selection background */
 }
 .flow-step-drag-handle {
   cursor: grab;
@@ -727,6 +829,10 @@ button:disabled {
   margin-right: 8px;
   font-size: 18px;
   line-height: 1;
+  padding: 2px; /* Make handle easier to grab */
+}
+.flow-step-drag-handle:active {
+    cursor: grabbing;
 }
 .flow-step-icon {
   margin-right: 10px;
@@ -735,14 +841,28 @@ button:disabled {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 .flow-step-icon svg { width: 18px; height: 18px; }
 .flow-step-request .flow-step-icon svg { fill: #4caf50; }
 .flow-step-condition .flow-step-icon svg { fill: #ff9800; }
 .flow-step-loop .flow-step-icon svg { fill: #9c27b0; }
 
-.flow-step-title { flex: 1; font-weight: 500; color: #333; }
-.flow-step-actions { display: flex; gap: 5px; margin-left: auto; }
+.flow-step-title {
+    flex: 1;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.flow-step-actions {
+    display: flex;
+    gap: 5px;
+    margin-left: auto; /* Push actions to the right */
+    padding-left: 10px; /* Space between title and actions */
+    flex-shrink: 0;
+}
 .flow-step-actions button {
   background: transparent;
   border: none;
@@ -752,15 +872,28 @@ button:disabled {
   padding: 2px;
   transition: color 0.2s;
   line-height: 1;
+  display: flex; /* Align icons nicely */
+  align-items: center;
 }
 .flow-step-actions button:hover { color: #333; }
-.flow-step-content { padding: 10px 15px; font-size: 0.9em; color: #555; background-color: #fafbfc; }
+.flow-step-actions .btn-delete:hover { color: #dc2626; } /* Red for delete */
+.flow-step-content {
+    padding: 10px 15px;
+    font-size: 0.9em;
+    color: #555;
+    background-color: #fafbfc;
+    border-top: 1px solid #f1f3f5; /* Separator if header exists */
+}
+.flow-step-header + .flow-step-content {
+    border-top: none; /* No top border if header present */
+}
 
-/* Request Step Details */
-.request-info { display: flex; align-items: center; margin-bottom: 8px; }
+/* --- List View: Step Content Details --- */
+/* Request Step */
+.request-info { display: flex; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 5px 10px;}
 .request-method {
-    font-weight: 600; padding: 2px 6px; border-radius: 3px; margin-right: 8px;
-    color: #fff; font-size: 0.85em; text-transform: uppercase;
+    font-weight: 600; padding: 2px 6px; border-radius: 3px; margin-right: 5px; /* Reduced margin */
+    color: #fff; font-size: 0.85em; text-transform: uppercase; display: inline-block;
 }
 .request-method.GET { background-color: #4caf50; }
 .request-method.POST { background-color: #2196f3; }
@@ -769,58 +902,84 @@ button:disabled {
 .request-method.DELETE { background-color: #f44336; }
 .request-method.OPTIONS { background-color: #607d8b; }
 .request-method.HEAD { background-color: #9c27b0; }
-.request-url { font-family: 'Courier New', Courier, monospace; color: #333; word-break: break-all; }
-.request-details { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85em; color: #777; }
+.request-url {
+    font-family: 'Courier New', Courier, monospace;
+    color: #333;
+    word-break: break-all; /* Allow long URLs to wrap */
+    flex: 1; /* Allow URL to take space */
+    min-width: 100px;
+}
+.request-details { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.85em; color: #777; margin-top: 5px; }
 .request-extractions span, .request-headers-badge, .request-body-badge {
-    background-color: #e9ecef; padding: 2px 6px; border-radius: 3px;
+    background-color: #e9ecef; padding: 2px 6px; border-radius: 3px; display: inline-block;
 }
 .request-extractions .extraction-badge {
     font-family: 'Courier New', Courier, monospace; background-color: #d1e7dd;
     color: #0f5132; margin-left: 4px;
 }
 
-/* Condition Step Details */
-.condition-expression { display: flex; align-items: center; gap: 5px; margin-bottom: 10px; }
-.condition-if { font-weight: 600; color: #ff9800; }
+/* Condition Step */
+.condition-expression { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+.condition-if { font-weight: 600; color: #ff9800; margin-right: 5px; }
 .condition-code {
     font-family: 'Courier New', Courier, monospace; background-color: #fff3e0;
     padding: 3px 6px; border-radius: 3px; color: #e65100; word-break: break-word;
+    flex: 1; /* Allow code to take space */
+    min-width: 100px;
 }
 .condition-branches { margin-top: 10px; padding-left: 15px; border-left: 2px solid #e9ecef; }
 .branch { margin-bottom: 10px; }
 .branch-header { font-weight: 600; margin-bottom: 5px; font-size: 0.95em; }
 .then-branch .branch-header { color: #198754; }
 .else-branch .branch-header { color: #dc3545; }
-.branch-steps { margin-left: 15px; padding: 5px 0; border-left: 2px dashed #ddd; margin-top: 5px; min-height: 20px; }
-.empty-branch { color: #999; font-style: italic; padding: 5px 10px; font-size: 0.9em; }
-.branch .btn-add-step { margin-left: 15px; margin-top: 5px; font-size: 0.85em; padding: 3px 8px; }
+.branch-steps { margin-left: 15px; padding: 5px 0 5px 15px; border-left: 2px dashed #ddd; margin-top: 5px; min-height: 20px; }
+.empty-branch { color: #999; font-style: italic; padding: 5px 0; font-size: 0.9em; }
+.branch .btn-add-step {
+    margin-top: 5px;
+    font-size: 0.85em;
+    padding: 3px 8px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #0d6efd;
+}
+.branch .btn-add-step:hover {
+    background-color: #e9ecef;
+}
 
-/* Loop Step Details */
+/* Loop Step */
 .loop-config { margin-bottom: 10px; }
-.loop-source-row, .loop-variable-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
-.loop-label { font-weight: 600; color: #9c27b0; }
+.loop-source-row, .loop-variable-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; flex-wrap: wrap;}
+.loop-label { font-weight: 600; color: #9c27b0; margin-right: 5px;}
 .loop-source, .loop-variable {
     font-family: 'Courier New', Courier, monospace; background-color: #f3e5f5;
     padding: 3px 6px; border-radius: 3px; color: #6a1b9a; word-break: break-word;
 }
 .loop-body { margin-top: 10px; padding-left: 15px; border-left: 2px solid #e9ecef; }
 .loop-header { font-weight: 600; margin-bottom: 5px; font-size: 0.95em; color: #8e24aa; }
-.loop-steps { margin-left: 15px; padding: 5px 0; border-left: 2px dashed #ddd; margin-top: 5px; min-height: 20px; }
-.loop-body .btn-add-loop-step { margin-left: 15px; margin-top: 5px; font-size: 0.85em; padding: 3px 8px; }
+.loop-steps { margin-left: 15px; padding: 5px 0 5px 15px; border-left: 2px dashed #ddd; margin-top: 5px; min-height: 20px; }
+.loop-body .btn-add-loop-step {
+    margin-top: 5px;
+    font-size: 0.85em;
+    padding: 3px 8px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #0d6efd;
+}
+.loop-body .btn-add-loop-step:hover {
+     background-color: #e9ecef;
+}
 
-/* Step Editor General */
-.step-editor { font-size: 14px; }
-.editor-header { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-.editor-header h3 { margin: 0; color: #333; font-size: 1.2em; }
+/* --- Step Editor Styles --- */
 
 /* Editor Tabs */
 .form-tabs { margin-top: 20px; }
-.tab-buttons { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 15px; }
+.tab-buttons { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 15px; flex-wrap: wrap; /* Allow tabs to wrap */}
 .tab-button {
   padding: 10px 15px; cursor: pointer; border: none; background: #f1f3f5;
   border-radius: 4px 4px 0 0; margin-right: 5px; position: relative; bottom: -1px;
   border: 1px solid #e5e7eb; border-bottom-color: #ddd; color: #475569; font-weight: 500;
   transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+  margin-bottom: -1px; /* Overlap border */
 }
 .tab-button.active {
   background: #ffffff; border-color: #ddd; border-bottom-color: transparent; color: #0284c7;
@@ -828,18 +987,19 @@ button:disabled {
 .tab-content { display: none; padding-top: 5px; }
 .tab-content.active { display: block; }
 
-/* Editor Action Buttons */
+/* Editor Add/Remove Buttons */
 .btn-add-step, .btn-add-global-header, .btn-add-flow-var, .btn-add-header,
 .btn-add-extract, .btn-add-loop-step {
-  padding: 5px 10px; background: #ffffff; border: 1px solid #ced4da;
-  border-radius: 4px; color: #0d6efd; font-weight: 500;
+  /* Styles already defined - ensure consistency */
+   padding: 5px 10px; background: #ffffff; border: 1px solid #ced4da;
+   border-radius: 4px; color: #0d6efd; font-weight: 500;
+   display: inline-flex; align-items: center; gap: 4px; /* Align icon/text */
 }
 .btn-add-step:hover, .btn-add-global-header:hover, .btn-add-flow-var:hover,
 .btn-add-header:hover, .btn-add-extract:hover, .btn-add-loop-step:hover {
-  background-color: #e7f1ff; border-color: #a9c7f5;
+   background-color: #e7f1ff; border-color: #a9c7f5;
 }
 
-/* Remove Buttons */
 .btn-remove-header, .btn-remove-extract, .btn-remove-flow-var, .btn-remove-global-header {
   background: transparent; border: none; color: #dc3545; cursor: pointer;
   font-size: 16px; padding: 2px 5px; line-height: 1;
@@ -856,14 +1016,33 @@ button:disabled {
 .var-ref.invalid {
   background: #ffebee; color: #b71c1c; border-color: #ffcdd2;
   text-decoration: line-through;
+  font-weight: bold;
 }
 
 /* Drag & Drop Placeholders (List View) */
-.flow-step.dragging { opacity: 0.4; background: #e9ecef; }
-.flow-step.drop-before { border-top: 2px solid #0d6efd; margin-top: 5px; }
-.flow-step.drop-after { border-bottom: 2px solid #0d6efd; margin-bottom: 5px; }
+/* Global body class when dragging a list item */
+body.flow-step-dragging {
+    /* Optional: change body cursor */
+     /* cursor: grabbing; */
+}
+.flow-step.dragging { /* Style of the item being dragged */
+    opacity: 0.4;
+    background: #e9ecef;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    border-style: dashed;
+}
+.flow-step.drop-before { /* Indicator above target */
+    border-top: 2px solid #0d6efd;
+    margin-top: 8px; /* Space for indicator */
+    padding-top: 6px; /* Adjust padding if needed */
+}
+.flow-step.drop-after { /* Indicator below target */
+    border-bottom: 2px solid #0d6efd;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+}
 
-/* Editor Lists (Headers, Extracts, Vars) */
+/* Editor Key-Value Lists (Headers, Extracts, Vars) */
 .headers-list, .extracts-list, .global-headers-list, .flow-vars-list {
   margin-bottom: 10px;
 }
@@ -871,55 +1050,90 @@ button:disabled {
   display: flex; align-items: center; margin-bottom: 8px; gap: 8px;
 }
 .header-row input, .extract-row input, .global-header-row input, .flow-var-row input {
-    min-width: 0;
+    min-width: 0; /* Allow shrinking */
+    flex-grow: 1; /* Allow growing */
 }
 .header-row .header-key, .global-header-row .header-key, .flow-var-row .flow-var-key, .extract-row .extract-var-name {
-  flex: 0 1 35%;
+  flex-basis: 35%; /* Base width before growing/shrinking */
 }
 .header-row .header-value, .global-header-row .header-value, .flow-var-row .flow-var-value, .extract-row .extract-path {
-  flex: 1 1 60%;
+  flex-basis: 55%;
+}
+.header-row .btn-insert-var, .extract-row .btn-insert-var,
+.global-header-row .btn-insert-var, .flow-var-row .btn-insert-var {
+    flex-shrink: 0; /* Prevent button shrinking */
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    background: #f0f0f0;
+    border-radius: 3px;
+    color: #0d6efd;
+    line-height: 22px;
+    text-align: center;
+}
+.header-row .btn-insert-var:hover, .extract-row .btn-insert-var:hover,
+.global-header-row .btn-insert-var:hover, .flow-var-row .btn-insert-var:hover {
+    background: #e0e0e0;
 }
 .header-row .btn-remove-header, .extract-row .btn-remove-extract,
 .global-header-row .btn-remove-global-header, .flow-var-row .btn-remove-flow-var {
-    margin-left: auto; flex-shrink: 0;
+    margin-left: auto; /* Push remove button to the right */
+    flex-shrink: 0;
 }
-.header-row .btn-insert-var, .global-header-row .btn-insert-var, .flow-var-row .btn-insert-var { /* Added Global/Flow */
-    flex-shrink: 0; padding: 0; width: 24px; height: 24px; font-size: 12px;
-    border: 1px solid #ccc; background: #f0f0f0; border-radius: 3px;
-    margin-left: 5px; color: #0d6efd; line-height: 22px; text-align: center;
-}
-.header-row .btn-insert-var:hover, .global-header-row .btn-insert-var:hover, .flow-var-row .btn-insert-var:hover {
-    background: #e0e0e0;
-}
-.no-headers, .no-extracts, .no-headers-message, .no-flow-vars,
-.header-row-no-items, .extract-row-no-items, .global-header-row-no-items, .flow-var-row-no-items { /* Added classes for generic editor */
+/* Message for empty lists */
+.header-row-no-items, .extract-row-no-items, .global-header-row-no-items, .flow-var-row-no-items {
     color: #888; font-style: italic; padding: 10px 5px; font-size: 0.9em;
 }
 
-/* Input fields with Insert Variable button */
-.input-with-vars { position: relative; display: flex; align-items: center; gap: 5px; }
-.input-with-vars input, .input-with-vars textarea { flex: 1; min-width: 0; }
-.input-with-vars .btn-insert-var {
-  flex-shrink: 0; background: #f8f9fa; color: #0d6efd; border: 1px solid #ced4da;
-  padding: 5px 10px; font-size: 12px; font-weight: bold; border-radius: 3px;
+/* Input fields with adjacent Insert Variable button */
+.input-with-vars {
+    position: relative; /* Needed if button is absolutely positioned inside */
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
-.input-with-vars .btn-insert-var:hover { background-color: #e2e6ea; }
+.input-with-vars input, .input-with-vars textarea {
+    flex: 1; /* Input takes most space */
+    min-width: 0;
+}
+.input-with-vars .btn-insert-var {
+  flex-shrink: 0; /* Prevent button shrinking */
+  background: #f8f9fa;
+  color: #0d6efd;
+  border: 1px solid #ced4da;
+  padding: 5px 8px; /* Smaller padding */
+  font-size: 12px;
+  font-weight: bold;
+  border-radius: 3px;
+  height: auto; /* Match input height */
+  line-height: 1.5; /* Match input line height */
+}
+.input-with-vars .btn-insert-var:hover {
+    background-color: #e2e6ea;
+}
 
-/* Body Actions Specific Styling */
-.body-actions { margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* Request Body Actions */
+.body-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
 .body-actions .btn-format-json {
   background: #198754; color: white; border: 1px solid #198754; padding: 5px 10px;
 }
 .body-actions .btn-format-json:hover { background: #157347; border-color: #146c43; }
-.body-actions .btn-insert-var {
-  background: #f8f9fa; color: #0d6efd; border: 1px solid #ced4da; padding: 5px 10px;
-}
+/* Inherit styles for insert var button */
+.body-actions .btn-insert-var {}
 
-/* Variable Insertion Dropdown */
+/* --- Variable Insertion Dropdown --- */
 .var-dropdown {
   /* Position is set dynamically by JS */
   background: white; border: 1px solid #bbb; border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 11000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); z-index: 11000; /* High z-index */
   width: 280px; font-size: 13px; display: none; /* Controlled by JS */
 }
 .var-dropdown-header { display: flex; align-items: center; padding: 8px 10px; border-bottom: 1px solid #eee; background-color: #f8f9fa; }
@@ -930,10 +1144,9 @@ button:disabled {
 .var-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f3f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .var-item:last-child { border-bottom: none; }
 .var-item:hover { background: #e7f1ff; color: #0056b3; }
-.no-results-msg { /* Style defined in HTML structure now */ }
+.no-results-msg { padding: 8px 12px; color: #888; text-align: center; display: none; }
 
-
-/* Step Type Selection Dialog */
+/* --- Step Type Selection Dialog --- */
 .step-type-dialog {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.6);
   display: flex; align-items: center; justify-content: center; z-index: 10100; padding: 20px;
@@ -958,10 +1171,11 @@ button:disabled {
 .step-type-option p { margin: 0; font-size: 0.9em; color: #666; line-height: 1.4; }
 
 
-/* Flash Messages / Toasts */
+/* --- Flash Messages / Toasts --- */
 .flow-messages {
   position: absolute; top: 15px; right: 20px; width: 320px; z-index: 10200;
   display: flex; flex-direction: column; gap: 10px;
+  max-width: calc(100% - 40px); /* Prevent overflow on small screens */
 }
 .flow-message {
   border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); overflow: hidden;
@@ -984,7 +1198,7 @@ button:disabled {
 .flow-message.warning { border-left-color: #ffc107; color: #664d03; background-color: #fff3cd; }
 
 
-/* Global Loading Indicator */
+/* --- Global Loading Indicator --- */
 .loading-overlay.global-loading {
   position: fixed; /* Cover entire viewport */
   top: 0; left: 0; right: 0; bottom: 0;
@@ -1007,15 +1221,19 @@ button:disabled {
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 
-/* Condition Builder Styles */
+/* --- Condition Builder Styles (in Step Editor) --- */
 .condition-builder { background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin-bottom: 15px; }
 .condition-row { display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 15px; }
 .condition-item { flex: 1; min-width: 180px; }
 .condition-item label { display: block; margin-bottom: 5px; color: #555; font-weight: 500; font-size: 0.9em; }
 .condition-item select, .condition-item input { width: 100%; padding: 8px 10px; }
+/* Hide value input container initially via JS */
+.condition-item#cond-val-cont { display: none; }
+
 .condition-preview { background: #f0f4f8; border: 1px solid #d1dbe5; border-radius: 3px; padding: 10px 12px; margin-top: 10px; }
 .condition-preview label { display: block; margin-bottom: 5px; color: #334155; font-weight: 600; font-size: 0.9em; }
-#condition-preview-text { margin: 0; padding: 5px 0; background: transparent; border: none; color: #1e293b; font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 0.95em; word-break: break-word; line-height: 1.4; }
+/* Target the <pre> tag directly for preview */
+.condition-preview pre { margin: 0; padding: 5px 0; background: transparent; border: none; color: #1e293b; font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 0.95em; word-break: break-word; line-height: 1.4; white-space: pre-wrap;}
 #condition-operator optgroup { font-weight: 600; color: #333; background-color: #f8f9fa; padding: 4px 0; margin-top: 5px; }
 #condition-operator optgroup:first-of-type { margin-top: 0; }
 #condition-operator option { padding: 5px 10px; font-weight: normal; }
@@ -1026,48 +1244,55 @@ button:disabled {
 .branch-info h4 { margin: 0 0 8px 0; font-size: 1em; color: #495057; font-weight: 600; }
 .branch-info p { margin: 0; color: #6c757d; font-size: 0.95em; }
 
-/* Visualizer Styles */
+/* --- Visualizer Styles --- */
 .flow-node {
     position: absolute;
     background-color: white;
     border: 1px solid #adb5bd; /* gray-500 */
-    border-radius: 6px;
-    padding: 10px 15px;
+    border-radius: 8px; /* Slightly more rounded */
+    padding: 0; /* Remove padding, handle internally */
     min-width: 180px;
-    max-width: 250px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    max-width: 250px; /* Keep max width */
+    box-shadow: 0 3px 6px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.08);
     cursor: grab;
-    transition: box-shadow 0.2s ease, transform 0.1s ease;
+    transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease;
     font-size: 13px;
     user-select: none; /* Prevent text selection during drag */
+    display: flex;
+    flex-direction: column; /* Stack header and content */
+    overflow: hidden; /* Prevent content overflow */
+    z-index: 10; /* Default stacking */
 }
-.flow-node:active {
-    cursor: grabbing;
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    z-index: 1001; /* Bring to front while dragging */
-    transform: scale(1.02);
-}
-.flow-node.dragging {
-    opacity: 0.7;
-    border-style: dashed;
-}
-.flow-node.active-step { /* Highlight for runner */
-    border-color: #f59e0b; /* amber-500 */
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4), 0 2px 5px rgba(0,0,0,0.1);
-    animation: pulse-border-amber 1.5s infinite;
-}
-@keyframes pulse-border-amber {
-  0% { border-color: #f59e0b; } /* amber-500 */
-  50% { border-color: #fbbf24; } /* amber-400 */
-  100% { border-color: #f59e0b; }
+.flow-node:hover {
+    border-color: #6c757d; /* Darker gray on hover */
+    box-shadow: 0 5px 10px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.1);
 }
 
+/* Node Dragging State */
+.flow-node.dragging {
+    opacity: 0.8;
+    cursor: grabbing;
+    border-style: dashed;
+    border-color: #0d6efd; /* Blue */
+    box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+    z-index: 1001 !important; /* Ensure on top */
+    transform: scale(1.03); /* Slight scale effect */
+}
+
+/* Node Selected State */
+.flow-node.selected {
+    border-color: #0d6efd; /* Blue */
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.3), 0 5px 10px rgba(0,0,0,0.12);
+}
+
+/* Node Header */
 .node-header {
     display: flex;
     align-items: center;
-    margin-bottom: 8px;
-    padding-bottom: 5px;
+    padding: 8px 12px;
     border-bottom: 1px solid #e9ecef; /* gray-200 */
+    background-color: #f8f9fa; /* Light header background */
+    flex-shrink: 0;
 }
 .node-icon {
     width: 18px; height: 18px; margin-right: 8px; flex-shrink: 0;
@@ -1079,91 +1304,139 @@ button:disabled {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex-grow: 1; /* Allow name to take space */
+    margin-right: 8px; /* Space before actions */
+}
+.node-actions {
+    display: flex;
+    gap: 4px;
+    margin-left: auto; /* Push actions to the right */
+}
+.node-actions button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #6c757d;
+    font-size: 14px; /* Adjust icon size */
+    padding: 1px 3px;
+    line-height: 1;
+    border-radius: 3px;
+}
+.node-actions button:hover {
+    color: #dc3545; /* Red for delete hover */
+    background-color: #f1f3f5;
 }
 
+/* Node Content */
 .node-content {
+    padding: 10px 12px;
     color: #495057; /* gray-700 */
     font-size: 0.95em;
     word-wrap: break-word;
+    flex-grow: 1; /* Allow content to fill remaining space */
+    line-height: 1.4;
 }
-/* Specific Node Type Borders */
-.flow-node.type-request { border-left: 4px solid #4caf50; }
-.flow-node.type-condition { border-left: 4px solid #ff9800; }
-.flow-node.type-loop { border-left: 4px solid #9c27b0; }
-/* Add more specific content styling if needed */
-.node-content .request-method { /* Reuse styles */ }
-.node-content .request-url { /* Reuse styles */ }
-.node-content .condition-code { /* Reuse styles */ }
-.node-content .loop-source { /* Reuse styles */ }
-
-/* Node Ports (Example - not fully implemented in JS) */
-.node-port {
-    position: absolute;
-    width: 10px;
-    height: 10px;
-    background: #6c757d; /* gray-600 */
-    border-radius: 50%;
-    border: 1px solid white;
+.node-content code {
+    background-color: #e9ecef;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: #212529;
+    word-break: break-word; /* Allow code to wrap */
 }
-.node-port.input { top: 50%; left: -6px; transform: translateY(-50%); }
-.node-port.output { top: 50%; right: -6px; transform: translateY(-50%); }
-.node-port.branch-then { bottom: -6px; left: 33%; transform: translateX(-50%); background: #198754; } /* Green for Then */
-.node-port.branch-else { bottom: -6px; left: 66%; transform: translateX(-50%); background: #dc3545; } /* Red for Else */
-.node-port.loop-body { bottom: -6px; left: 50%; transform: translateX(-50%); background: #8e24aa; } /* Purple for Loop */
+.node-content .request-method { /* Reuse styles */
+    font-weight: 600; padding: 2px 6px; border-radius: 3px; margin-right: 5px;
+    color: #fff; font-size: 0.85em; text-transform: uppercase; display: inline-block;
+}
+.node-content .request-method.GET { background-color: #4caf50; }
+.node-content .request-method.POST { background-color: #2196f3; }
+.node-content .request-method.PUT { background-color: #ff9800; }
+.node-content .request-method.PATCH { background-color: #ffc107; }
+.node-content .request-method.DELETE { background-color: #f44336; }
+.node-content .request-method.OPTIONS { background-color: #607d8b; }
+.node-content .request-method.HEAD { background-color: #9c27b0; }
 
-/* SVG Connectors (Example - needs JS to generate paths) */
+/* Node Type Specific Borders/Styling */
+.flow-node.type-request { border-top: 4px solid #4caf50; }
+.flow-node.type-condition { border-top: 4px solid #ff9800; }
+.flow-node.type-loop { border-top: 4px solid #9c27b0; }
+
+/* --- Runner Highlighting Classes (Visualizer) --- */
+@keyframes pulse-border-amber { /* For active step */
+  0% { border-color: #f59e0b; box-shadow: 0 0 0 0px rgba(245, 158, 11, 0.3); }
+  50% { border-color: #fbbf24; box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.1); }
+  100% { border-color: #f59e0b; box-shadow: 0 0 0 0px rgba(245, 158, 11, 0.3); }
+}
+.flow-node.active-step {
+    border-color: #f59e0b !important; /* amber-500 */
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4);
+    animation: pulse-border-amber 1.8s infinite ease-in-out;
+}
+.flow-node.success {
+    border-color: #198754 !important; /* green */
+    box-shadow: 0 0 0 2px rgba(25, 135, 84, 0.3);
+}
+.flow-node.error {
+    border-color: #dc3545 !important; /* red */
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.3);
+}
+.flow-node.stopped {
+    border-color: #ffc107 !important; /* warning yellow */
+    box-shadow: 0 0 0 2px rgba(255, 193, 7, 0.3);
+}
+
+/* --- SVG Connectors --- */
 .flow-connector {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none; /* Allow clicking through SVG */
+    /* Positioned absolutely by JS */
     z-index: 1; /* Below nodes */
-    overflow: visible;
 }
 .connector-path {
-    stroke: #adb5bd; /* gray-500 */
+    stroke: #adb5bd; /* gray-400 */
     stroke-width: 2;
     fill: none;
+    transition: stroke 0.2s ease, stroke-width 0.2s ease;
 }
 .connector-path:hover {
     stroke: #3b82f6; /* blue-500 */
+    stroke-width: 3; /* Thicker on hover */
 }
-/* Arrowhead definition */
 .connector-arrowhead {
     fill: #adb5bd;
+    transition: fill 0.2s ease;
 }
-.connector-path:hover + .connector-arrowhead {
+/* Style marker arrowhead when path is hovered (requires JS to add class or use vars) */
+.connector-path:hover .connector-arrowhead { /* This direct CSS selector won't work */ }
+.connector-arrowhead.hover { /* Add this class via JS to the <path> inside the <marker> */
     fill: #3b82f6;
 }
-/* Active path during execution */
+
+/* Active Connector during execution */
+@keyframes dash-animation {
+    to { stroke-dashoffset: -20; } /* Adjust based on dash array */
+}
 .connector-path.active-connector {
     stroke: #f59e0b; /* amber-500 */
     stroke-width: 2.5;
-    animation: dash-animation 1s linear infinite;
+    stroke-dasharray: 10 5; /* Dashed line */
+    animation: dash-animation 0.8s linear infinite;
 }
-.connector-path.active-connector + .connector-arrowhead {
+/* Style active arrowhead */
+.connector-arrowhead.active-arrowhead { /* Add this class via JS to the <path> inside the <marker> */
     fill: #f59e0b;
 }
-@keyframes dash-animation {
-    to {
-        stroke-dashoffset: -20; /* Adjust based on dash array */
-    }
-}
 
-/* Visualizer Drag Placeholder (Example) */
+/* --- Visualizer Drag Placeholder --- */
 .drag-placeholder {
     position: absolute;
     border: 2px dashed #0d6efd;
-    border-radius: 6px;
-    background-color: rgba(59, 130, 246, 0.1);
+    border-radius: 8px;
+    background-color: rgba(13, 110, 253, 0.1);
     pointer-events: none; /* Don't interfere with drop */
-    z-index: 1000; /* Below dragged node */
+    z-index: 5; /* Below nodes but above background */
+    transition: top 0.1s ease-out, left 0.1s ease-out; /* Smooth placeholder movement */
 }
 
-
-/* Responsive Overrides */
+/* --- Responsive Overrides --- */
 @media (max-width: 1100px) {
     .app-container {
         flex-direction: column;
@@ -1183,47 +1456,59 @@ button:disabled {
         max-height: 50vh; /* Limit height */
         border-left: none;
         border-top: 1px solid #e5e7eb;
+        order: 3; /* Ensure runner is last */
     }
     .workspace {
-       order: -1; /* Move workspace to the top on smaller screens */
+       order: 2; /* Move workspace after sidebar */
        min-height: 500px; /* Ensure workspace has decent height */
     }
      .variables-panel {
         /* Position may need adjustment */
         bottom: auto;
-        top: 50px; /* Below header */
+        top: 55px; /* Approx below header */
         max-height: 200px;
     }
     .flow-messages {
         top: 10px;
         right: 10px;
         left: 10px;
-        width: auto;
+        width: auto; /* Full width */
+    }
+    .workspace-header {
+        /* Allow wrapping, gap already set */
+    }
+    .workspace-view-controls {
+        margin-left: 0; /* Remove margin push */
+    }
+    .workspace-controls {
+        margin-left: 0; /* Remove margin push */
     }
 }
 
 
 @media (max-width: 768px) {
+    /* Split builder panels vertically */
     .flow-builder-section {
         flex-direction: column;
         height: auto;
       }
       .flow-steps-panel, .step-editor-panel {
         width: 100%;
-        height: auto;
-        max-height: 50vh;
-        overflow: hidden;
+        height: auto; /* Auto height based on content */
+        max-height: 50vh; /* Limit max height */
+        overflow: hidden; /* Enable internal scroll */
       }
       .flow-steps-panel {
         border-right: none;
         border-bottom: 1px solid #e0e0e0;
       }
        .step-editor-panel {
-          min-height: 300px;
+          min-height: 300px; /* Ensure editor has some space */
       }
        .flow-info-overlay {
            max-height: 40%; /* Reduce further */
        }
+    /* Stack condition builder items */
      .condition-row {
       flex-direction: column; gap: 10px;
     }
@@ -1233,25 +1518,29 @@ button:disabled {
     .branches-info {
       grid-template-columns: 1fr; gap: 10px;
     }
+    /* Runner controls layout */
     .runner-controls .control-group {
         flex-direction: row; /* Try to keep buttons side-by-side */
         justify-content: center; /* Center buttons if they wrap */
     }
+    /* Workspace header adjustments */
     .workspace-header {
-        flex-wrap: wrap; /* Allow header items to wrap */
-        gap: 10px;
+        gap: 10px; /* Reduce gap */
     }
      .workspace-header h2 {
          width: 100%; /* Title takes full width when wrapping */
          order: -1; /* Move title to top */
          text-align: center;
          margin-bottom: 5px;
+         font-size: 1.2em; /* Slightly smaller title */
      }
-     .workspace-view-controls { margin-left: 0;}
-     .workspace-controls { margin-left: 0;}
-    }
+     .workspace-view-controls, .workspace-controls {
+         justify-content: center; /* Center controls */
+         width: 100%; /* Allow controls to take full width if they wrap */
+     }
+}
 
-    /* Utility */
-    .hidden {
-        display: none !important;
-    }
+/* Utility */
+.hidden {
+    display: none !important;
+}

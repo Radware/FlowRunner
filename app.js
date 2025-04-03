@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadFlowList();
     updateRunnerUI();
     updateViewToggle(); // Set initial view state
+    
 });
 
 function initializeDOMReferences() {
@@ -128,6 +129,9 @@ function initializeEventListeners() {
     initializeStepTypeDialogListeners();
     initializeVarDropdownListeners();
     initializeVariableInsertionListener(); // Single listener for all insert buttons
+
+    // Expose step type dialog function globally for components
+    window.showAppStepTypeDialog = showAppStepTypeDialog;
 }
 
 function initializeRunner() {
@@ -569,32 +573,75 @@ function renderCurrentFlow() {
     syncPanelVisibility();
 }
 
+/**
+ * Clears the workspace, optionally resetting the entire flow state.
+ * Handles cleanup of both FlowBuilderComponent and FlowVisualizerComponent.
+ * @param {boolean} [fullClear=true] - If true, also resets currentFlowId, currentFlowModel, etc.
+ */
 function clearWorkspace(fullClear = true) {
-    // Clear both view containers
+    // --- Component Cleanup ---
+    // Clear builder component
     if (appState.builderComponent) {
-        appState.builderComponent.destroy(); // Add destroy method if needed
-        appState.builderComponent = null;
+        // Check if a destroy method exists for proper cleanup (e.g., removing listeners)
+        if (typeof appState.builderComponent.destroy === 'function') {
+            appState.builderComponent.destroy();
+        } else {
+            // Fallback or basic clear if no destroy method
+            console.warn("FlowBuilderComponent does not have a destroy method. Manual cleanup might be needed.");
+            // Clearing innerHTML below might suffice in simple cases
+        }
+        appState.builderComponent = null; // Remove reference
     }
+
+    // Clear visualizer component
     if (appState.visualizerComponent) {
-        appState.visualizerComponent.clear();
+        // Check for destroy method first for comprehensive cleanup
+        if (typeof appState.visualizerComponent.destroy === 'function') {
+            appState.visualizerComponent.destroy();
+        }
+        // Fallback to clear if destroy is not available but clear is (less thorough cleanup)
+        else if (typeof appState.visualizerComponent.clear === 'function') {
+            console.warn("FlowVisualizerComponent using clear() instead of destroy(). Some listeners might persist.");
+            appState.visualizerComponent.clear();
+        } else {
+            // If neither exists, log it, as cleanup might be incomplete
+            console.error("FlowVisualizerComponent has neither destroy nor clear method. Manual cleanup required.");
+        }
+        appState.visualizerComponent = null; // Remove reference
     }
-    domRefs.flowBuilderMount.innerHTML = '';
-    domRefs.flowVisualizerMount.innerHTML = '';
-    domRefs.flowBuilderMount.classList.remove('active');
-    domRefs.flowVisualizerMount.classList.remove('active');
 
-    domRefs.workspacePlaceholder.style.display = 'flex';
-    domRefs.toggleInfoBtn.style.display = 'none';
-    domRefs.toggleVariablesBtn.style.display = 'none';
-    domRefs.toggleViewBtn.style.display = 'none'; // Hide view toggle
+    // --- DOM Clearing ---
+    // Clear the mount points' content after attempting component cleanup
+    if (domRefs.flowBuilderMount) {
+        domRefs.flowBuilderMount.innerHTML = '';
+        domRefs.flowBuilderMount.classList.remove('active');
+    }
+    if (domRefs.flowVisualizerMount) {
+        domRefs.flowVisualizerMount.innerHTML = '';
+        domRefs.flowVisualizerMount.classList.remove('active');
+    }
 
-    // Close panels managed by app.js/builder
-    domRefs.variablesPanel.classList.remove('visible');
-    domRefs.infoOverlay.classList.remove('open');
+    // --- UI Reset ---
+    // Show placeholder, hide action buttons
+    if (domRefs.workspacePlaceholder) domRefs.workspacePlaceholder.style.display = 'flex';
+    if (domRefs.toggleInfoBtn) domRefs.toggleInfoBtn.style.display = 'none';
+    if (domRefs.toggleVariablesBtn) domRefs.toggleVariablesBtn.style.display = 'none';
+    if (domRefs.toggleViewBtn) domRefs.toggleViewBtn.style.display = 'none'; // Hide view toggle
+
+    // Close panels
+    if (domRefs.variablesPanel) domRefs.variablesPanel.classList.remove('visible');
+    // Try to find info overlay robustly, as its parent might be cleared
+    // Note: Direct access via domRefs.infoOverlay might fail if builder managed it and got cleared
+    // This tries to find it again if needed. A better approach might be for builder to always use a fixed element outside its mount.
+    const infoOverlay = document.querySelector('[data-ref="infoOverlay"]'); // Re-query the DOM
+    if (infoOverlay) infoOverlay.classList.remove('open');
+
+    // Reset panel state variables
     appState.isInfoOverlayOpen = false;
     appState.isVariablesPanelVisible = false;
-    syncPanelVisibility(); // Update buttons
+    syncPanelVisibility(); // Update button text/icons
 
+    // --- State Reset (if full clear requested) ---
     if (fullClear) {
         appState.currentFlowId = null;
         appState.currentFlowModel = null;
@@ -602,11 +649,11 @@ function clearWorkspace(fullClear = true) {
         appState.isDirty = false;
         appState.stepEditorIsDirty = false;
         updateWorkspaceTitle();
-        clearMessages();
-        handleClearResults(); // Clear runner
-        updateRunnerUI();
-        appState.currentView = 'list-editor'; // Reset to default view
-        updateViewToggle();
+        clearMessages(); // Clear any leftover messages
+        handleClearResults(); // Clear runner results and state
+        updateRunnerUI(); // Update runner button states
+        appState.currentView = 'list-editor'; // Reset view to default
+        updateViewToggle(); // Ensure toggle button reflects default state
     }
 }
 
