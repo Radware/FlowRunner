@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Flowmap Maker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar: Flow List & Management -->
+        <aside class="sidebar" id="sidebar">
+            <h2>API Flows</h2>
+            <div class="sidebar-actions">
+                <button id="add-flow-btn" class="btn btn-primary">+ New Flow</button>
+            </div>
+            <div class="flow-list-container">
+                <ul id="flow-list" class="flow-list">
+                    <!-- Flow items will be dynamically inserted here -->
+                    <li class="loading-flows">Loading flows...</li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Workspace: Flow Editor / Visualizer -->
+        <main class="workspace" id="workspace">
+            <div class="workspace-header">
+                <h2 id="workspace-title">Select or Create a Flow</h2>
+                <div class="workspace-view-controls">
+                     <button id="toggle-view-btn" class="btn btn-secondary btn-sm" style="display: none;">Visual View</button>
+                </div>
+                <div class="workspace-controls">
+                     <button class="btn btn-toggle-info" id="toggle-info-btn" style="display: none;">Info ▼</button>
+                     <button class="btn btn-toggle-variables" id="toggle-variables-btn" style="display: none;">Show Variables ▲</button>
+                </div>
+            </div>
+            <div class="workspace-content" id="workspace-content">
+                <!-- FlowBuilderComponent renders its main UI here (List/Editor View) -->
+                 <div id="flow-builder-mount" class="view-mode list-editor-view active">
+                    <div class="placeholder-message" id="workspace-placeholder">
+                        <p>Select a flow from the sidebar to start editing, or click "+ New Flow".</p>
+                    </div>
+                    <!-- Flow Info Overlay Area (Managed by FlowBuilderComponent) -->
+                    <div class="flow-info-overlay" data-ref="infoOverlay"></div>
+                 </div>
+                 <!-- Flow Visualizer renders its UI here (Node-Graph View) -->
+                 <div id="flow-visualizer-mount" class="view-mode node-graph-view">
+                     <!-- Visualizer content will be added here -->
+                 </div>
+            </div>
+             <!-- Variables Panel (Positioned absolutely relative to workspace) -->
+            <div class="variables-panel" id="variables-panel">
+                <div class="variables-container" id="variables-container">
+                    <!-- FlowBuilderComponent renders variables table here -->
+                </div>
+            </div>
+             <!-- Message Area for Workspace/Builder -->
+             <div class="flow-messages" id="builder-messages"></div>
+        </main>
+
+        <!-- Runner Panel: Flow Execution -->
+        <aside class="runner-panel" id="runner-panel">
+            <div class="runner-header">
+                <h2>Flow Runner</h2>
+                <button id="clear-results-btn" class="btn btn-secondary btn-sm">Clear Results</button>
+            </div>
+            <div class="runner-controls">
+                 <div class="control-group">
+                    <button id="run-flow-btn" class="btn btn-success" disabled>▶ Run</button>
+                    <button id="step-flow-btn" class="btn btn-warning" disabled>Step</button>
+                    <button id="step-into-flow-btn" class="btn btn-warning" disabled style="display: none;">Step Into</button> <!-- TODO: Implement Step Into -->
+                    <button id="stop-flow-btn" class="btn btn-danger" disabled>⏹ Stop</button>
+                 </div>
+                 <div class="control-group delay-group">
+                    <label for="request-delay">Delay (ms):</label>
+                    <input type="number" id="request-delay" value="500" min="0" step="100">
+                 </div>
+            </div>
+            <div class="runner-results-container">
+                <h3>Execution Results</h3>
+                <ul id="runner-results" class="runner-results-list">
+                    <li class="no-results">Run a flow to see results here.</li>
+                    <!-- Results will be dynamically added -->
+                </ul>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Step Type Selection Dialog Structure (initially hidden) -->
+    <div class="step-type-dialog" id="step-type-dialog" style="display: none;">
+        <div class="step-type-container">
+          <div class="step-type-header">
+            <h3>Select Step Type</h3>
+            <button class="step-type-close" title="Close">✕</button>
+          </div>
+          <div class="step-type-options">
+            <div class="step-type-option" data-type="request" title="Make an HTTP request">
+              <div class="type-icon request-icon"></div>
+              <h4>API Request</h4>
+              <p>Call an external API endpoint.</p>
+            </div>
+            <div class="step-type-option" data-type="condition" title="Branch based on a condition">
+              <div class="type-icon condition-icon"></div>
+              <h4>Condition (If/Else)</h4>
+              <p>Execute steps based on data.</p>
+            </div>
+            <div class="step-type-option" data-type="loop" title="Iterate over an array">
+              <div class="type-icon loop-icon"></div>
+              <h4>Loop (For Each)</h4>
+              <p>Repeat steps for items in a list.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Loading Overlay (Global) -->
+      <div class="loading-overlay global-loading" id="global-loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing...</div>
+      </div>
+
+    <!-- Variable Insertion Dropdown Structure (initially hidden) -->
+    <div class="var-dropdown" id="var-dropdown" style="display: none; position: absolute;">
+        <div class="var-dropdown-header">
+          <input type="text" class="var-search" placeholder="Search variables...">
+          <button class="var-close" title="Close">✕</button>
+        </div>
+        <div class="var-list">
+          <!-- Variable items added dynamically -->
+        </div>
+        <div class="no-results-msg" style="display: none; padding: 8px 12px; color: #888; text-align: center;">No matching variables</div>
+      </div>
+
+    <script type="module" src="app.js"></script>
+    <!-- Other modules (flowCore, flowBuilderComponent, flowStepComponents, flowRunner, flowVisualizer) are imported by app.js -->
+</body>
+</html>
