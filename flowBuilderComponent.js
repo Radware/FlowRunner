@@ -247,10 +247,10 @@ export class FlowBuilderComponent {
 
         const row = document.createElement('div');
         row.className = 'global-header-row'; // Use specific class
+        // --- REMOVED btn-insert-var button ---
         row.innerHTML = `
             <input type="text" class="header-key" value="${escapeHTML(key)}" placeholder="Header Name">
             <input type="text" class="header-value" value="${escapeHTML(value)}" placeholder="Header Value">
-            <button class="btn-insert-var" title="Insert Variable">{{…}}</button> <!-- Add insert var button -->
             <button class="btn-remove-global-header" title="Remove Header">✕</button>
         `;
         container.appendChild(row);
@@ -259,7 +259,8 @@ export class FlowBuilderComponent {
         const keyInput = row.querySelector('.header-key');
         const valueInput = row.querySelector('.header-value');
         const removeBtn = row.querySelector('.btn-remove-global-header');
-        const insertVarBtn = row.querySelector('.btn-insert-var'); // Get insert button
+        // --- REMOVED insertVarBtn reference ---
+        // const insertVarBtn = row.querySelector('.btn-insert-var'); // Removed
 
 
         const updateCallback = () => {
@@ -279,8 +280,8 @@ export class FlowBuilderComponent {
              this._adjustCollapsibleHeight(this.uiRefs.globalHeadersToggle, this.uiRefs.globalHeadersContent); // Adjust height
         });
 
-        // Setup variable insert button (defined in flowStepComponents, but used here too)
-         setupVariableInsertButton(insertVarBtn, valueInput, Object.keys(this.variables || {}));
+        // --- REMOVED setupVariableInsertButton call ---
+        // setupVariableInsertButton(insertVarBtn, valueInput, Object.keys(this.variables || {})); // Removed
 
 
         if (triggerUpdate) {
@@ -321,10 +322,10 @@ export class FlowBuilderComponent {
 
         const row = document.createElement('div');
         row.className = 'flow-var-row';
+        // --- REMOVED btn-insert-var button ---
         row.innerHTML = `
             <input type="text" class="flow-var-key" value="${escapeHTML(key)}" placeholder="Variable Name">
             <input type="text" class="flow-var-value" value="${escapeHTML(value)}" placeholder="Variable Value">
-             <button class="btn-insert-var" title="Insert Variable">{{…}}</button> <!-- Add insert var button -->
             <button class="btn-remove-flow-var" title="Remove Variable">✕</button>
         `;
         container.appendChild(row);
@@ -332,7 +333,8 @@ export class FlowBuilderComponent {
         const keyInput = row.querySelector('.flow-var-key');
         const valueInput = row.querySelector('.flow-var-value');
         const removeBtn = row.querySelector('.btn-remove-flow-var');
-        const insertVarBtn = row.querySelector('.btn-insert-var');
+        // --- REMOVED insertVarBtn reference ---
+        // const insertVarBtn = row.querySelector('.btn-insert-var'); // Removed
 
 
         const updateCallback = () => {
@@ -352,7 +354,8 @@ export class FlowBuilderComponent {
              this._adjustCollapsibleHeight(this.uiRefs.flowVarsToggle, this.uiRefs.flowVarsContent);
         });
 
-         setupVariableInsertButton(insertVarBtn, valueInput, Object.keys(this.variables || {}));
+        // --- REMOVED setupVariableInsertButton call ---
+        // setupVariableInsertButton(insertVarBtn, valueInput, Object.keys(this.variables || {})); // Removed
 
 
         if (triggerUpdate) {

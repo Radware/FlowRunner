@@ -38,6 +38,7 @@ import {
  * @return {HTMLElement} The rendered step element.
  */
 export function renderStep(step, options) {
+  // ... (existing setup) ...
   const {
     variables = {},
     onSelect,
@@ -45,8 +46,8 @@ export function renderStep(step, options) {
     onDelete, // Used for the delete button on the step header
     selectedStepId,
     isNested = false,
-    parentId = null, // Pass parentId for context
-    branch = null    // Pass branch for context
+    parentId = null, // Capture parentId passed TO this render call
+    branch = null    // Capture branch passed TO this render call
   } = options || {};
 
   const stepEl = document.createElement('div');
@@ -83,12 +84,13 @@ export function renderStep(step, options) {
     cloneBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const clonedStepData = cloneStep(step); // Use core function
+      // Ensure clone passes correct context for insertion logic if needed
       onUpdate({
         type: 'clone',
-        originalStep: step, // Pass original for context if needed by handler
+        originalStep: step,
         newStep: clonedStepData,
-        parentId: parentId, // Context for insertion logic
-        branch: branch
+        parentId: parentId, // Pass context for insertion logic
+        branch: branch      // Pass context for insertion logic
       });
     });
   }
@@ -99,7 +101,7 @@ export function renderStep(step, options) {
      deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         // The onDelete callback (mapped from onUpdate in builder) triggers the action in app.js
-        onDelete(step.id);
+        onDelete(step.id); // Correct, onDelete callback handles context
      });
   }
   stepEl.appendChild(header);
@@ -108,42 +110,30 @@ export function renderStep(step, options) {
   const content = document.createElement('div');
   content.className = 'flow-step-content';
 
-  // Options passed down for nested rendering
+  // --- CRITICAL: Correctly set parentId and branch for nested calls ---
   const nestedOptions = {
       ...options,
       isNested: true,
-      parentId: step.id, // The current step becomes the parent for nested calls
-      // Pass callbacks down
-      onUpdate: onUpdate,
-      onSelect: onSelect,
-      // Map nested onDelete to trigger the correct onUpdate action in the parent
-      onDelete: (nestedStepId) => {
-          if (onUpdate) {
-              // Use parentId (which is the current step's ID) and branch context
-              onUpdate({ type: 'delete', stepId: nestedStepId, parentId: step.id, branch: branch });
-          } else {
-              console.error("Cannot delete nested step: Missing onUpdate callback.");
-          }
-      }
+      parentId: step.id, // Current step IS the parent for nested calls
+      // branch: // branch context will be set specifically inside condition/loop renderers below
   };
 
-  // Render type-specific content preview
   switch (step.type) {
-    case 'request':
-      renderRequestStepContent(content, step, variables);
-      break;
-    case 'condition':
-      renderConditionStepContent(content, step, variables, nestedOptions);
-      break;
-    case 'loop':
-      renderLoopStepContent(content, step, variables, nestedOptions);
-      break;
-    default:
-        content.innerHTML = `Unknown step type: ${escapeHTML(step.type)}`;
+      case 'request':
+          renderRequestStepContent(content, step, options.variables); // Request doesn't need nested options directly
+          break;
+      case 'condition':
+          // Pass nestedOptions down to condition renderer
+          renderConditionStepContent(content, step, options.variables, nestedOptions);
+          break;
+      case 'loop':
+          // Pass nestedOptions down to loop renderer
+          renderLoopStepContent(content, step, options.variables, nestedOptions);
+          break;
+      default:
+          content.innerHTML = `Unknown step type: ${escapeHTML(step.type)}`;
   }
   stepEl.appendChild(content);
-
-  // --- Setup Drag and Drop ---
   setupDragAndDrop(stepEl, options); // Apply D&D to the step element
   return stepEl;
 }
@@ -167,138 +157,160 @@ function renderRequestStepContent(container, step, variables) {
 }
 
 function renderConditionStepContent(container, step, variables, options) {
-  const { onUpdate, parentId } = options; // Need parentId for adding steps within
+    const { onUpdate, parentId, onSelect } = options; // parentId here IS the ID of the condition step itself, get onSelect too
 
-  let conditionDisplay = 'No condition set';
-  if (step.conditionData?.variable && step.conditionData.operator) {
-      conditionDisplay = generateConditionPreview(step.conditionData);
-  } else if (step.condition) {
-      const parsed = parseConditionString(step.condition);
-      conditionDisplay = parsed.preview || escapeHTML(step.condition); // Use preview or escaped original
-  }
+    let conditionDisplay = 'No condition set';
+    if (step.conditionData?.variable && step.conditionData.operator) {
+        conditionDisplay = generateConditionPreview(step.conditionData);
+    } else if (step.condition) {
+        const parsed = parseConditionString(step.condition);
+        conditionDisplay = parsed.preview || escapeHTML(step.condition); // Use preview or escaped original
+    }
 
-  container.innerHTML = `
-    <div class="condition-expression"> <span class="condition-if">If:</span> <code class="condition-code">${conditionDisplay}</code> </div>
-    <div class="condition-branches">
-      <div class="branch then-branch"> <div class="branch-header">Then</div> <div class="branch-steps" data-branch-container="then"></div> <button class="btn-add-step" data-branch="then" title="Add step to 'Then'">+ Add Step</button> </div>
-      <div class="branch else-branch"> <div class="branch-header">Else</div> <div class="branch-steps" data-branch-container="else"></div> <button class="btn-add-step" data-branch="else" title="Add step to 'Else'">+ Add Step</button> </div>
-    </div>`;
+    container.innerHTML = `
+        <div class="condition-expression"> <span class="condition-if">If:</span> <code class="condition-code">${conditionDisplay}</code> </div>
+        <div class="condition-branches">
+          <div class="branch then-branch"> <div class="branch-header">Then</div> <div class="branch-steps" data-branch-container="then"></div> <button class="btn-add-step" data-branch="then" title="Add step to 'Then'">+ Add Step</button> </div>
+          <div class="branch else-branch"> <div class="branch-header">Else</div> <div class="branch-steps" data-branch-container="else"></div> <button class="btn-add-step" data-branch="else" title="Add step to 'Else'">+ Add Step</button> </div>
+        </div>`;
 
-  const thenContainer = container.querySelector('[data-branch-container="then"]');
-  if (step.thenSteps?.length) {
-      step.thenSteps.forEach(child => thenContainer.appendChild(renderStep(child, { ...options, branch: 'then' }))); // Pass branch context
-  } else { thenContainer.innerHTML = '<div class="empty-branch">(empty)</div>'; }
+    const thenContainer = container.querySelector('[data-branch-container="then"]');
+    if (step.thenSteps?.length) {
+        step.thenSteps.forEach(child => thenContainer.appendChild(
+            renderStep(child, { ...options, branch: 'then' }) // Pass 'then' branch context
+        ));
+    } else { thenContainer.innerHTML = '<div class="empty-branch">(empty)</div>'; }
 
-  const elseContainer = container.querySelector('[data-branch-container="else"]');
-  if (step.elseSteps?.length) {
-      step.elseSteps.forEach(child => elseContainer.appendChild(renderStep(child, { ...options, branch: 'else' }))); // Pass branch context
-  } else { elseContainer.innerHTML = '<div class="empty-branch">(empty)</div>'; }
+    const elseContainer = container.querySelector('[data-branch-container="else"]');
+    if (step.elseSteps?.length) {
+        step.elseSteps.forEach(child => elseContainer.appendChild(
+             renderStep(child, { ...options, branch: 'else' }) // Pass 'else' branch context
+         ));
+    } else { elseContainer.innerHTML = '<div class="empty-branch">(empty)</div>'; }
 
-  // Add Step Buttons within branches
-  container.querySelectorAll('.btn-add-step').forEach(button => {
-      button.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const targetBranch = button.dataset.branch;
-          if (onUpdate && parentId) {
-              // Use the globally managed dialog via window reference
-               if (typeof window.showAppStepTypeDialog === 'function') {
-                  window.showAppStepTypeDialog(type => {
-                      if (type) {
-                          const newStep = createNewStep(type);
-                          // Use onUpdate callback to notify app.js about adding nested step
-                          onUpdate({ type: 'add', step: newStep, parentId: parentId, branch: targetBranch });
-                      }
-                  });
-               } else { console.error("App's step type dialog function not found."); }
-          } else { console.error("Cannot add nested step: Missing onUpdate or parentId."); }
-      });
-  });
+    // Add Step Buttons within branches
+    container.querySelectorAll('.btn-add-step').forEach(button => {
+        button.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetBranch = button.dataset.branch; // 'then' or 'else'
+            if (onUpdate && parentId) { // parentId is the condition step ID
+                if (typeof window.showAppStepTypeDialog === 'function') {
+                   window.showAppStepTypeDialog(type => {
+                       if (type) {
+                           const newStep = createNewStep(type);
+                           // --- Use correct parentId and targetBranch ---
+                           onUpdate({ type: 'add', step: newStep, parentId: parentId, branch: targetBranch });
+                       }
+                   });
+                } else { console.error("App's step type dialog function not found."); }
+            } else { console.error("Cannot add nested step: Missing onUpdate or parentId (condition ID)."); }
+        });
+    });
 }
 
 function renderLoopStepContent(container, step, variables, options) {
-  const varNames = Object.keys(variables);
-  const { onUpdate, parentId } = options;
+   const { onUpdate, parentId, onSelect } = options; // parentId here IS the ID of the loop step itself, get onSelect too
+   const varNames = Object.keys(variables);
 
-  container.innerHTML = `
+   container.innerHTML = `
     <div class="loop-config"> <div class="loop-source-row"> <span class="loop-label">For each in:</span> <code class="loop-source">${highlightVariables(step.source, varNames)}</code> </div> <div class="loop-variable-row"> <span class="loop-label">As:</span> <code class="loop-variable">${escapeHTML(step.loopVariable || 'item')}</code> </div> </div>
     <div class="loop-body"> <div class="loop-header">Loop Body</div> <div class="loop-steps" data-loop-container="body"></div> <button class="btn-add-loop-step" title="Add step inside loop">+ Add Step</button> </div>`;
 
-  const loopContainer = container.querySelector('[data-loop-container="body"]');
-  if (step.loopSteps?.length) {
-    const loopVariables = { ...variables }; // Pass down current variables
-    if (step.loopVariable) { // Add loop variable to scope for children
-        loopVariables[step.loopVariable] = { origin: step.name || 'Loop Step', type: 'loop', stepId: step.id };
-    }
-    step.loopSteps.forEach(child => loopContainer.appendChild(renderStep(child, { ...options, variables: loopVariables }))); // Pass updated vars
-  } else { loopContainer.innerHTML = '<div class="empty-branch">(empty)</div>'; }
+   const loopContainer = container.querySelector('[data-loop-container="body"]');
+   if (step.loopSteps?.length) {
+       const loopVariables = { ...variables }; // Pass down current variables
+       if (step.loopVariable) { // Add loop variable to scope for children
+           loopVariables[step.loopVariable] = { origin: step.name || 'Loop Step', type: 'loop', stepId: step.id };
+       }
+       step.loopSteps.forEach(child => loopContainer.appendChild(
+           renderStep(child, { ...options, variables: loopVariables /*, branch: null */ }) // No branch for loop children
+       ));
+   } else { loopContainer.innerHTML = '<div class="empty-branch">(empty)</div>'; }
 
-  // Add Step Button within loop body
-  container.querySelector('.btn-add-loop-step').addEventListener('click', (e) => {
-     e.stopPropagation();
-     if (onUpdate && parentId) {
-          if (typeof window.showAppStepTypeDialog === 'function') {
-             window.showAppStepTypeDialog(type => {
-                 if (type) {
-                    const newStep = createNewStep(type);
-                    onUpdate({ type: 'add', step: newStep, parentId: parentId, branch: null }); // No branch for loop
-                }
-              });
-          } else { console.error("App's step type dialog function not found."); }
-     } else { console.error("Cannot add loop step: Missing onUpdate or parentId."); }
-  });
+   // Add Step Button within loop body
+   container.querySelector('.btn-add-loop-step').addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (onUpdate && parentId) { // parentId is the loop step ID
+           if (typeof window.showAppStepTypeDialog === 'function') {
+              window.showAppStepTypeDialog(type => {
+                  if (type) {
+                     const newStep = createNewStep(type);
+                     // --- Use correct parentId, branch is null for loop ---
+                     onUpdate({ type: 'add', step: newStep, parentId: parentId, branch: null });
+                 }
+               });
+           } else { console.error("App's step type dialog function not found."); }
+      } else { console.error("Cannot add loop step: Missing onUpdate or parentId (loop ID)."); }
+   });
 }
 
 // --- Drag and Drop Setup ---
 
 function setupDragAndDrop(stepEl, options) {
   const dragHandle = stepEl.querySelector('.flow-step-drag-handle');
-  if (!dragHandle) return;
+  if (!dragHandle || !options.onUpdate) { // Check for onUpdate callback existence
+       // If no callback, disable D&D
+       if (dragHandle) dragHandle.draggable = false;
+       return;
+  }
   dragHandle.draggable = true;
 
   dragHandle.addEventListener('dragstart', (e) => {
     // Only allow drag from handle itself
     if (!e.target.classList.contains('flow-step-drag-handle')) { e.preventDefault(); return; }
+
     const stepId = stepEl.dataset.stepId;
     if (!stepId) return;
 
     e.dataTransfer.setData('text/plain', stepId);
     e.dataTransfer.effectAllowed = 'move';
-    // Delay adding class slightly so browser can capture drag image correctly
+    // Delay adding class slightly for better drag image capture
     setTimeout(() => stepEl.classList.add('dragging'), 0);
     document.body.classList.add('flow-step-dragging'); // Global indicator class
-    e.stopPropagation(); // Prevent header selection
+    e.stopPropagation();
   });
 
   dragHandle.addEventListener('dragend', () => {
+    // Clean up styles on the dragged element and body
     stepEl.classList.remove('dragging');
-    // Clean up any leftover indicators on any element
+    document.body.classList.remove('flow-step-dragging');
+    // Ensure any leftover drop indicators are removed globally
     document.querySelectorAll('.flow-step.drop-before, .flow-step.drop-after').forEach(el => {
         el.classList.remove('drop-before', 'drop-after');
     });
-    document.body.classList.remove('flow-step-dragging');
   });
 
-  // Dragover/leave/drop listeners on the step element itself (the potential target)
+  // Listeners on the step element itself as a potential drop target
   stepEl.addEventListener('dragover', (e) => {
     e.preventDefault(); // Necessary to allow dropping
+
     const draggingEl = document.querySelector('.flow-step.dragging');
-    // Prevent dropping on self or inside content area
-    if (!draggingEl || draggingEl === stepEl || e.target.closest('.flow-step-content')) {
+    // Prevent dropping on self or inside the content area (only allow dropping relative to the *step element itself*)
+    // Also prevent dropping a parent step onto one of its descendants
+    if (!draggingEl || draggingEl === stepEl || stepEl.contains(draggingEl) || e.target.closest('.flow-step-content')) {
         e.dataTransfer.dropEffect = 'none';
         stepEl.classList.remove('drop-before', 'drop-after'); // Clear indicators if invalid
         return;
     }
     e.dataTransfer.dropEffect = 'move';
+
     // Determine position based on vertical midpoint
     const rect = stepEl.getBoundingClientRect();
     const isBefore = e.clientY < (rect.top + rect.height / 2);
     // Apply indicator classes (only one should be active)
-    stepEl.classList.toggle('drop-before', isBefore);
-    stepEl.classList.toggle('drop-after', !isBefore);
+    // Check if already set correctly to avoid excessive toggling
+    if (isBefore && !stepEl.classList.contains('drop-before')) {
+       stepEl.classList.add('drop-before');
+       stepEl.classList.remove('drop-after');
+    } else if (!isBefore && !stepEl.classList.contains('drop-after')) {
+       stepEl.classList.add('drop-after');
+       stepEl.classList.remove('drop-before');
+    }
   });
 
   stepEl.addEventListener('dragleave', (e) => {
       // Remove indicators only if leaving the element entirely
+      // relatedTarget is the element the cursor is entering
       if (!stepEl.contains(e.relatedTarget)) {
         stepEl.classList.remove('drop-before', 'drop-after');
       }
@@ -306,22 +318,40 @@ function setupDragAndDrop(stepEl, options) {
 
   stepEl.addEventListener('drop', (e) => {
     e.preventDefault();
-    e.stopPropagation(); // Prevent bubbling
+    e.stopPropagation(); // Prevent bubbling to parent elements
+
     const sourceStepId = e.dataTransfer.getData('text/plain');
     const targetStepId = stepEl.dataset.stepId;
+    const draggingEl = document.querySelector('.flow-step.dragging'); // Get the element being dragged
 
-    // Final checks before triggering update
-    if (!sourceStepId || sourceStepId === targetStepId || e.target.closest('.flow-step-content')) {
-      stepEl.classList.remove('drop-before', 'drop-after');
-      return;
+     // --- Final Validation on Drop ---
+     // Check source/target IDs and ensure not dropping on self or parent onto descendant
+    if (!sourceStepId || !targetStepId || sourceStepId === targetStepId || (draggingEl && stepEl.contains(draggingEl)) ) {
+         stepEl.classList.remove('drop-before', 'drop-after');
+         if (draggingEl) draggingEl.classList.remove('dragging');
+         return;
     }
+    // Prevent dropping inside content (redundant check, but safe)
+    if (e.target.closest('.flow-step-content')) {
+         stepEl.classList.remove('drop-before', 'drop-after');
+         if (draggingEl) draggingEl.classList.remove('dragging');
+         return;
+    }
+
     // Determine position from class (more reliable than mouse coords at drop time)
     const position = stepEl.classList.contains('drop-before') ? 'before' : 'after';
-    stepEl.classList.remove('drop-before', 'drop-after'); // Clean up immediately
+    // Clean up indicators immediately
+    stepEl.classList.remove('drop-before', 'drop-after');
+    if (draggingEl) draggingEl.classList.remove('dragging'); // Also remove dragging class from source
 
-    // Trigger the move action via the onUpdate callback
-    if (options.onUpdate) {
-       options.onUpdate({ type: 'move', sourceStepId, targetStepId, position });
+    console.log(`Drop detected: Move ${sourceStepId} ${position} ${targetStepId}`);
+
+    // Trigger the move action via the onUpdate callback provided in options
+    try {
+        options.onUpdate({ type: 'move', sourceStepId, targetStepId, position });
+    } catch (updateError) {
+        console.error("Error triggering move update from drop:", updateError);
+        // Optionally show message, though app.js handler should manage errors
     }
   });
 }
@@ -335,33 +365,45 @@ function setupDragAndDrop(stepEl, options) {
  * @param {Object} step - The step data object being edited.
  * @param {Object} options - Editor options.
  * @param {Object} [options.variables={}] - Available variables map.
- * @param {Function} options.onChange - Callback triggered on Save/Cancel: onChange(updatedStepData | originalStepData).
+ * @param {Function} options.onChange - Callback triggered on Save: onChange(updatedStepData).
  * @param {Function} [options.onDirtyChange] - Callback for dirty state changes: onDirtyChange(isDirty).
  * @return {HTMLElement} The editor form element.
  */
 export function createStepEditor(step, options) {
+  // --- CRITICAL: Check if step data is valid ---
+  if (!step || !step.id || !step.type) {
+      console.error("Cannot create step editor: Invalid step data provided.", step);
+      const errorEl = document.createElement('div');
+      errorEl.className = 'step-editor error-message';
+      errorEl.textContent = "Error: Could not load editor for this step. Step data is missing or invalid.";
+      return errorEl;
+  }
+
   const { variables = {}, onChange, onDirtyChange } = options || {};
 
   let localStep; // Local copy for editing
-  try { localStep = JSON.parse(JSON.stringify(step)); }
-  catch (e) {
-     console.error("Failed to clone step for editing:", e);
-     const errorEl = document.createElement('div'); errorEl.textContent="Error loading editor."; return errorEl;
-  }
-  const originalStep = JSON.parse(JSON.stringify(step)); // For cancel/revert
+  let originalStep; // Store for cancellation
+  try {
+       localStep = JSON.parse(JSON.stringify(step));
+       originalStep = JSON.parse(JSON.stringify(step)); // Keep clean copy for revert
+   } catch (e) {
+       console.error("Failed to clone step for editing:", e);
+       const errorEl = document.createElement('div'); errorEl.textContent="Error initializing editor state."; return errorEl;
+   }
   let isDirty = false;
 
   // --- Dirty State Management ---
   function setDirtyState(dirty) {
-    if (isDirty === dirty) return;
-    isDirty = dirty;
-    saveBtn.disabled = !isDirty; // Enable/disable save button
-    if (typeof onDirtyChange === 'function') {
-      onDirtyChange(isDirty); // Notify parent component
-    }
+      if (isDirty === dirty) return; // No change
+      isDirty = dirty;
+      if (saveBtn) saveBtn.disabled = !isDirty; // Update save button state (check if saveBtn exists)
+      if (typeof onDirtyChange === 'function') {
+          try { onDirtyChange(isDirty); } // Notify parent component
+          catch (callbackError) { console.error("Error in onDirtyChange callback:", callbackError); }
+      }
   }
 
-  // --- Create Editor Structure ---
+  // --- Create Editor Structure (remains same) ---
   const editorEl = document.createElement('div');
   editorEl.className = 'step-editor';
   editorEl.innerHTML = `
@@ -374,7 +416,7 @@ export function createStepEditor(step, options) {
     <div class="step-editor-actions"> <button class="btn-save-step" title="Save changes to this step" disabled>Save Step</button> <button class="btn-cancel-step" title="Discard changes and revert">Cancel</button> </div>
   `;
 
-  // --- Get References ---
+  // --- Get References (remains same) ---
   const nameInput = editorEl.querySelector(`#step-editor-name-${localStep.id}`);
   const typeContentContainer = editorEl.querySelector('.editor-type-content');
   const saveMessageEl = editorEl.querySelector('.step-save-message');
@@ -382,13 +424,21 @@ export function createStepEditor(step, options) {
   const cancelBtn = editorEl.querySelector('.btn-cancel-step');
 
   // --- Populate Type-Specific Editor ---
-  // Pass setDirtyState down so sub-editors can trigger it
+  // Pass setDirtyState down
   const editorOptions = { variables, localStep, setDirtyState };
-  switch (localStep.type) {
-    case 'request': createRequestEditor(typeContentContainer, editorOptions); break;
-    case 'condition': createConditionEditor(typeContentContainer, editorOptions); break;
-    case 'loop': createLoopEditor(typeContentContainer, editorOptions); break;
-    default: typeContentContainer.textContent = `Editor not available for type: ${localStep.type}`;
+  try { // Wrap sub-editor creation
+       switch (localStep.type) {
+          case 'request': createRequestEditor(typeContentContainer, editorOptions); break;
+          case 'condition': createConditionEditor(typeContentContainer, editorOptions); break;
+          case 'loop': createLoopEditor(typeContentContainer, editorOptions); break;
+          default: typeContentContainer.textContent = `Editor not available for type: ${localStep.type}`;
+       }
+  } catch (subEditorError) {
+       console.error(`Error creating editor for type ${localStep.type}:`, subEditorError);
+       typeContentContainer.innerHTML = `<p style="color: red;">Error loading ${localStep.type} editor fields.</p>`;
+       // Disable save button if sub-editor failed
+       if (saveBtn) saveBtn.disabled = true;
+       setDirtyState(false); // Not technically dirty if fields failed to load
   }
 
   // --- Event Listeners ---
@@ -399,52 +449,92 @@ export function createStepEditor(step, options) {
 
   // Save Button
   saveBtn.addEventListener('click', () => {
-    if (onChange) {
-      // Perform any final pre-save logic (e.g., generate condition string)
-      if (localStep.type === 'condition' && localStep.conditionData?.variable && localStep.conditionData?.operator) {
-        localStep.condition = generateConditionString(localStep.conditionData);
-      }
-      // Basic validation before saving (e.g., loop variable name)
+      if (!isDirty) return; // Do nothing if not dirty
+
+      // Perform pre-save logic and validation (moved from createStepEditor main body)
+       if (localStep.type === 'condition') {
+           if (localStep.conditionData?.variable && localStep.conditionData?.operator) {
+               localStep.condition = generateConditionString(localStep.conditionData);
+           } else {
+                // Validation: Condition requires variable and operator
+                alert("Condition Error: Please select both a variable and an operator.");
+                const varSelect = editorEl.querySelector(`#cond-var-${localStep.id}`);
+                if (varSelect?.value === '') varSelect.focus();
+                else editorEl.querySelector(`#cond-op-${localStep.id}`)?.focus();
+                return; // Prevent saving invalid state
+           }
+       }
       if (localStep.type === 'loop') {
-        const loopVar = localStep.loopVariable?.trim();
-        if (!loopVar || !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(loopVar)) {
-          alert("Invalid Loop Variable Name. Please fix before saving.");
-          const varInput = editorEl.querySelector(`#loop-variable-${localStep.id}`);
-          if (varInput) { varInput.focus(); varInput.style.borderColor = 'red'; }
-          return; // Prevent saving invalid state
-        }
+          const loopVar = localStep.loopVariable?.trim();
+          if (!loopVar || !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(loopVar)) {
+              alert("Loop Error: Invalid 'Item Variable Name'. Please use a valid JavaScript variable name.");
+              const varInput = editorEl.querySelector(`#loop-variable-${localStep.id}`);
+              if (varInput) { varInput.focus(); varInput.style.borderColor = 'red'; }
+              return; // Prevent saving invalid state
+          }
+           const sourceVar = localStep.source?.trim();
+           if (!sourceVar || !/^\{\{.+\}\}$/.test(sourceVar)) {
+                alert("Loop Error: 'Source' must be a variable reference like {{arrayVariable}}.");
+                const sourceInput = editorEl.querySelector(`#loop-source-${localStep.id}`);
+                if (sourceInput) sourceInput.focus();
+                return;
+           }
       }
-      // Call parent's onChange with the updated local step data
-      onChange(localStep);
-    }
-    saveMessageEl.style.display = 'block'; // Show success message
-    setTimeout(() => { if (saveMessageEl) saveMessageEl.style.display = 'none'; }, 2500);
-    setDirtyState(false); // Reset dirty state after successful save
+       // Add more validation for Request step if needed (e.g., URL format)
+
+      // If validation passes, call parent's onChange with the updated local step data
+      if (onChange) {
+          try { onChange(localStep); } // Pass the modified localStep
+          catch (callbackError) { console.error("Error in editor save onChange callback:", callbackError); }
+      }
+      if (saveMessageEl) { // Check element exists
+           saveMessageEl.style.display = 'block';
+           setTimeout(() => { if (saveMessageEl) saveMessageEl.style.display = 'none'; }, 2500);
+      }
+      setDirtyState(false); // Reset dirty state after successful save
   });
 
   // Cancel Button
   cancelBtn.addEventListener('click', () => {
-    if (isDirty && !confirm("Discard unsaved changes to this step?")) {
-      return; // User canceled the discard action
-    }
-    // If discarding or wasn't dirty, revert UI and notify parent
-    // We notify parent by calling onChange with the *original* step data
-    if (onChange) {
-      onChange(originalStep); // This signals a revert/cancel action
-    }
-    // Re-render the editor with original data (simplest way to revert UI)
-    // No need to manually reset fields if we re-create based on originalStep
-    // Note: This might cause a flicker, but ensures clean state.
-    const revertOptions = { variables, localStep: originalStep, setDirtyState }; // Use original data
-    nameInput.value = originalStep.name || ''; // Reset name input explicitly
-    typeContentContainer.innerHTML = ''; // Clear current specific fields
-    switch (originalStep.type) { // Rebuild based on original type
-      case 'request': createRequestEditor(typeContentContainer, revertOptions); break;
-      case 'condition': createConditionEditor(typeContentContainer, revertOptions); break;
-      case 'loop': createLoopEditor(typeContentContainer, revertOptions); break;
-      default: typeContentContainer.textContent = `Editor not available for type: ${originalStep.type}`;
-    }
-    setDirtyState(false); // Ensure dirty state is reset
+      if (isDirty && !confirm("Discard unsaved changes to this step?")) {
+          return; // User canceled the discard action
+      }
+
+      // If discarding or wasn't dirty, reset state and UI
+      isDirty = false; // Reset local dirty flag first
+
+      // --- CRITICAL: Reset localStep object to original state ---
+      try { localStep = JSON.parse(JSON.stringify(originalStep)); }
+      catch(e) { console.error("Failed to revert localStep on cancel:", e); /* Handle error */ return; }
+
+      // Reset the UI by re-rendering the editor with original data
+      nameInput.value = localStep.name || ''; // Reset name input
+      typeContentContainer.innerHTML = ''; // Clear current specific fields
+
+       // Re-create sub-editor with original data and pass the *same* setDirtyState function
+       const revertOptions = { variables, localStep, setDirtyState };
+      try {
+           switch (localStep.type) {
+              case 'request': createRequestEditor(typeContentContainer, revertOptions); break;
+              case 'condition': createConditionEditor(typeContentContainer, revertOptions); break;
+              case 'loop': createLoopEditor(typeContentContainer, revertOptions); break;
+              default: typeContentContainer.textContent = `Editor not available for type: ${localStep.type}`;
+           }
+      } catch (revertError) {
+           console.error(`Error reverting editor for type ${localStep.type}:`, revertError);
+           typeContentContainer.innerHTML = `<p style="color: red;">Error reverting editor fields.</p>`;
+      }
+
+      // Ensure save button is disabled and notify parent that state is clean
+       if (saveBtn) saveBtn.disabled = true;
+       if (typeof onDirtyChange === 'function') {
+            try { onDirtyChange(false); }
+            catch (callbackError) { console.error("Error in onDirtyChange callback during cancel:", callbackError); }
+       }
+
+       // Note: We do NOT call onChange(originalStep) here anymore. The editor simply resets itself.
+       // The parent (app.js) already knows the original state and doesn't need explicit notification of cancellation *unless*
+       // the cancellation implies a change in the overall flow's dirty state (which setDirtyState(false) handles via onDirtyChange).
   });
 
   return editorEl;
@@ -453,20 +543,45 @@ export function createStepEditor(step, options) {
 
 // --- Type-Specific Editor Creation Functions ---
 
+// --- [Modified Code] --- in createRequestEditor
 function createRequestEditor(container, options) {
     const { localStep, variables, setDirtyState } = options; // Get setDirtyState callback
     const availableVarNames = Object.keys(variables);
 
-    // (innerHTML structure remains largely the same as original)
+    // --- MODIFICATION START: Add onFailure HTML ---
     container.innerHTML = `
         <div class="form-group"> <label for="request-method-${localStep.id}">Method</label> <select id="request-method-${localStep.id}">${getHttpMethods().map(m => `<option value="${m}" ${localStep.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select> </div>
         <div class="form-group"> <label for="request-url-${localStep.id}">URL</label> <div class="input-with-vars"> <input type="text" id="request-url-${localStep.id}" value="${escapeHTML(localStep.url || '')}" placeholder="e.g., https://api.example.com/users/{{userId}}"> <button class="btn-insert-var" data-target-input="request-url-${localStep.id}">{{…}}</button> </div> </div>
-        <div class="form-tabs"> <div class="tab-buttons"> <button class="tab-button active" data-tab="headers">Headers (${Object.keys(localStep.headers || {}).length})</button> <button class="tab-button" data-tab="body">Body</button> <button class="tab-button" data-tab="extract">Extract (${Object.keys(localStep.extract || {}).length})</button> </div>
-        <div class="tab-content active" id="tab-headers-${localStep.id}"><div class="headers-editor"><div class="headers-list"></div><button class="btn-add-header" style="margin-top:10px;">+ Add Header</button></div></div>
-        <div class="tab-content" id="tab-body-${localStep.id}"><div class="form-group"><label for="request-body-${localStep.id}">Request Body (JSON)</label><textarea id="request-body-${localStep.id}" rows="10" placeholder='e.g.,\n{\n "key": "value",\n "id": {{var}}\n}'>${escapeHTML(localStep.body || '')}</textarea><div class="form-hint">Use "{{var}}" for strings, {{var}} for numbers/booleans.</div><div class="body-actions"><button class="btn-format-json">Format</button><button class="btn-insert-var" data-target-input="request-body-${localStep.id}">Insert Var</button></div><div class="json-validation-error" style="color:red;margin-top:5px;font-size:0.9em;display:none;"></div></div></div>
-        <div class="tab-content" id="tab-extract-${localStep.id}"><div class="extract-editor"><div class="extracts-list"></div><button class="btn-add-extract" style="margin-top:10px;">+ Add Extraction</button><p class="form-hint">Extract values via dot notation (<code>body.data.token</code>), array index (<code>body.items[0].id</code>), or keywords (<code>status</code>, <code>headers</code>, <code>body</code>).</p></div></div>
-        </div>`;
 
+        <div class="form-tabs">
+            <div class="tab-buttons">
+                 <button class="tab-button active" data-tab="headers">Headers (${Object.keys(localStep.headers || {}).length})</button>
+                 <button class="tab-button" data-tab="body">Body</button>
+                 <button class="tab-button" data-tab="extract">Extract (${Object.keys(localStep.extract || {}).length})</button>
+                 <button class="tab-button" data-tab="options">Options</button> <!-- Optional: New tab for options like onFailure -->
+            </div>
+
+            <div class="tab-content active" id="tab-headers-${localStep.id}">
+                <div class="headers-editor"><div class="headers-list"></div><button class="btn-add-header" style="margin-top:10px;">+ Add Header</button></div>
+            </div>
+            <div class="tab-content" id="tab-body-${localStep.id}">
+                <div class="form-group"><label for="request-body-${localStep.id}">Request Body (JSON)</label><textarea id="request-body-${localStep.id}" rows="10" placeholder='e.g.,\n{\n "key": "value",\n "id": {{var}}\n}'>${escapeHTML(localStep.body || '')}</textarea><div class="form-hint">Use "{{var}}" for strings, {{var}} for numbers/booleans.</div><div class="body-actions"><button class="btn-format-json">Format</button><button class="btn-insert-var" data-target-input="request-body-${localStep.id}">Insert Var</button></div><div class="json-validation-error" style="color:red;margin-top:5px;font-size:0.9em;display:none;"></div></div>
+            </div>
+            <div class="tab-content" id="tab-extract-${localStep.id}">
+                <div class="extract-editor"><div class="extracts-list"></div><button class="btn-add-extract" style="margin-top:10px;">+ Add Extraction</button><p class="form-hint">Extract values via dot notation (<code>body.data.token</code>), array index (<code>body.items[0].id</code>), or keywords (<code>.status</code>, <code>headers.Content-Type</code>, <code>body</code>).</p></div>
+            </div>
+             <div class="tab-content" id="tab-options-${localStep.id}">
+                 <div class="form-group">
+                    <label for="request-onfailure-${localStep.id}">On Failure (Network Error or Non-2xx Status)</label>
+                    <select id="request-onfailure-${localStep.id}">
+                        <option value="stop" ${!localStep.onFailure || localStep.onFailure === 'stop' ? 'selected' : ''}>Stop Flow Execution</option>
+                        <option value="continue" ${localStep.onFailure === 'continue' ? 'selected' : ''}>Continue Flow Execution</option>
+                    </select>
+                    <p class="form-hint">Choose behavior when a request fails (network error or status >= 300). 'Stop' halts the entire flow. 'Continue' logs the result and proceeds.</p>
+                </div>
+            </div>
+        </div>`;
+    // --- MODIFICATION END ---
 
     const methodSelect = container.querySelector(`#request-method-${localStep.id}`);
     const urlInput = container.querySelector(`#request-url-${localStep.id}`);
@@ -475,40 +590,32 @@ function createRequestEditor(container, options) {
     const bodyError = container.querySelector('.json-validation-error');
     const headersTabBtn = container.querySelector('[data-tab="headers"]');
     const extractTabBtn = container.querySelector('[data-tab="extract"]');
+    // --- MODIFICATION START: Get onFailure select ---
+    const onFailureSelect = container.querySelector(`#request-onfailure-${localStep.id}`);
+    // --- MODIFICATION END ---
 
-    // Attach listeners that update localStep and call setDirtyState(true)
+    // --- Existing listeners + NEW onFailure listener ---
     methodSelect.addEventListener('change', () => { localStep.method = methodSelect.value; setDirtyState(true); });
     urlInput.addEventListener('input', () => { localStep.url = urlInput.value; setDirtyState(true); });
     bodyTextarea.addEventListener('input', () => { localStep.body = bodyTextarea.value; bodyError.style.display = 'none'; setDirtyState(true); });
-
-    formatBtn.addEventListener('click', () => {
-        bodyError.style.display = 'none';
-        const originalBody = bodyTextarea.value;
-        const formatted = formatJson(originalBody); // formatJson now includes validation
-        if (formatted !== originalBody) { // Update only if format actually changed
-            bodyTextarea.value = formatted;
-            localStep.body = formatted;
-            setDirtyState(true); // Mark dirty if format changed
-        } else {
-             // If format didn't change, re-validate to show potential errors
-             const validation = validateRequestBodyJson(originalBody);
-             if (!validation.valid) {
-                 bodyError.textContent = validation.message || 'Invalid JSON syntax.';
-                 bodyError.style.display = 'block';
-             }
-        }
+    // --- MODIFICATION START: Add listener for onFailure ---
+    onFailureSelect.addEventListener('change', () => {
+        localStep.onFailure = onFailureSelect.value;
+        setDirtyState(true); // Mark dirty when failure behavior changes
     });
+    // --- MODIFICATION END ---
 
-    // Setup sub-editors, passing setDirtyState down indirectly via their onChange callbacks
+    // ... (rest of formatBtn listener, setupHeadersEditor, setupExtractEditor, tab switching, etc. remain the same) ...
+     // Setup sub-editors - they call onChange which MUST call setDirtyState(true)
     setupHeadersEditor(container.querySelector('.headers-editor'), localStep.headers || {}, availableVarNames, (hdrs) => {
         localStep.headers = hdrs;
         headersTabBtn.textContent = `Headers (${Object.keys(hdrs).length})`;
-        setDirtyState(true); // Mark dirty when headers change
+        setDirtyState(true); // Ensure sub-editor changes mark dirty
     });
     setupExtractEditor(container.querySelector('.extract-editor'), localStep.extract || {}, (exts) => {
         localStep.extract = exts;
         extractTabBtn.textContent = `Extract (${Object.keys(exts).length})`;
-        setDirtyState(true); // Mark dirty when extractions change
+        setDirtyState(true); // Ensure sub-editor changes mark dirty
     });
 
     // Tab switching logic
@@ -543,7 +650,6 @@ function createConditionEditor(container, options) {
         localStep.conditionData.preview = 'Select variable and operator';
     }
 
-
     // (innerHTML structure remains the same)
     container.innerHTML = `
         <div class="form-group"><label>Condition Logic</label><div class="condition-builder">
@@ -555,7 +661,7 @@ function createConditionEditor(container, options) {
         <div class="condition-preview"><label>Preview:</label><pre id="cond-preview-${localStep.id}">${escapeHTML(localStep.conditionData.preview)}</pre></div>
         </div></div>
         <div class="branches-info"><div class="branch-info then-info"><h4>Then</h4><p>${(localStep.thenSteps?.length || 0)} step(s)</p></div><div class="branch-info else-info"><h4>Else</h4><p>${(localStep.elseSteps?.length || 0)} step(s)</p></div></div>`;
-
+    // --- End innerHTML ---
 
     const varSelect = container.querySelector(`#cond-var-${localStep.id}`);
     const opSelect = container.querySelector(`#cond-op-${localStep.id}`);
@@ -563,7 +669,7 @@ function createConditionEditor(container, options) {
     const valContainer = container.querySelector(`#cond-val-cont-${localStep.id}`);
     const previewEl = container.querySelector(`#cond-preview-${localStep.id}`);
 
-    if (localStep.conditionData.operator) opSelect.value = localStep.conditionData.operator; // Pre-select operator
+    if (localStep.conditionData.operator) opSelect.value = localStep.conditionData.operator;
 
     function updateState() {
         const needsValue = doesOperatorNeedValue(opSelect.value);
@@ -571,14 +677,16 @@ function createConditionEditor(container, options) {
         localStep.conditionData = { variable: varSelect.value, operator: opSelect.value, value: needsValue ? valInput.value : '' };
         localStep.conditionData.preview = generateConditionPreview(localStep.conditionData);
         previewEl.textContent = escapeHTML(localStep.conditionData.preview);
-        setDirtyState(true); // Mark dirty on any change
+        // Don't call setDirtyState here directly, let the event listeners do it
     }
 
-    varSelect.addEventListener('change', updateState);
-    opSelect.addEventListener('change', updateState);
-    valInput.addEventListener('input', updateState); // Input triggers update too
+    // --- MODIFICATION START: Add immediate dirty listeners ---
+    varSelect.addEventListener('change', () => { updateState(); setDirtyState(true); });
+    opSelect.addEventListener('change', () => { updateState(); setDirtyState(true); });
+    valInput.addEventListener('input', () => { updateState(); setDirtyState(true); }); // Use 'input' for value field
+    // --- MODIFICATION END ---
 
-    updateState(); // Initial setup
+    updateState(); // Initial setup (doesn't mark dirty)
      // Setup insert button (delegated)
     setupVariableInsertButton(container.querySelector(`#cond-val-cont-${localStep.id} .btn-insert-var`), valInput, availableVarNames);
 }
@@ -587,19 +695,19 @@ function createLoopEditor(container, options) {
     const { localStep, variables, setDirtyState } = options; // Get setDirtyState
     const availableVarNames = Object.keys(variables);
 
-    // (innerHTML structure remains the same)
+    // --- Existing innerHTML setup ---
      container.innerHTML = `
         <div class="form-group"> <label for="loop-source-${localStep.id}">Source (Array Variable)</label> <div class="input-with-vars"> <input type="text" id="loop-source-${localStep.id}" value="${escapeHTML(localStep.source || '')}" placeholder="e.g., {{apiResponse.items}}"> <button class="btn-insert-var" data-target-input="loop-source-${localStep.id}">{{…}}</button> </div> <p class="form-hint">Variable like <code>{{varName}}</code> resolving to an array.</p> </div>
         <div class="form-group"> <label for="loop-variable-${localStep.id}">Item Variable Name</label> <input type="text" id="loop-variable-${localStep.id}" value="${escapeHTML(localStep.loopVariable || 'item')}" placeholder="e.g., item"> <p class="form-hint">Name for each item (e.g., {{item}}).</p> <div class="loop-var-validation-error" style="color:red;margin-top:5px;font-size:0.9em;display:none;"></div> </div>
         <div class="loop-steps-info"><h4>Loop Body</h4><p>${(localStep.loopSteps?.length || 0)} step(s)</p></div>`;
-
+    // --- End innerHTML ---
 
     const sourceInput = container.querySelector(`#loop-source-${localStep.id}`);
     const varInput = container.querySelector(`#loop-variable-${localStep.id}`);
     const varError = container.querySelector('.loop-var-validation-error');
 
-    // Attach listeners that update localStep and call setDirtyState(true)
-    sourceInput.addEventListener('input', () => { localStep.source = sourceInput.value; setDirtyState(true); });
+    // --- MODIFICATION START: Add immediate dirty listeners ---
+    sourceInput.addEventListener('input', () => { localStep.source = sourceInput.value; setDirtyState(true); /* Immediate dirty */ });
     varInput.addEventListener('input', () => {
         const name = varInput.value.trim();
         localStep.loopVariable = name;
@@ -609,18 +717,20 @@ function createLoopEditor(container, options) {
         } else {
             varError.style.display = 'none'; varInput.style.borderColor = '';
         }
-        setDirtyState(true);
+        setDirtyState(true); /* Immediate dirty */
     });
-    varInput.dispatchEvent(new Event('input')); // Initial validation
+    // --- MODIFICATION END ---
+    varInput.dispatchEvent(new Event('input')); // Initial validation (doesn't mark dirty)
 
      // Setup insert button (delegated)
     setupVariableInsertButton(container.querySelector(`#loop-source-${localStep.id}`).closest('.input-with-vars').querySelector('.btn-insert-var'), sourceInput, availableVarNames);
 }
 
 
-// ----- KeyValue Editor Helpers ----- (Unchanged from original)
+// ----- KeyValue Editor Helpers -----
 
 function setupKeyValueEditor(editorContainer, initialItems, availableVarNames, onChange, config) {
+    // ... (get listContainer, addButton, currentItems) ...
     const listContainer = editorContainer.querySelector(config.listSelector);
     const addButton = editorContainer.querySelector(config.addBtnSelector);
     let currentItems = { ...(initialItems || {}) };
@@ -628,19 +738,32 @@ function setupKeyValueEditor(editorContainer, initialItems, availableVarNames, o
     function renderAndBind() {
         listContainer.innerHTML = renderKeyValueList(currentItems, config);
         bindRowListeners();
+        // ... (no items msg logic) ...
         const noItemsMsg = listContainer.querySelector(`.${config.itemClass}-no-items`);
         if (noItemsMsg && Object.keys(currentItems).length > 0) noItemsMsg.remove();
-        else if (!noItemsMsg && Object.keys(currentItems).length === 0) listContainer.innerHTML = `<div class="${config.itemClass}-no-items">${config.noItemsMsg}</div>`;
+        else if (!noItemsMsg && Object.keys(currentItems).length === 0 && config.noItemsMsg) listContainer.innerHTML = `<div class="${config.itemClass}-no-items">${config.noItemsMsg}</div>`;
+
     }
 
     function bindRowListeners() {
         listContainer.querySelectorAll(`.${config.itemClass}`).forEach(row => {
             row.addEventListener('input', (e) => {
-                 if (e.target.matches(`.${config.keyClass}, .${config.valueClass}`)) { updateModelFromView(); onChange(currentItems); }
+                 // Update model on input in either key or value field
+                 if (e.target.matches(`.${config.keyClass}, .${config.valueClass}`)) {
+                     // --- MODIFICATION START: Ensure dirty state is set ---
+                     // Call updateModelFromView, which will call onChange, which SHOULD call setDirtyState(true) in the parent editor.
+                     // If there's any doubt, add a direct call here, but it should be handled by the onChange chain.
+                     // Example Direct Call (if needed):
+                     // if (typeof options.setDirtyState === 'function') { options.setDirtyState(true); }
+                     updateModelFromView();
+                     // --- MODIFICATION END ---
+                 }
              });
              row.addEventListener('click', (e) => {
                  if (e.target.matches(`.${config.removeBtnClass}`)) {
-                     row.remove(); updateModelFromView(); renderAndBind(); onChange(currentItems);
+                     row.remove(); updateModelFromView(); // Update model after removing row
+                     // Re-render only if list becomes empty to show the message
+                     if (Object.keys(currentItems).length === 0) renderAndBind();
                  }
                  // Variable insert button handled globally
              });
@@ -653,28 +776,66 @@ function setupKeyValueEditor(editorContainer, initialItems, availableVarNames, o
     }
 
     function updateModelFromView() {
+        // ... (logic to build newItems from UI) ...
         const newItems = {};
         listContainer.querySelectorAll(`.${config.itemClass}`).forEach(row => {
-            const keyInput = row.querySelector(`.${config.keyClass}`);
-            const valueInput = row.querySelector(`.${config.valueClass}`);
-            if (!keyInput || !valueInput) return;
-            const key = keyInput.value.trim();
-            if (key) newItems[key] = valueInput.value;
+            try { // Add try-catch around DOM access
+                const keyInput = row.querySelector(`.${config.keyClass}`);
+                const valueInput = row.querySelector(`.${config.valueClass}`);
+                // --- Add checks ---
+                if (!keyInput || !valueInput) {
+                    console.warn("KeyValueEditor: Skipping row due to missing input elements.");
+                    return;
+                }
+                const key = keyInput.value.trim();
+                // Only add if key is not empty
+                if (key) {
+                     newItems[key] = valueInput.value;
+                } else if (valueInput.value.trim()) {
+                     // Optional: Warn if value exists but key is empty?
+                     // console.warn(`KeyValueEditor: Ignoring item with value but empty key: "${valueInput.value}"`);
+                }
+            } catch (error) {
+                console.error("Error processing key-value row:", error, row);
+            }
         });
-        currentItems = newItems;
+        // Only update if the object actually changed (shallow compare for simple cases)
+        // Compare stringified versions as a simple way to detect changes in keys or values
+        if (JSON.stringify(currentItems) !== JSON.stringify(newItems)) {
+             currentItems = newItems;
+             // --- CRITICAL: onChange MUST trigger setDirtyState(true) in its implementation ---
+             // (e.g., in createRequestEditor's setupHeadersEditor/setupExtractEditor callbacks)
+             onChange(currentItems);
+        }
     }
 
     addButton.addEventListener('click', () => {
-        const tempKey = `new_item_${Date.now()}`; currentItems[tempKey] = ''; renderAndBind();
+        // ... (add new row logic) ...
+        const tempKey = `new_item_${Date.now()}`; // Create a temporary unique key
+        currentItems[tempKey] = ''; // Add placeholder item to model
+        renderAndBind(); // Re-render the list
+
+        // Find the newly added row and focus its key input
         const newRow = Array.from(listContainer.querySelectorAll(`.${config.itemClass}`)).find(r => r.querySelector(`.${config.keyClass}`).value === tempKey);
-        if (newRow) { const keyInput = newRow.querySelector(`.${config.keyClass}`); keyInput.value = ''; keyInput.focus(); }
-        onChange(currentItems);
+        if (newRow) {
+             const keyInput = newRow.querySelector(`.${config.keyClass}`);
+             keyInput.value = ''; // Clear the temporary key
+             keyInput.focus(); // Focus for immediate editing
+         }
+        // --- CRITICAL: Adding a row inherently makes it dirty ---
+        // Trigger onChange because items have changed (even if temporarily named)
+        onChange(currentItems); // This call MUST trigger setDirtyState(true)
+        // Consider if onChange should only be called *after* the user modifies the new row.
+        // The current approach marks dirty immediately on add.
     });
-    renderAndBind();
+    renderAndBind(); // Initial render
 }
 
+
 function renderKeyValueList(items, config) {
-  if (!items || Object.keys(items).length === 0) return `<div class="${config.itemClass}-no-items">${config.noItemsMsg}</div>`;
+  if (!items || Object.keys(items).length === 0) {
+       return config.noItemsMsg ? `<div class="${config.itemClass}-no-items">${config.noItemsMsg}</div>` : '';
+   }
   return Object.entries(items).map(([key, value]) =>
       `<div class="${config.itemClass}">
         <input type="text" class="${config.keyClass}" value="${escapeHTML(key)}" placeholder="${config.keyPlaceholder || 'Name'}">
@@ -689,6 +850,7 @@ function setupHeadersEditor(container, initialHeaders, availableVarNames, onChan
     setupKeyValueEditor(container, initialHeaders, availableVarNames, onChange, { listSelector: '.headers-list', addBtnSelector: '.btn-add-header', itemClass: 'header-row', keyClass: 'header-key', valueClass: 'header-value', removeBtnClass: 'btn-remove-header', noItemsMsg: 'No headers defined', keyPlaceholder: 'Header Name', valuePlaceholder: 'Header Value', includeVarInsert: true });
 }
 function setupExtractEditor(container, initialExtracts, onChange) {
+    // Extracts don't need availableVarNames for insertion
     setupKeyValueEditor(container, initialExtracts, [], onChange, { listSelector: '.extracts-list', addBtnSelector: '.btn-add-extract', itemClass: 'extract-row', keyClass: 'extract-var-name', valueClass: 'extract-path', removeBtnClass: 'btn-remove-extract', noItemsMsg: 'No extractions defined', keyPlaceholder: 'Variable Name', valuePlaceholder: 'JSON Path (e.g., body.id)', includeVarInsert: false });
 }
 

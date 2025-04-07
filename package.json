@@ -1,0 +1,37 @@
+{
+  "name": "flowrunner",
+  "description": "API Flow Creation and Visualization Tool",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "build": {
+    "appId": "com.flowrunner.app",
+    "mac": {
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "category": "Development"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Razor29/FlowX.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Razor29/FlowX/issues"
+  },
+  "homepage": "https://github.com/Razor29/FlowX#readme",
+  "devDependencies": {
+    "electron": "^35.1.3"
+  }
+}
