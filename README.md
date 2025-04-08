@@ -1,11 +1,11 @@
-# FlowRunner <img src="assets/favicon.svg" alt="FlowRunner Icon" height="32" style="vertical-align: -6px;">
+# FlowRunner <img src="assets/favicon.svg" alt="FlowRunner Icon" height="32" style="vertical-align: -15px;">
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
 <!-- Optional: Add build status/license badges here if desired -->
 <!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
 <div align="center" style="margin-bottom: 25px; margin-top: 10px;">
-  <img src="assets/ase.svg" alt="ASE Team Logo" height="100">
+  <img src="assets/ASE.svg" alt="ASE Team Logo" height="100">
   <p style="font-size: 2.85em; color: #555; margin-top: 0px; margin-bottom: 0; font-weight: 500; letter-spacing: 0.5px;">
     Team
   </p>
