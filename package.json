@@ -39,6 +39,9 @@
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1"
   },
+  "overrides": {
+    "app-builder-lib": "24.13.2" 
+  },
   "config": {
     "forge": {
       "packagerConfig": {
