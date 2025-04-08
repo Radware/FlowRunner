@@ -31,12 +31,14 @@
   "devDependencies": {
     "@electron-forge/cli": "^7.4.0",
     "@electron-forge/maker-dmg": "^7.4.0",
-    "@electron-forge/maker-portable": "^7.4.0",
     "@electron-forge/maker-squirrel": "^7.4.0",
     "@electron-forge/maker-zip": "^7.4.0",
+    "@rabbitholesyndrome/electron-forge-maker-portable": "^0.2.0",
     "electron": "^31.2.1"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-squirrel-startup": "^1.0.1"
+  },
   "config": {
     "forge": {
       "packagerConfig": {
@@ -45,27 +47,31 @@
         "executableName": "FlowRunner",
         "appCopyright": "Copyright (c) 2024 Radware ASE Team",
         "win32metadata": {
-           "CompanyName": "Radware",
-           "ProductName": "FlowRunner",
-           "FileDescription": "API Flow Creation and Visualization Tool",
-           "OriginalFilename": "FlowRunner.exe"
+          "CompanyName": "Radware",
+          "ProductName": "FlowRunner",
+          "FileDescription": "API Flow Creation and Visualization Tool",
+          "OriginalFilename": "FlowRunner.exe"
         }
       },
       "rebuildConfig": {},
       "makers": [
         {
           "name": "@electron-forge/maker-squirrel",
-          "platforms": ["win32"],
+          "platforms": [
+            "win32"
+          ],
           "config": {
-             "name": "FlowRunner",
-             "authors": "Radware ASE Team",
-             "description": "API Flow Creation and Visualization Tool",
-             "setupIcon": "assets/icon.ico"
+            "name": "FlowRunner",
+            "authors": "Radware ASE Team",
+            "description": "API Flow Creation and Visualization Tool",
+            "setupIcon": "assets/icon.ico"
           }
         },
         {
-          "name": "@electron-forge/maker-portable",
-          "platforms": ["win32"],
+          "name": "@rabbitholesyndrome/electron-forge-maker-portable",
+          "platforms": [
+            "win32"
+          ],
           "config": {}
         },
         {
@@ -74,16 +80,14 @@
           "config": {
             "icon": "assets/icon.icns",
             "format": "ULFO",
-            "title": "FlowRunner Installer",
-             "contents": [
-              { "x": 410, "y": 150, "type": "link", "path": "/Applications" },
-              { "x": 130, "y": 150, "type": "file" }
-            ]
+            "title": "FlowRunner Installer"
           }
         },
         {
           "name": "@electron-forge/maker-zip",
-          "platforms": ["darwin"]
+          "platforms": [
+            "darwin"
+          ]
         }
       ]
     }

@@ -1,10 +1,19 @@
-# FlowRunner
+# FlowRunner <img src="assets/favicon.svg" alt="FlowRunner Icon" height="32" style="vertical-align: -6px;">
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+<!-- Optional: Add build status/license badges here if desired -->
+<!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
+
+<div align="center" style="margin-bottom: 25px; margin-top: 10px;">
+  <img src="assets/ase.svg" alt="ASE Team Logo" height="100">
+  <p style="font-size: 2.85em; color: #555; margin-top: 0px; margin-bottom: 0; font-weight: 500; letter-spacing: 0.5px;">
+    Team
+  </p>
+</div>
 
 ## Introduction
 
-FlowRunner is a standalone Windows desktop application designed to help you visually create, manage, run, and visualize sequences of API calls (known as "API Flows").
+FlowRunner is a standalone desktop application, developed by the **Radware ASE Team**, designed to help you visually create, manage, run, and visualize sequences of API calls (known as "API Flows"). It runs on Windows (x64) and macOS (Apple Silicon / arm64).
 
 Whether you need to demonstrate complex API interactions, test multi-step API processes locally, or debug intricate data flows, FlowRunner provides an intuitive interface with both list-based and node-graph views. Its real-time execution visualization helps you understand exactly what's happening step-by-step.
 
@@ -48,20 +57,29 @@ This tool is particularly useful for:
 
 ## Prerequisites
 
-*   A FlowRunner application package for Windows (**Installer** `.exe` or **Portable** `.exe`).
-    *   *[Action Required: Explain how users obtain the installer/portable executable. e.g., Download link, internal share, etc.]*
+*   Windows (x64) or macOS (Apple Silicon / arm64).
+*   The appropriate FlowRunner installer package downloaded from the [v1.0.0 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.0.0) (or latest release).
 *   Network access is required *only* when executing flows that contain 'API Request' steps which need to reach external endpoints. Flow authoring, saving, loading, and visualization can be done offline.
 
 ## Installation
 
-1.  **Obtain the Application:** Download the FlowRunner Installer (`.exe`) or Portable (`.exe`) file.
-2.  **Install (Installer Version):**
-    *   Double-click the downloaded installer `.exe` file.
-    *   Follow the on-screen prompts to complete the installation (standard Windows installation).
-    *   Launch FlowRunner from the Start Menu or Desktop shortcut created during installation.
-3.  **Run (Portable Version):**
-    *   Place the downloaded portable `.exe` file in your desired location.
-    *   Double-click the `.exe` file to launch FlowRunner directly. No installation is required.
+1.  **Download the Correct Installer:**
+    *   Go to the [FlowRunner Releases Page](https://github.com/Radware/FlowRunner/releases) on GitHub.
+    *   Find the latest release (e.g., v1.0.0).
+    *   Under **Assets**:
+        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.0.0.zip`. Unzip the file to find the `Setup.exe`.
+        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.0.0.dmg`.
+2.  **Install on Windows:**
+    *   Double-click the extracted `Setup.exe` file.
+    *   The installation will proceed silently in the background (using Squirrel.Windows). It typically installs to your `AppData\Local\FlowRunner` folder.
+    *   Once installed, the application should launch automatically.
+    *   You can find FlowRunner in your Start Menu afterwards.
+    *   *(Note: As the application is unsigned, you might see a Windows SmartScreen prompt. You may need to click "More info" and then "Run anyway".)*
+3.  **Install on macOS (arm64):**
+    *   Double-click the downloaded `.dmg` file to open it.
+    *   Drag the `FlowRunner` application icon into your `Applications` folder.
+    *   Launch FlowRunner from your Applications folder.
+    *   *(Note: See macOS Troubleshooting below if you encounter issues opening the app).*
 
 ## Getting Started: Creating and Running a Simple Flow
 
@@ -104,7 +122,7 @@ Congratulations! You've created and run your first API flow.
 *   **Save As:** Click **"Save As..."** in the workspace header to save the current flow to a new `.flow.json` file.
 *   **Recent Files:** The sidebar lists recently opened/saved files. Click an item to load it.
 *   **Clone:** To duplicate a flow, load the flow you want to clone, then use **"Save As..."** to save it under a new name. FlowRunner ensures the internal steps get new unique IDs automatically when saved as a new file.
-*   **Delete:** To delete a flow, simply delete the corresponding `.flow.json` file from your computer using Windows File Explorer. The file will eventually disappear from the "Recent Files" list.
+*   **Delete:** To delete a flow, simply delete the corresponding `.flow.json` file from your computer using Finder (macOS) or File Explorer (Windows). The file will eventually disappear from the "Recent Files" list.
 
 ### Flow Configuration (Info Overlay)
 
@@ -201,6 +219,14 @@ FlowRunner configuration happens primarily through the user interface:
 
 ## Troubleshooting
 
+*   **Windows: Installer Warning:** When running `Setup.exe`, Windows SmartScreen might show a warning because the application is not code-signed. Click "More info" and then "Run anyway" to proceed with the silent installation.
+*   **macOS: "FlowRunner is damaged and can't be opened. You should move it to the Trash." Error:** This error often occurs on macOS for downloaded applications that are not notarized by Apple. It's usually related to extended attributes (quarantine flags) set by the OS. To fix this:
+    1.  Open the **Terminal** application (you can find it in Applications > Utilities).
+    2.  Run the following command, replacing `<path/to/FlowRunner.app>` with the actual path to the FlowRunner application (usually `/Applications/FlowRunner.app` if you dragged it to the Applications folder):
+        ```bash
+        xattr -c /Applications/FlowRunner.app
+        ```
+    3.  Try opening FlowRunner again. If prompted about it being from an unidentified developer, you might need to right-click (or Control-click) the app icon and choose "Open", then confirm in the dialog box.
 *   **Flow Doesn't Save / Load:**
     *   Ensure you have write/read permissions for the directory where you are saving/loading `.flow.json` files.
     *   Check if the `.flow.json` file might be corrupted (e.g., manually edited incorrectly). Try creating a new flow.
@@ -227,13 +253,10 @@ FlowRunner configuration happens primarily through the user interface:
     *   Ensure the **Source** variable points to a valid array in the execution context. Check previous step outputs.
     *   Verify the **Item Variable Name** is correctly used (`{{itemName}}`) within the loop body steps.
 *   **General Issues / UI Glitches:**
-    *   Try reloading the application (if running unpacked) or restarting the packaged application.
-    *   Check the Developer Tools Console for errors (usually accessible via a 'View' or 'Developer' menu in Electron apps - may require a development build).
+    *   Try restarting the packaged application.
+    *   For more advanced debugging, you can open the **Developer Tools** from the **View** menu (`View > Toggle Developer Tools`). Check the **Console** tab within the Developer Tools for any error messages logged by the application.
 
-## Contributing
 
-Contributions are welcome! Please see `CONTRIBUTING.md` for details. (If a CONTRIBUTING.md exists).
-
-## License
-
-This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+<div align="center" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+  <img src="assets/Radware_logo.svg" alt="Radware Logo" height="40">
+</div>
