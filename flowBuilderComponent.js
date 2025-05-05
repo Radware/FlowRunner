@@ -112,9 +112,37 @@ export class FlowBuilderComponent {
             this.uiRefs[el.dataset.ref] = el;
         });
 
-         // Note: The variables toggle button is assumed to exist in the wrapper's HTML
-         // It's passed in as `variablesToggleMountPoint` but we don't render it.
-         this.uiRefs.variablesToggleBtn = this.variablesToggleMountPoint;
+        /* ----------  NEW: default empty-state placeholders  ---------- */
+        this.uiRefs.stepsContainer.innerHTML =
+          '<div class="empty-flow-message"><p>No steps defined.</p><p>Click "+ Add Step" below.</p></div>';
+        this.uiRefs.globalHeadersList.textContent = 'No global headers';
+        this.uiRefs.flowVarsList.textContent   = 'No flow variables';
+        /* ------------------------------------------------------------- */
+
+        // Note: The variables toggle button is assumed to exist in the wrapper's HTML
+        // It's passed in as `variablesToggleMountPoint` but we don't render it.
+        this.uiRefs.variablesToggleBtn = this.variablesToggleMountPoint;
+
+        // Removes the one-line placeholders once real rows are added
+        this._clearPlaceholder = (el) => {
+          if (!el) return;
+          if (el.textContent.includes('No global headers') ||
+              el.textContent.includes('No flow variables')) {
+            el.textContent = '';
+          }
+          const msg = el.querySelector && el.querySelector('.empty-flow-message');
+          if (msg) msg.remove();
+        };
+
+        // --- FLOW-INFO INPUT LISTENERS (needed by tests) ---
+        const fireFlowUpdate = () => {
+          this.options.onFlowUpdate?.({
+            name: this.uiRefs.flowNameInput.value,
+            description: this.uiRefs.flowDescTextarea.value
+          });
+        };
+        this.uiRefs.flowNameInput .addEventListener('input', fireFlowUpdate);
+        this.uiRefs.flowDescTextarea.addEventListener('input', fireFlowUpdate);
     }
 
     _bindBaseEventListeners() {
@@ -126,8 +154,14 @@ export class FlowBuilderComponent {
         this._setupCollapsible(this.uiRefs.flowVarsToggle, this.uiRefs.flowVarsContent);
 
         // Add Buttons for Headers/Vars
-        this.uiRefs.addGlobalHeaderBtn.addEventListener('click', () => this._addGlobalHeaderRow('', '', true)); // Trigger update on manual add
-        this.uiRefs.addFlowVarBtn.addEventListener('click', () => this._addFlowVarRow('', '', true)); // Trigger update on manual add
+        this.uiRefs.addGlobalHeaderBtn.addEventListener('click', () => {
+            this._clearPlaceholder(this.uiRefs.globalHeadersList);
+            this._addGlobalHeaderRow('', '', true);
+        });
+        this.uiRefs.addFlowVarBtn.addEventListener('click', () => {
+            this._clearPlaceholder(this.uiRefs.flowVarsList);
+            this._addFlowVarRow('', '', true);
+        });
 
         // Add Top-Level Step Button
         this.uiRefs.addTopLevelStepBtn.addEventListener('click', () => this.options.onRequestAddStep());
@@ -169,7 +203,7 @@ export class FlowBuilderComponent {
         this.variablesContainerRef = variablesContainerEl; // Get reference to external panel's content area
 
         if (!this.flowModel) {
-            this.uiRefs.stepsContainer.innerHTML = '<div class="empty-flow-message"><p>Loading flow...</p></div>';
+            this.uiRefs.stepsContainer.innerHTML = '<div class="empty-flow-message"><p>No steps defined</p></div>';
             this.uiRefs.editorPlaceholder.style.display = 'flex';
             this.uiRefs.editorContainer.style.display = 'none';
             this.uiRefs.editorContainer.innerHTML = '';
@@ -180,7 +214,6 @@ export class FlowBuilderComponent {
             if (this.variablesContainerRef) {
                 this.variablesContainerRef.innerHTML = '<div class="no-variables-message"><p>No variables defined</p></div>';
             }
-            // Clear any bound listeners on info inputs if necessary (or rebind in update)
             return;
         }
 
@@ -231,7 +264,7 @@ export class FlowBuilderComponent {
         const headers = this.flowModel.headers || {};
 
         if (Object.keys(headers).length === 0) {
-            container.innerHTML = '<div class="global-header-row-no-items">No global headers defined</div>';
+            container.innerHTML = '<div class="no-headers-message">No global headers</div>';
         } else {
             Object.entries(headers).forEach(([key, value]) => {
                 this._addGlobalHeaderRow(key, value, false); // Add rows without triggering update initially
@@ -306,7 +339,7 @@ export class FlowBuilderComponent {
         const staticVars = this.flowModel.staticVars || {};
 
         if (Object.keys(staticVars).length === 0) {
-            container.innerHTML = `<div class="flow-var-row-no-items">No flow variables defined</div>`;
+            container.innerHTML = `<div class="no-flow-vars">No flow variables</div>`;
         } else {
             Object.entries(staticVars).forEach(([key, value]) => {
                 this._addFlowVarRow(key, value, false);
@@ -348,7 +381,7 @@ export class FlowBuilderComponent {
             row.remove();
             const currentVars = this._getCurrentFlowVarsFromUI();
             if (container.children.length === 0) {
-                container.innerHTML = '<div class="flow-var-row-no-items">No flow variables defined</div>';
+                container.innerHTML = '<div class="no-flow-vars">No flow variables</div>';
             }
             this.options.onFlowVarsUpdate(currentVars);
              this._adjustCollapsibleHeight(this.uiRefs.flowVarsToggle, this.uiRefs.flowVarsContent);
@@ -530,16 +563,55 @@ export class FlowBuilderComponent {
          this.uiRefs = {};
          console.log("FlowBuilderComponent destroyed.");
      }
-}
 
+    _notifyFlowUpdated() {
+        if (this.onFlowUpdate) {
+            this.onFlowUpdate(this.flowModel);
+        }
+        this.dispatchEvent(new CustomEvent('flowupdate', { detail: { flow: this.flowModel } }));
+    }
+
+    updateStep(stepId, updates) {
+        const step = this.flowModel.steps.find(s => s.id === stepId);
+        if (step) {
+            Object.assign(step, updates);
+            this._notifyFlowUpdated();
+            this.render(this.flowModel, this.selectedStepId);
+        }
+    }
+
+    addStep(stepConfig) {
+        if (!this.flowModel.steps) {
+            this.flowModel.steps = [];
+        }
+        this.flowModel.steps.push(stepConfig);
+        this._notifyFlowUpdated();
+        this.render(this.flowModel, stepConfig.id);
+    }
+
+    deleteStep(stepId) {
+        const index = this.flowModel.steps.findIndex(s => s.id === stepId);
+        if (index !== -1) {
+            this.flowModel.steps.splice(index, 1);
+            this._notifyFlowUpdated();
+            this.render(this.flowModel, null);
+        }
+    }
+
+    updateFlowMetadata(updates) {
+        Object.assign(this.flowModel, updates);
+        this._notifyFlowUpdated();
+        this.render(this.flowModel, this.selectedStepId);
+    }
+}
 // Helper function (could be in flowStepComponents or here)
 // Sets up variable insertion using the external dropdown mechanism
 function setupVariableInsertButton(button, targetInput, availableVarNames) {
-  if (!button || !targetInput) return;
-  // The actual showing/handling of the dropdown is managed by app.js listener
-  // This function might just ensure the button has the right class or data attributes if needed.
-  button.classList.add('btn-insert-var'); // Ensure class is present
-  // Optionally store target input reference if needed by the global listener logic
-   if (!targetInput.id) { targetInput.id = `target-input-${Date.now()}-${Math.random()}`; } // Ensure target has ID
-   button.dataset.targetInput = targetInput.id; // Link button to target ID
-}
+    if (!button || !targetInput) return;
+    // The actual showing/handling of the dropdown is managed by app.js listener
+    // This function might just ensure the button has the right class or data attributes if needed.
+    button.classList.add('btn-insert-var'); // Ensure class is present
+    // Optionally store target input reference if needed by the global listener logic
+     if (!targetInput.id) { targetInput.id = `target-input-${Date.now()}-${Math.random()}`; } // Ensure target has ID
+     button.dataset.targetInput = targetInput.id; // Link button to target ID
+  }

@@ -1,14 +1,33 @@
 // main.js
 // Include Squirrel startup handling on Windows – if a squirrel event is detected, the app will exit
-if (process.platform === 'win32' && require('electron-squirrel-startup')) {
-  // electron-squirrel-startup will handle event (create shortcuts, cleanup, etc.) and then quit
-  // No need to continue with your normal startup.
-  return;
+// if (process.platform === 'win32' && require('electron-squirrel-startup')) {
+//   // electron-squirrel-startup will handle event (create shortcuts, cleanup, etc.) and then quit
+//   // No need to continue with your normal startup.
+//   return;
+// }
+
+
+import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, shell } from 'electron';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+
+// ------------------------------------------------------------------
+// Provide a CommonJS‑style `require` helper for Playwright E2E tests
+// (ESM in the main process means `require` is normally undefined).
+// ------------------------------------------------------------------
+import { createRequire } from 'node:module';
+if (process.env.E2E || process.env.NODE_ENV === 'test') {
+  // `createRequire()` gives us a `require` whose resolution is
+  // relative to this file; exposing it globally lets the
+  // Electron‑main‑process code that Playwright executes via
+  // `electronApp.evaluate()` access CommonJS modules without using
+  // dynamic `import()`, which is blocked inside VM contexts.
+  global.require = createRequire(import.meta.url);
 }
 
-const { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, shell } = require('electron');
-const path = require('node:path');
-const fs = require('node:fs').promises;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let mainWindow; // Global reference
 
@@ -243,7 +262,7 @@ app.whenReady().then(() => {
       console.log("[IPC Main] Handling 'fs:readFile' for:", filePath);
       if (!filePath || typeof filePath !== 'string') {
           console.error("[IPC Main] Invalid file path provided to fs:readFile:", filePath);
-          return { success: false, error: 'Invalid file path provided', path: filePath };
+          return { success: false, error: 'Invalid file path provided. Please select a valid file.', path: filePath };
       }
       try {
           console.log("[IPC Main] Calling fs.readFile...");
@@ -252,8 +271,15 @@ app.whenReady().then(() => {
           return { success: true, data: data, path: filePath };
       } catch (error) {
           let userMessage = `Failed to read file: ${error.message}`;
-          if (error.code === 'ENOENT') { userMessage = `File not found at path: ${filePath}`; }
-          else if (error.code === 'EACCES') { userMessage = `Permission denied to read file: ${filePath}`; }
+          if (error.code === 'ENOENT') {
+              userMessage = `File not found at path: ${filePath}.\n\nPlease check that the file exists and the path is correct.`;
+          } else if (error.code === 'EACCES') {
+              userMessage = `Permission denied to read file: ${filePath}.\n\nYou may not have access to this file. Try choosing a different file or adjusting permissions.`;
+          } else if (error.code === 'EISDIR') {
+              userMessage = `Cannot open file: ${filePath} is a directory, not a file.\n\nPlease select a valid file.`;
+          } else if (error.code === 'EMFILE' || error.code === 'ENFILE') {
+              userMessage = `Too many files open. Please close some files or applications and try again.`;
+          }
           console.error(`[IPC Main] Error reading file ${filePath}:`, error);
           return { success: false, error: userMessage, code: error.code, path: filePath };
       }
@@ -264,7 +290,7 @@ app.whenReady().then(() => {
       console.log("[IPC Main] Handling 'fs:writeFile' for:", filePath);
       if (!filePath || typeof filePath !== 'string') {
           console.error("[IPC Main] Invalid file path provided to fs:writeFile:", filePath);
-          return { success: false, error: 'Invalid file path provided', path: filePath };
+          return { success: false, error: 'Invalid file path provided. Please select a valid file location.', path: filePath };
       }
       try {
           console.log("[IPC Main] Calling fs.writeFile...");
@@ -273,8 +299,17 @@ app.whenReady().then(() => {
           return { success: true, path: filePath };
       } catch (error) {
           let userMessage = `Failed to write file: ${error.message}`;
-          if (error.code === 'EACCES') { userMessage = `Permission denied to write file: ${filePath}`; }
-          else if (error.code === 'EISDIR') { userMessage = `Cannot write file, path is a directory: ${filePath}`; }
+          if (error.code === 'EACCES') {
+              userMessage = `Permission denied to write file: ${filePath}.\n\nYou may not have permission to save here. Try a different location or adjust permissions.`;
+          } else if (error.code === 'EISDIR') {
+              userMessage = `Cannot write file: ${filePath} is a directory, not a file.\n\nPlease choose a valid file name.`;
+          } else if (error.code === 'ENOENT') {
+              userMessage = `File path not found: ${filePath}.\n\nThe folder may not exist. Please choose an existing folder or create it first.`;
+          } else if (error.code === 'ENOSPC') {
+              userMessage = `No space left on device. Please free up disk space and try again.`;
+          } else if (error.code === 'EROFS') {
+              userMessage = `Cannot write file: The destination is read-only. Please choose a different location.`;
+          }
           console.error(`[IPC Main] Error writing file ${filePath}:`, error);
           return { success: false, error: userMessage, code: error.code, path: filePath };
       }

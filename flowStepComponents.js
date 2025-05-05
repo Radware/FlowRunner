@@ -67,7 +67,7 @@ export function renderStep(step, options) {
     <div class="flow-step-title">${escapeHTML(step.name || 'Unnamed Step')}</div>
     <div class="flow-step-actions">
       <button class="btn-clone" title="Clone Step">⧉</button>
-      <button class="btn-delete" title="Delete Step">✕</button>
+      <button class="btn-delete btn-delete-node" title="Delete Step">✕</button>
     </div>
   `;
 
@@ -96,7 +96,7 @@ export function renderStep(step, options) {
   }
 
   // Delete button listener
-  const deleteBtn = header.querySelector('.btn-delete');
+  const deleteBtn = header.querySelector('.btn-delete-node, .btn-delete');
   if (deleteBtn && onDelete) {
      deleteBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -213,9 +213,8 @@ function renderLoopStepContent(container, step, variables, options) {
    const varNames = Object.keys(variables);
 
    container.innerHTML = `
-    <div class="loop-config"> <div class="loop-source-row"> <span class="loop-label">For each in:</span> <code class="loop-source">${highlightVariables(step.source, varNames)}</code> </div> <div class="loop-variable-row"> <span class="loop-label">As:</span> <code class="loop-variable">${escapeHTML(step.loopVariable || 'item')}</code> </div> </div>
+    <div class="loop-config"> <div class="loop-source-row"> <span class="loop-label">For each in:</span> <code class="loop-source">${highlightVariables(`{{${step.source}}}`, varNames)}</code> </div> <div class="loop-variable-row"> <span class="loop-label">As:</span> <code class="loop-variable">${escapeHTML(step.loopVariable || 'item')}</code> </div> </div>
     <div class="loop-body"> <div class="loop-header">Loop Body</div> <div class="loop-steps" data-loop-container="body"></div> <button class="btn-add-loop-step" title="Add step inside loop">+ Add Step</button> </div>`;
-
    const loopContainer = container.querySelector('[data-loop-container="body"]');
    if (step.loopSteps?.length) {
        const loopVariables = { ...variables }; // Pass down current variables
@@ -472,13 +471,18 @@ export function createStepEditor(step, options) {
               if (varInput) { varInput.focus(); varInput.style.borderColor = 'red'; }
               return; // Prevent saving invalid state
           }
-           const sourceVar = localStep.source?.trim();
-           if (!sourceVar || !/^\{\{.+\}\}$/.test(sourceVar)) {
-                alert("Loop Error: 'Source' must be a variable reference like {{arrayVariable}}.");
-                const sourceInput = editorEl.querySelector(`#loop-source-${localStep.id}`);
-                if (sourceInput) sourceInput.focus();
-                return;
-           }
+          let sourceVar = localStep.source?.trim();
+          // Accept either {{var}} or raw var, but always store as raw var
+          if (sourceVar && sourceVar.startsWith('{{') && sourceVar.endsWith('}}')) {
+              sourceVar = sourceVar.slice(2, -2).trim();
+          }
+          localStep.source = sourceVar;
+          if (!sourceVar) {
+              alert("Loop Error: 'Source' must be a variable reference like {{arrayVariable}}.");
+              const sourceInput = editorEl.querySelector(`#loop-source-${localStep.id}`);
+              if (sourceInput) sourceInput.focus();
+              return;
+          }
       }
        // Add more validation for Request step if needed (e.g., URL format)
 
@@ -650,12 +654,14 @@ function createConditionEditor(container, options) {
         localStep.conditionData.preview = 'Select variable and operator';
     }
 
-    // (innerHTML structure remains the same)
+    // --- PATCH: Add Path input after Variable select ---
+    const pathValue = localStep.conditionData.variable.split('.').slice(1).join('.') || '';
     container.innerHTML = `
         <div class="form-group"><label>Condition Logic</label><div class="condition-builder">
         <div class="condition-row">
-            <div class="condition-item"><label for="cond-var-${localStep.id}">Variable</label><select id="cond-var-${localStep.id}"><option value="">-- Select --</option>${availableVarNames.sort().map(v => `<option value="${escapeHTML(v)}" ${localStep.conditionData.variable === v ? 'selected' : ''}>${escapeHTML(v)}</option>`).join('')}</select></div>
-            <div class="condition-item"><label for="cond-op-${localStep.id}">Operator</label><select id="cond-op-${localStep.id}"> <option value="">-- Select --</option> <optgroup label="Comparison"><option value="equals">equals</option><option value="not_equals">not equals</option><option value="greater_than">> (number)</option><option value="less_than">< (number)</option><option value="greater_equals">>= (number)</option><option value="less_equals"><= (number)</option></optgroup> <optgroup label="Text"><option value="contains">contains</option><option value="starts_with">starts with</option><option value="ends_with">ends with</option><option value="matches_regex">matches regex</option></optgroup> <optgroup label="Existence"><option value="exists">exists</option><option value="not_exists">does not exist</option></optgroup> <optgroup label="Type"><option value="is_number">is number</option><option value="is_text">is text</option><option value="is_boolean">is boolean</option><option value="is_array">is array</option></optgroup> <optgroup label="Boolean"><option value="is_true">is true</option><option value="is_false">is false</option></optgroup> </select></div>
+            <div class="condition-item"><label for="cond-var-${localStep.id}">Variable</label><select id="cond-var-${localStep.id}"><option value="">-- Select --</option>${availableVarNames.sort().map(v => `<option value="${escapeHTML(v)}" ${localStep.conditionData.variable.split('.')[0] === v ? 'selected' : ''}>${escapeHTML(v)}</option>`).join('')}</select></div>
+            <div class="condition-item"><label for="cond-path-${localStep.id}">Path</label><input type="text" id="cond-path-${localStep.id}" value="${escapeHTML(pathValue)}" placeholder="e.g. title"></div>
+            <div class="condition-item"><label for="cond-op-${localStep.id}">Operator</label><select id="cond-op-${localStep.id}"> <option value="">-- Select --</option> <optgroup label="Comparison"><option value="equals">equals</option><option value="not_equals">not equals</option><option value="greater_than">&gt; (number)</option><option value="less_than">&lt; (number)</option><option value="greater_equals">&gt;= (number)</option><option value="less_equals">&lt;= (number)</option></optgroup> <optgroup label="Text"><option value="contains">contains</option><option value="starts_with">starts with</option><option value="ends_with">ends with</option><option value="matches_regex">matches regex</option></optgroup> <optgroup label="Existence"><option value="exists">exists</option><option value="not_exists">does not exist</option></optgroup> <optgroup label="Type"><option value="is_number">is number</option><option value="is_text">is text</option><option value="is_boolean">is boolean</option><option value="is_array">is array</option></optgroup> <optgroup label="Boolean"><option value="is_true">is true</option><option value="is_false">is false</option></optgroup> </select></div>
             <div class="condition-item" id="cond-val-cont-${localStep.id}"><label for="cond-val-${localStep.id}">Value</label><div class="input-with-vars"><input type="text" id="cond-val-${localStep.id}" value="${escapeHTML(localStep.conditionData.value)}" placeholder="Enter value"><button class="btn-insert-var" data-target-input="cond-val-${localStep.id}">{{…}}</button></div></div>
         </div>
         <div class="condition-preview"><label>Preview:</label><pre id="cond-preview-${localStep.id}">${escapeHTML(localStep.conditionData.preview)}</pre></div>
@@ -664,6 +670,7 @@ function createConditionEditor(container, options) {
     // --- End innerHTML ---
 
     const varSelect = container.querySelector(`#cond-var-${localStep.id}`);
+    const pathInput = container.querySelector(`#cond-path-${localStep.id}`);
     const opSelect = container.querySelector(`#cond-op-${localStep.id}`);
     const valInput = container.querySelector(`#cond-val-${localStep.id}`);
     const valContainer = container.querySelector(`#cond-val-cont-${localStep.id}`);
@@ -674,7 +681,14 @@ function createConditionEditor(container, options) {
     function updateState() {
         const needsValue = doesOperatorNeedValue(opSelect.value);
         valContainer.style.display = needsValue ? '' : 'none';
-        localStep.conditionData = { variable: varSelect.value, operator: opSelect.value, value: needsValue ? valInput.value : '' };
+        const base   = varSelect.value;
+        const sub    = pathInput.value.trim();
+        const full   = sub ? `${base}.${sub}` : base;
+        localStep.conditionData = {
+          variable: full,
+          operator: opSelect.value,
+          value   : needsValue ? valInput.value : ''
+        };
         localStep.conditionData.preview = generateConditionPreview(localStep.conditionData);
         previewEl.textContent = escapeHTML(localStep.conditionData.preview);
         // Don't call setDirtyState here directly, let the event listeners do it
@@ -682,6 +696,7 @@ function createConditionEditor(container, options) {
 
     // --- MODIFICATION START: Add immediate dirty listeners ---
     varSelect.addEventListener('change', () => { updateState(); setDirtyState(true); });
+    pathInput.addEventListener('input', () => { updateState(); setDirtyState(true); });
     opSelect.addEventListener('change', () => { updateState(); setDirtyState(true); });
     valInput.addEventListener('input', () => { updateState(); setDirtyState(true); }); // Use 'input' for value field
     // --- MODIFICATION END ---
@@ -707,20 +722,28 @@ function createLoopEditor(container, options) {
     const varError = container.querySelector('.loop-var-validation-error');
 
     // --- MODIFICATION START: Add immediate dirty listeners ---
-    sourceInput.addEventListener('input', () => { localStep.source = sourceInput.value; setDirtyState(true); /* Immediate dirty */ });
     varInput.addEventListener('input', () => {
         const name = varInput.value.trim();
         localStep.loopVariable = name;
-        if (name && !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)) {
-            varError.textContent = 'Invalid name (letters, numbers, _, $ allowed; no starting number).';
-            varError.style.display = 'block'; varInput.style.borderColor = 'red';
+        if (!name) {
+            varError.textContent = 'Item variable name is required.';
+            varError.style.display = 'block';
+            varInput.style.borderColor = 'red';
+        } else if (!/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(name)) {
+            varError.textContent = 'Invalid name. Use only letters, numbers, _ or $. Cannot start with a number. Example: item1';
+            varError.style.display = 'block';
+            varInput.style.borderColor = 'red';
         } else {
-            varError.style.display = 'none'; varInput.style.borderColor = '';
+            varError.style.display = 'none';
+            varInput.style.borderColor = '';
         }
         setDirtyState(true); /* Immediate dirty */
     });
+    // Initial validation (doesn't mark dirty)
+    setTimeout(() => varInput.dispatchEvent(new Event('input')), 0);
+
+    sourceInput.addEventListener('input', () => { localStep.source = sourceInput.value; setDirtyState(true); /* Immediate dirty */ });
     // --- MODIFICATION END ---
-    varInput.dispatchEvent(new Event('input')); // Initial validation (doesn't mark dirty)
 
      // Setup insert button (delegated)
     setupVariableInsertButton(container.querySelector(`#loop-source-${localStep.id}`).closest('.input-with-vars').querySelector('.btn-insert-var'), sourceInput, availableVarNames);
@@ -855,7 +878,7 @@ function setupExtractEditor(container, initialExtracts, onChange) {
 }
 
 
-// ----- Utility Helpers ----- (Unchanged from original)
+// ----- Utility Helpers -----
 
 /**
  * Sets up a variable insert button to work with the global dropdown mechanism.
@@ -892,8 +915,9 @@ export function showStepTypeDialog(onSelect) {
 function highlightVariables(text, availableVarNames) {
   if (!text || typeof text !== 'string') return escapeHTML(text);
   return escapeHTML(text).replace(/\{\{([^}]+)\}\}/g, (match, varName) => {
-    const trimmed = varName.trim();
-    const isValid = availableVarNames.includes(trimmed);
+    const trimmed   = varName.trim();
+    const baseName  = trimmed.split('.')[0]; // take “slide” from “slide.title”
+    const isValid   = availableVarNames.includes(baseName);
     const className = `var-ref ${isValid ? 'valid' : 'invalid'}`;
     const title = isValid ? `Variable "${trimmed}"` : `Variable "${trimmed}" (Undefined)`;
     return `<span class="${className}" title="${escapeHTML(title)}">${match}</span>`;

@@ -118,77 +118,43 @@ export class FlowRunner {
         }
     }
 
-    // [Modified Code] - Add finally block to step() for robust state reset and UI update
+    // [Modified Code] - Fix isStepping flag management in step() method
     /**
      * Executes the next single logical step in the flow.
      * @param {Object} flowModel - The flow model object.
      */
     async step(flowModel) {
         if (this.state.isRunning || this.state.isStepping) {
-             this.onMessage("Already processing a step.", "warning");
-            return; // Prevent concurrent stepping
+            this.onMessage("Already processing a step.", "warning");
+            return;
         }
-         if (!flowModel || !flowModel.steps) {
+        if (!flowModel || !flowModel.steps) {
             throw new Error("Invalid flow model provided.");
         }
 
-        // --- MODIFICATION START: Wrap in try...finally ---
-        try {
-            this.state.isStepping = true; // Indicate stepping mode active
-            this.state.stopRequested = false; // Allow stopping a step sequence
+        this.state.stopRequested = false;
 
-            // If starting fresh, initialize
-            if (this.state.executionPath.length === 0) {
-                this.reset(flowModel.staticVars || {});
-                this.onContextUpdate(this.state.context);
-                this.state.executionPath = [{ steps: flowModel.steps, index: 0, context: this.state.context, type: 'main' }];
-            }
-
-            // Execute one step/block
-            const executed = await this._executeNextStep();
-
-            // Check if execution finished normally (not stopped)
-            if (!executed && !this.state.stopRequested) {
-                 this.onMessage("End of flow reached.", "info");
-                 // Optionally trigger onFlowComplete when stepping reaches the end?
-                 // this.onFlowComplete(this.state.context, this.state.results);
-            }
-
-            // NOTE: isStepping is reset in the finally block now
-
-        } catch (error) {
-            // Catch potential errors thrown directly by _executeNextStep or initialization
-            console.error("[FlowRunner step()] Error during step execution:", error);
-            this.onMessage(`Critical error during step execution: ${error.message}`, "error");
-            // Ensure state reflects stopped/error state if not already handled by onError
-            if (!this.state.stopRequested) {
-                 this.stop(); // Request stop on unhandled errors during step
-            }
-             // Trigger onError if not already called from lower level? Maybe redundant.
-             // this.onError(this.state.currentResultIndex, null, error, this.state.context, this._getCurrentPathArray());
-
-        } finally {
-             // --- GUARANTEED EXECUTION: Reset state and ensure UI update ---
-             this.state.isStepping = false; // Ensure stepping mode is always reset
-
-             // Check if a stop was requested and trigger the final stop callback if needed
-             // This handles cases where stop() was called but the flow didn't naturally reach the end to trigger onFlowStopped
-             if (this.state.stopRequested) {
-                 // Ensure the onFlowStopped callback is triggered if we are ending due to stop request
-                  this.onFlowStopped(this.state.context, this.state.results);
-             }
-
-             // Explicitly trigger a UI update via callback *after* resetting state
-             // We need access to the app's updateRunnerUI function. Add it to constructor options.
-             if (typeof this.updateRunnerUICallback === 'function') {
-                  console.log("[FlowRunner step() finally] Explicitly calling updateRunnerUICallback.");
-                  this.updateRunnerUICallback();
-             } else {
-                  console.warn("[FlowRunner step() finally] updateRunnerUICallback not configured. UI might not update correctly.");
-             }
-             // --- END GUARANTEED EXECUTION ---
+        // (re)initialise execution stack on first ever step
+        if (this.state.executionPath.length === 0) {
+            this.reset(flowModel.staticVars || {});
+            this.onContextUpdate(this.state.context);
+            this._pushExecutionLevel(flowModel.steps, this.state.context, 'root');
+            // reset() cleared the flag – set it after reset/initial-push
+            this.state.isStepping = true;
+            this.updateRunnerUICallback?.();
         }
-         // --- MODIFICATION END ---
+
+        try {
+            await this._executeNextStep();
+            if (this.state.executionPath.length === 0 && !this.state.stopRequested) {
+                this.onFlowComplete(this.state.context, this.state.results);
+            }
+        } catch (error) {
+            console.error("[FlowRunner step] Error during step execution:", error);
+        } finally {
+            this.state.isStepping = false;
+            this.updateRunnerUICallback?.();
+        }
     }
 
     // --- Internal Execution Logic ---
@@ -198,8 +164,8 @@ export class FlowRunner {
         while (this.state.executionPath.length > 0) {
             // --- Check stopRequested *before* processing the level ---
             if (this.state.stopRequested) {
-                 console.log("[FlowRunner] Stop request detected in _executeCurrentLevel loop.");
-                 break;
+                console.log("[FlowRunner] Stop request detected in _executeCurrentLevel loop.");
+                break;
             }
             // --- End Modification ---
 
@@ -213,10 +179,10 @@ export class FlowRunner {
             }
 
             // --- Check stopRequested *before* executing the specific step ---
-             if (this.state.stopRequested) {
-                  console.log("[FlowRunner] Stop request detected before executing step in _executeCurrentLevel.");
-                  break;
-             }
+            if (this.state.stopRequested) {
+                console.log("[FlowRunner] Stop request detected before executing step in _executeCurrentLevel.");
+                break;
+            }
             // --- End Modification ---
 
             const step = steps[index];
@@ -227,8 +193,8 @@ export class FlowRunner {
 
             // If stop requested during step execution, break loop
             if (this.state.stopRequested) {
-                 console.log("[FlowRunner] Stop request detected after executing step in _executeCurrentLevel.");
-                 break;
+                console.log("[FlowRunner] Stop request detected after executing step in _executeCurrentLevel.");
+                break;
             }
 
             // --- FIX START: Increment index of the correct level AFTER step execution ---
@@ -264,13 +230,13 @@ export class FlowRunner {
                 levelToIncrement.index++;
                 // console.log(`[FlowRunner _executeCurrentLevel] Incremented index for level containing step "${step.name}" (ID: ${step.id}) to ${levelToIncrement.index}`);
             } else if (levelToIncrement && levelToIncrement.index !== index) {
-                 // This might indicate the index was already advanced internally (e.g., loop iteration reset). Log for safety.
-                 console.warn(`[FlowRunner _executeCurrentLevel] Index mismatch when trying to increment level for step ${step.id}. Expected index ${index}, found ${levelToIncrement.index}. No increment performed.`);
+                // This might indicate the index was already advanced internally (e.g., loop iteration reset). Log for safety.
+                console.warn(`[FlowRunner _executeCurrentLevel] Index mismatch when trying to increment level for step ${step.id}. Expected index ${index}, found ${levelToIncrement.index}. No increment performed.`);
             } else if (!levelToIncrement && levelAfterExecution !== levelBeforeExecution) {
-                 // This likely means the level was popped (e.g. loop/branch finished). No increment needed here.
-                 // console.log(`[FlowRunner _executeCurrentLevel] Level for step ${step.id} was popped. No index increment needed at this stage.`);
+                // This likely means the level was popped (e.g. loop/branch finished). No increment needed here.
+                // console.log(`[FlowRunner _executeCurrentLevel] Level for step ${step.id} was popped. No index increment needed at this stage.`);
             }
-             // --- FIX END ---
+            // --- FIX END ---
 
 
             // Apply delay if running continuously and not the last step at this level
@@ -278,11 +244,11 @@ export class FlowRunner {
             // We need to check the index of the level whose step *was* just run.
             const levelToCheckForDelay = levelToIncrement || levelBeforeExecution; // Use the level whose index might have just been incremented, or the original if popped
             if (this.state.isRunning && levelToCheckForDelay && levelToCheckForDelay.index < levelToCheckForDelay.steps.length && this.delay > 0) {
-                 // Check if the level still exists on the stack before potentially delaying based on its state
-                 const levelStillExists = this.state.executionPath.some(l => l === levelToCheckForDelay);
-                 if (levelStillExists) {
+                // Check if the level still exists on the stack before potentially delaying based on its state
+                const levelStillExists = this.state.executionPath.some(l => l === levelToCheckForDelay);
+                if (levelStillExists) {
                     await this._sleep(this.delay); // _sleep now checks stopRequested internally
-                 }
+                }
             }
         }
     }
@@ -290,95 +256,88 @@ export class FlowRunner {
 
     /** Executes the next step based on the execution path stack (for stepping) */
     async _executeNextStep() {
-         // --- MODIFIED: Check stopRequested at the very beginning ---
-         if (this.state.stopRequested) {
-             console.log("[FlowRunner] Stop request detected at start of _executeNextStep.");
-             return false; // Stopped
-         }
-         // --- End Modification ---
+        // --- MODIFIED: Check stopRequested at the very beginning ---
+        if (this.state.stopRequested) {
+            console.log("[FlowRunner] Stop request detected at start of _executeNextStep.");
+            return false; // Stopped
+        }
+        // --- End Modification ---
 
-         if (this.state.executionPath.length === 0) {
-             return false; // Nothing more to execute
-         }
+        if (this.state.executionPath.length === 0) {
+            return false; // Nothing more to execute
+        }
 
-         const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
-         const steps = currentLevel.steps;
-         const index = currentLevel.index;
+        const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
+        const steps = currentLevel.steps;
+        const index = currentLevel.index;
 
-         if (index >= steps.length) {
-             // Finished steps at this level, pop and try stepping at parent level
-             this._popExecutionLevel();
-             // If popping finished the flow, return false
-             if (this.state.executionPath.length === 0) return false;
-              // --- MODIFIED: Check stopRequested after popping ---
-              if (this.state.stopRequested) {
-                  console.log("[FlowRunner] Stop request detected after popping level in _executeNextStep.");
-                  return false; // Stopped
-              }
-             // --- End Modification ---
-             // Otherwise, attempt to execute the next step at the NEW current level (which might also be finished)
-             return this._executeNextStep(); // Recursive call to step at the new top level
-         }
+        if (index >= steps.length) {
+            // Finished steps at this level, pop and try stepping at parent level
+            this._popExecutionLevel();
+            // If popping finished the flow, return false
+            if (this.state.executionPath.length === 0) return false;
+            // --- MODIFIED: Check stopRequested after popping ---
+            if (this.state.stopRequested) {
+                console.log("[FlowRunner] Stop request detected after popping level in _executeNextStep.");
+                return false; // Stopped
+            }
+            // --- End Modification ---
+            // Otherwise, attempt to execute the next step at the NEW current level (which might also be finished)
+            return this._executeNextStep(); // Recursive call to step at the new top level
+        }
 
-         // --- MODIFIED: Check stopRequested *before* executing the specific step ---
-          if (this.state.stopRequested) {
-               console.log("[FlowRunner] Stop request detected before executing step in _executeNextStep.");
-               return false; // Stopped
-          }
-         // --- End Modification ---
+        // --- MODIFIED: Check stopRequested *before* executing the specific step ---
+        if (this.state.stopRequested) {
+            console.log("[FlowRunner] Stop request detected before executing step in _executeNextStep.");
+            return false; // Stopped
+        }
+        // --- End Modification ---
 
-         const step = steps[index];
-         const context = currentLevel.context;
+        const step = steps[index];
+        const context = currentLevel.context;
 
-         // Execute the single step logic
-         await this._executeSingleStepLogic(step, context);
+        // Execute the single step logic
+        await this._executeSingleStepLogic(step, context);
 
-         // Increment index for the next step call *after* this one completes,
-         // but only if the current level hasn't been popped or replaced (e.g., by loop finishing or condition branching)
-         // And only if the step logic didn't already push a new level (handled internally by loop/condition)
-         // Check if the level we operated on is still the top level.
-         const levelAfterStepExecution = this.state.executionPath[this.state.executionPath.length - 1];
-         if (levelAfterStepExecution === currentLevel && !this.state.stopRequested) {
+        // Increment index for the next step call *after* this one completes,
+        // but only if the current level hasn't been popped or replaced (e.g., by loop finishing or condition branching)
+        // And only if the step logic didn't already push a new level (handled internally by loop/condition)
+        // Check if the level we operated on is still the top level.
+        const levelAfterStepExecution = this.state.executionPath[this.state.executionPath.length - 1];
+        if (levelAfterStepExecution === currentLevel && !this.state.stopRequested) {
             // Only increment if the current level is still the one at the top
             currentLevel.index++;
-         }
-         // If a different level is now at the top (either pushed or popped),
-         // the next call to _executeNextStep will handle it without incrementing here.
+        }
+        // If a different level is now at the top (either pushed or popped),
+        // the next call to _executeNextStep will handle it without incrementing here.
 
 
-         return true; // Indicate a step was executed (or at least attempted)
+        return true; // Indicate a step was executed (or at least attempted)
     }
 
 
     /** Core logic to execute a single step, handle its type, and manage results/context */
-    // --- [Modified Code] --- in flowRunner.js
     async _executeSingleStepLogic(step, context) {
-        let result = { status: 'skipped', output: null, error: null, extractionFailures: [] }; // <-- Initialize extractionFailures array
-        let stepContext = { ...context }; // Create context snapshot for this step
-        this.state.currentResultIndex = null; // Reset result index
+        let result = { status: 'skipped', output: null, error: null, extractionFailures: [] };
+        let stepContext = { ...context };
+        this.state.currentResultIndex = null;
         let processedStepResult;
         let processedStep;
         let unquotedPlaceholders = {};
 
         try {
-            // Notify start and get result index
             this.state.currentResultIndex = this.onStepStart(step, this._getCurrentPathArray());
-
-            // Substitute variables BEFORE execution (might throw errors)
             processedStepResult = this.substituteVariablesFn(step, stepContext);
             processedStep = processedStepResult.processedStep;
-            unquotedPlaceholders = processedStepResult.unquotedPlaceholders || {}; // Get placeholders map
+            unquotedPlaceholders = processedStepResult.unquotedPlaceholders || {};
 
             switch (processedStep.type) {
                 case 'request':
                     result = await this._executeRequestStep(processedStep, unquotedPlaceholders);
-                    // --- MODIFICATION START: Pass context and collect failures ---
-                    if (result.status === 'success' && processedStep.extract) { // Extract even on non-2xx success
-                        // Pass stepContext to be modified, collect failures
+                    if (result.status === 'success' && processedStep.extract) {
                         const failures = this._updateContextFromExtraction(processedStep.extract, result.output, stepContext);
-                        result.extractionFailures = failures; // Store failures in the result object
+                        result.extractionFailures = failures;
                     }
-                    // --- MODIFICATION END ---
                     break;
                 case 'condition':
                     result = await this._executeConditionStep(processedStep, stepContext);
@@ -390,45 +349,34 @@ export class FlowRunner {
                     throw new Error(`Unknown step type: ${processedStep.type}`);
             }
 
-            // --- Finalize Step Context ---
-             const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
-             if (currentLevel && JSON.stringify(currentLevel.context) !== JSON.stringify(stepContext)) {
+            // Never overwrite the freshly-created context of a loop level when
+            // the step we just ran *is* that loop node
+            const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
+            if (step.type !== 'loop' && currentLevel && currentLevel.context !== stepContext) {
                 currentLevel.context = stepContext;
-                // onContextUpdate is called by _updateContextFromExtraction if changes occur
-             }
-
-            // Store and notify completion
-            // --- MODIFICATION START: Ensure result object (potentially with extractionFailures) is stored ---
-            this.state.results.push({ stepId: step.id, ...result }); // result now includes extractionFailures
-            this.onStepComplete(this.state.currentResultIndex, step, result, currentLevel?.context || stepContext, this._getCurrentPathArray());
-            // --- MODIFICATION END ---
-
-            // --- Stop logic based on result status and onFailure (remains the same) ---
-            if (result.status === 'error') {
-                if (step.type === 'request' && (!step.onFailure || step.onFailure === 'stop')) {
-                     const errorReason = result.error || 'Request failed';
-                     console.warn(`[FlowRunner] Request Step "${step.name}" (ID: ${step.id}) failed and onFailure=stop. Requesting stop. Reason: ${errorReason}`);
-                     this.onMessage(`Execution stopped: Request step "${step.name}" failed (onFailure=stop).`, "error");
-                     this.stop();
-                } else if (step.type !== 'request') {
-                     const errorReason = result.error || 'Step failed';
-                     console.warn(`[FlowRunner] Non-Request Step "${step.name}" (ID: ${step.id}) failed. Requesting stop. Reason: ${errorReason}`);
-                     this.onMessage(`Execution stopped due to error in step "${step.name}".`, "error");
-                     this.stop();
-                }
-                 else if (step.type === 'request' && step.onFailure === 'continue') {
-                     console.log(`[FlowRunner] Request Step "${step.name}" (ID: ${step.id}) failed (status='error') but onFailure=continue. Proceeding.`);
-                 }
+                this.onContextUpdate(currentLevel.context);
             }
 
-        } catch (error) {
-            // --- MODIFICATION START: Initialize extractionFailures in error case ---
-            result = { status: 'error', output: null, error: error.message || 'Unknown execution error', extractionFailures: [] };
-            // --- MODIFICATION END ---
             this.state.results.push({ stepId: step.id, ...result });
+            this.onStepComplete(this.state.currentResultIndex, step, result, currentLevel?.context || stepContext, this._getCurrentPathArray());
 
+            if (result.status === 'error') {
+                if (step.type === 'request' && (!step.onFailure || step.onFailure === 'stop')) {
+                    const errorReason = result.error || 'Request failed';
+                    console.warn(`[FlowRunner] Request Step "${step.name}" (ID: ${step.id}) failed and onFailure=stop. Requesting stop. Reason: ${errorReason}`);
+                    this.onMessage(`Execution stopped: Request step "${step.name}" failed (onFailure=stop).`, "error");
+                    this.stop();
+                } else if (step.type !== 'request') {
+                    const errorReason = result.error || 'Step failed';
+                    console.warn(`[FlowRunner] Non-Request Step "${step.name}" (ID: ${step.id}) failed. Requesting stop. Reason: ${errorReason}`);
+                    this.onMessage(`Execution stopped due to error in step "${step.name}".`, "error");
+                    this.stop();
+                }
+            }
+        } catch (error) {
+            result = { status: 'error', output: null, error: error.message || 'Unknown execution error', extractionFailures: [] };
+            this.state.results.push({ stepId: step.id, ...result });
             this.onError(this.state.currentResultIndex, step, error, stepContext, this._getCurrentPathArray());
-
             console.error(`[FlowRunner] Uncaught error during execution of step "${step.name}" (ID: ${step.id}). Requesting stop. Error:`, error);
             this.onMessage(`Execution stopped due to critical error in step "${step.name}": ${error.message}`, "error");
             this.stop();
@@ -445,8 +393,8 @@ export class FlowRunner {
         }
     }
 
-     // Override _popExecutionLevel to handle loop iteration logic
-    _popExecutionLevel() {
+    // Override _popExecutionLevel to handle loop iteration logic
+    async _popExecutionLevel() {
         if (this.state.executionPath.length === 0) return;
 
         const finishedLevel = this.state.executionPath[this.state.executionPath.length - 1];
@@ -454,8 +402,14 @@ export class FlowRunner {
         // If the level we just finished was the body of a loop iteration
         if (finishedLevel.type === 'loop') {
             // Check if there are more items to process
-             finishedLevel.loopItemIndex++; // Move to next item
+            finishedLevel.loopItemIndex++; // Move to next item
             if (finishedLevel.loopItemIndex < finishedLevel.loopItems.length) {
+                // --- ADD DELAY BETWEEN LOOP ITERATIONS (only in run mode, not stepping) ---
+                if (this.state.isRunning && this.delay > 0) {
+                    // Wait before starting the next iteration
+                    // (If stop requested, _sleep will resolve early)
+                    await this._sleep(this.delay);
+                }
                 // Reset index to start of loop body steps for next iteration
                 finishedLevel.index = 0;
                 this._prepareLoopIterationContext(); // Prepare context for the new iteration
@@ -470,8 +424,8 @@ export class FlowRunner {
                 // Now proceed to pop
             }
         } else if (finishedLevel.type === 'then' || finishedLevel.type === 'else') {
-             // Log finishing a branch?
-             // this.onMessage(`Finished ${finishedLevel.type} branch.`, 'info');
+            // Log finishing a branch?
+            // this.onMessage(`Finished ${finishedLevel.type} branch.`, 'info');
         }
 
         // Default pop action
@@ -582,9 +536,9 @@ export class FlowRunner {
                     try {
                         JSON.parse(bodyString);
                     } catch (jsonError) {
-                         console.warn(`Resulting request body for step ${step.id} is not valid JSON after unquoted replacements: ${jsonError.message}`);
-                         // Let's throw an error here to prevent sending invalid JSON.
-                         throw new Error(`Resulting request body is not valid JSON after unquoted replacements: ${jsonError.message}. Body: ${bodyString.substring(0, 200)}...`);
+                        console.warn(`Resulting request body for step ${step.id} is not valid JSON after unquoted replacements: ${jsonError.message}`);
+                        // Let's throw an error here to prevent sending invalid JSON.
+                        throw new Error(`Resulting request body is not valid JSON after unquoted replacements: ${jsonError.message}. Body: ${bodyString.substring(0, 200)}...`);
                     }
                 }
 
@@ -603,7 +557,7 @@ export class FlowRunner {
             fetchOptions.body = String(body);
             // If content-type wasn't set, maybe set to text/plain?
             if (!fetchOptions.headers['Content-Type']) {
-                 fetchOptions.headers['Content-Type'] = 'text/plain';
+                fetchOptions.headers['Content-Type'] = 'text/plain';
             }
         } else if (body !== null && body !== undefined && typeof body === 'string' && !['GET', 'HEAD'].includes(fetchOptions.method.toUpperCase())) {
             // If the body was already a string (e.g. XML, plain text), just use it
@@ -618,8 +572,8 @@ export class FlowRunner {
         try {
             // Set timeout *before* fetch call
             timeoutId = setTimeout(() => {
-                 console.warn(`[FlowRunner] Request timeout triggered for step ${step.id}. Aborting.`);
-                 controller.abort();
+                console.warn(`[FlowRunner] Request timeout triggered for step ${step.id}. Aborting.`);
+                controller.abort();
             }, 30000); // 30s timeout
 
             const response = await fetch(url, fetchOptions);
@@ -630,10 +584,10 @@ export class FlowRunner {
             let responseBody = null;
             const respContentType = response.headers.get('content-type');
             try {
-                 if (respContentType && respContentType.includes('application/json')) { responseBody = await response.json(); }
-                 else { responseBody = await response.text(); }
+                if (respContentType && respContentType.includes('application/json')) { responseBody = await response.json(); }
+                else { responseBody = await response.text(); }
             } catch (parseError) {
-                 try { responseBody = await response.text(); } catch (textError) { responseBody = "[Failed to retrieve response body]"; this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error'); } this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
+                try { responseBody = await response.text(); } catch (textError) { responseBody = "[Failed to retrieve response body]"; this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error'); } this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
             }
 
             // --- MODIFICATION START: Implement onFailure logic for HTTP status (remains the same logic) ---
@@ -649,8 +603,8 @@ export class FlowRunner {
                     return { status: 'success', output: output, error: null };
                 } else { // 'stop' (default)
                     // Stop flow, report step as error
-                     this.onMessage(`Request step "${step.name}" failed with status ${responseStatus}, stopping flow.`, 'error');
-                     // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
+                    this.onMessage(`Request step "${step.name}" failed with status ${responseStatus}, stopping flow.`, 'error');
+                    // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
                     return { status: 'error', output: output, error: `Request failed with status ${responseStatus}` };
                 }
             }
@@ -663,39 +617,49 @@ export class FlowRunner {
 
             // --- MODIFICATION START: Specific message for user abort ---
             if (error.name === 'AbortError') {
-                 // Check if it was aborted by the timeout or by user stop()
-                 if (this.state.stopRequested && this.state.currentFetchController === controller) { // Ensure this abort corresponds to the *current* stop request
-                     errorMsg = 'Request aborted by user.';
-                     console.log(`[FlowRunner] Fetch aborted by user stop request for step ${step.id}`);
-                 } else {
-                     // Assume it was the timeout if not explicitly stopped by the user for this controller
-                     errorMsg = 'Request timed out (30s)';
-                     console.warn(`[FlowRunner] Fetch timed out or aborted unexpectedly for step ${step.id}`); // Make slightly more general if stop wasn't requested
-                 }
+                // Check if it was aborted by the timeout or by user stop()
+                if (this.state.stopRequested && this.state.currentFetchController === controller) { // Ensure this abort corresponds to the *current* stop request
+                    errorMsg = 'Request aborted by user.';
+                    this.onMessage(`Request step \"${step.name}\" was aborted by user.`, 'warning');
+                } else {
+                    errorMsg = 'Request timed out (30s)';
+                    this.onMessage(`Request step \"${step.name}\" timed out after 30 seconds.`, 'error');
+                }
+            } else if (errorMsg.match(/ENOTFOUND|DNS|getaddrinfo|Failed to fetch|Name or service not known|Could not resolve host/i)) {
+                errorMsg = 'Network error: Could not resolve host or DNS lookup failed.';
+                this.onMessage(`Request step \"${step.name}\": Could not resolve host or DNS lookup failed.\n\nCheck the URL and your network connection.`, 'error');
+            } else if (errorMsg.match(/ECONNREFUSED|connection refused|ECONNRESET|Connection refused/i)) {
+                errorMsg = 'Network error: Connection refused by server.';
+                this.onMessage(`Request step \"${step.name}\": Connection refused by server.\n\nCheck if the server is running and reachable.`, 'error');
+            } else if (errorMsg.match(/timeout|timed out|ETIMEDOUT/i)) {
+                errorMsg = 'Network error: Connection timed out.';
+                this.onMessage(`Request step \"${step.name}\": Connection timed out.\n\nCheck your network connection and server status.`, 'error');
+            } else if (errorMsg.match(/NetworkError|network error|TypeError: Failed to fetch/i)) {
+                errorMsg = 'Network error: Failed to connect.';
+                this.onMessage(`Request step \"${step.name}\": Failed to connect.\n\nCheck your network connection and the request URL.`, 'error');
             }
             // --- MODIFICATION END ---
-
 
             // --- MODIFICATION START: Implement onFailure logic for fetch errors (remains the same logic) ---
             if (effectiveOnFailure === 'continue') {
                 // Continue flow, report step as error (since the request fundamentally failed)
-                this.onMessage(`Request step "${step.name}" encountered network/fetch error, continuing flow. Error: ${errorMsg}`, 'warning');
-                 // Return 'error' status, but _executeSingleStepLogic checks onFailure === 'continue' and won't stop the flow
+                this.onMessage(`Request step \"${step.name}\" encountered network/fetch error, continuing flow. Error: ${errorMsg}`, 'warning');
+                // Return 'error' status, but _executeSingleStepLogic checks onFailure === 'continue' and won't stop the flow
                 return { status: 'error', output: null, error: errorMsg };
             } else { // 'stop' (default)
                 // Stop flow, report step as error
-                 this.onMessage(`Request step "${step.name}" failed with network/fetch error, stopping flow. Error: ${errorMsg}`, 'error');
-                 // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
+                this.onMessage(`Request step \"${step.name}\" failed with network/fetch error, stopping flow. Error: ${errorMsg}`, 'error');
+                // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
                 return { status: 'error', output: null, error: errorMsg };
             }
             // --- MODIFICATION END ---
         } finally {
-             // --- MODIFICATION START: Always clear the controller and timeout ---
-             clearTimeout(timeoutId); // Ensure timeout is cleared regardless of outcome
-             if (this.state.currentFetchController === controller) {
-                 this.state.currentFetchController = null; // Clear the stored controller only if it's the one we created
-             }
-             // --- MODIFICATION END ---
+            // --- MODIFICATION START: Always clear the controller and timeout ---
+            clearTimeout(timeoutId); // Ensure timeout is cleared regardless of outcome
+            if (this.state.currentFetchController === controller) {
+                this.state.currentFetchController = null; // Clear the stored controller only if it's the one we created
+            }
+            // --- MODIFICATION END ---
         }
     } // --- End of _executeRequestStep ---
 
@@ -704,8 +668,8 @@ export class FlowRunner {
         let evalError = null;
 
         try {
-             // Use the provided evaluation function
-             conditionMet = this.evaluateConditionFn(step.conditionData, context);
+            // Use the provided evaluation function
+            conditionMet = this.evaluateConditionFn(step.conditionData, context);
         } catch (error) {
             console.error(`Error evaluating condition for step ${step.id}:`, error);
             evalError = error;
@@ -726,14 +690,14 @@ export class FlowRunner {
 
             // Push the appropriate branch onto the execution stack
             if (conditionMet) {
-                 this._pushExecutionLevel(step.thenSteps || [], { ...context }, 'then', step.id);
+                this._pushExecutionLevel(step.thenSteps || [], { ...context }, 'then', step.id);
             } else {
-                 this._pushExecutionLevel(step.elseSteps || [], { ...context }, 'else', step.id);
+                this._pushExecutionLevel(step.elseSteps || [], { ...context }, 'else', step.id);
             }
         } else {
             // If evaluation itself errored, log that
-             const errorResultIndex = this.onStepStart({ name: `Condition Error`, type: 'System', id: `${step.id}-error` }, this._getCurrentPathArray());
-             this.onStepComplete(errorResultIndex, { name: `Condition Error`, type: 'System', id: `${step.id}-error` }, { status: 'error', output: null, error: resultError }, context, this._getCurrentPathArray());
+            const errorResultIndex = this.onStepStart({ name: `Condition Error`, type: 'System', id: `${step.id}-error` }, this._getCurrentPathArray());
+            this.onStepComplete(errorResultIndex, { name: `Condition Error`, type: 'System', id: `${step.id}-error` }, { status: 'error', output: null, error: resultError }, context, this._getCurrentPathArray());
         }
 
 
@@ -750,7 +714,7 @@ export class FlowRunner {
         let evalError = null;
 
         if (!this.evaluatePathFn) {
-             return { status: 'error', output: null, error: 'Loop step requires evaluatePathFn to be configured in FlowRunner.' };
+            return { status: 'error', output: null, error: 'Loop step requires evaluatePathFn to be configured in FlowRunner.' };
         }
 
         try {
@@ -774,90 +738,111 @@ export class FlowRunner {
             }
 
             // Add Loop Start marker
-             const startResultIndex = this.onStepStart({ name: `Loop Start (${items.length} items)`, type: 'System', id: `${step.id}-start` }, this._getCurrentPathArray());
-             const startMsg = items.length === 0 ? `Loop source "${step.source}" is empty. Skipping body.` : `Iterating over "${step.source}" (${items.length} items) as "{{${loopVariable}}}".`;
-             this.onStepComplete(startResultIndex, { name: `Loop Start (${items.length} items)`, type: 'System', id: `${step.id}-start` }, { status: 'success', output: startMsg, error: null }, context, this._getCurrentPathArray());
+            const startResultIndex = this.onStepStart({ name: `Loop Start (${items.length} items)`, type: 'System', id: `${step.id}-start` }, this._getCurrentPathArray());
+            const startMsg = items.length === 0 ? `Loop source "${step.source}" is empty. Skipping body.` : `Iterating over "${step.source}" (${items.length} items) as "{{${loopVariable}}}".`;
+            this.onStepComplete(startResultIndex, { name: `Loop Start (${items.length} items)`, type: 'System', id: `${step.id}-start` }, { status: 'success', output: startMsg, error: null }, context, this._getCurrentPathArray());
 
 
             if (items.length > 0) {
-                 // Push the loop body onto the stack, but with special context handling
-                 const loopContextBase = { ...context }; // Capture context *before* the loop starts modifying it per iteration
-                 this.state.executionPath.push({
-                     steps: step.loopSteps || [],
-                     index: 0, // Start at first step *within* the loop body
-                     context: loopContextBase, // Base context for the loop level (will be updated per iteration)
-                     type: 'loop',
-                     parentStepId: step.id,
-                     // Loop-specific state:
-                     loopItems: items,
-                     loopItemIndex: 0, // Start with the first item
-                     loopVarName: loopVariable,
-                 });
-                 // Prepare context for the *first* iteration immediately
-                 this._prepareLoopIterationContext();
+                // Push the loop body onto the stack, but with special context handling
+                const loopContextBase = { ...context }; // Capture context *before* the loop starts modifying it per iteration
+                this.state.executionPath.push({
+                    steps: step.loopSteps || [],
+                    index: 0, // Start at first step *within* the loop body
+                    context: loopContextBase, // Base context for the loop level (will be updated per iteration)
+                    type: 'loop',
+                    parentStepId: step.id,
+                    // Loop-specific state:
+                    loopItems: items,
+                    loopItemIndex: 0, // Start with the first item
+                    loopVarName: loopVariable,
+                });
+                // Prepare context for the *first* iteration immediately
+                this._prepareLoopIterationContext();
 
             }
             // Loop step setup is successful (even if 0 items)
-             return { status: 'success', output: { itemCount: items.length }, error: null };
+            return { status: 'success', output: { itemCount: items.length }, error: null };
 
         } catch (error) {
-             console.error(`Error evaluating loop source for step ${step.id}:`, error);
-             evalError = error;
+            console.error(`Error evaluating loop source for step ${step.id}:`, error);
+            evalError = error;
         }
 
-         if (evalError) {
-             const errResultIndex = this.onStepStart({ name: `Loop Error`, type: 'System', id: `${step.id}-error` }, this._getCurrentPathArray());
-             this.onStepComplete(errResultIndex, { name: `Loop Error`, type: 'System', id: `${step.id}-error` }, { status: 'error', output: null, error: `Loop setup error: ${evalError.message}` }, context, this._getCurrentPathArray());
-             // _executeSingleStepLogic will handle stopping due to 'error' status
-             return { status: 'error', output: null, error: `Loop setup error: ${evalError.message}` };
-         }
-         // Should not be reached if error handling is correct
-         return { status: 'skipped', output: { itemCount: 0 }, error: 'Unexpected state in loop setup' };
+        if (evalError) {
+            const errResultIndex = this.onStepStart({ name: `Loop Error`, type: 'System', id: `${step.id}-error` }, this._getCurrentPathArray());
+            this.onStepComplete(errResultIndex, { name: `Loop Error`, type: 'System', id: `${step.id}-error` }, { status: 'error', output: null, error: `Loop setup error: ${evalError.message}` }, context, this._getCurrentPathArray());
+            // _executeSingleStepLogic will handle stopping due to 'error' status
+            return { status: 'error', output: null, error: `Loop setup error: ${evalError.message}` };
+        }
+        // Should not be reached if error handling is correct
+        return { status: 'skipped', output: { itemCount: 0 }, error: 'Unexpected state in loop setup' };
     }
 
 
     _prepareLoopIterationContext() {
-         const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
-         if (!currentLevel || currentLevel.type !== 'loop') return;
+        const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
+        if (!currentLevel || currentLevel.type !== 'loop') return;
 
-         const { loopItems, loopItemIndex, loopVarName, context: baseContext } = currentLevel;
+        const { loopItems, loopItemIndex, loopVarName } = currentLevel;
 
-         if (loopItemIndex < loopItems.length) {
-             const currentItem = loopItems[loopItemIndex];
+        if (loopItemIndex < loopItems.length) {
+            const currentItem = loopItems[loopItemIndex];
+            
+            // Set the loop variable for this iteration
+            currentLevel.context[loopVarName] = currentItem;
 
-             // Create the context for this iteration: Start with base, add loop var
-             currentLevel.context = { ...baseContext, [loopVarName]: currentItem };
-             this.onContextUpdate(currentLevel.context); // Notify UI of change for this specific level/iteration
+            // Notify UI of context change for this specific level/iteration
+            this.onContextUpdate(currentLevel.context);
 
-             // Add iteration marker
-             const iterResultIndex = this.onStepStart({ name: `Loop Iteration ${loopItemIndex + 1}/${loopItems.length}`, type: 'System', id: `${currentLevel.parentStepId}-iter-${loopItemIndex}` }, this._getCurrentPathArray());
-             let itemPreview = "[Complex Object/Array]";
-             try {
+            // Add iteration marker
+            const iterResultIndex = this.onStepStart({ 
+                name: `Loop Iteration ${loopItemIndex + 1}/${loopItems.length}`, 
+                type: 'System', 
+                id: `${currentLevel.parentStepId}-iter-${loopItemIndex}` 
+            }, this._getCurrentPathArray());
+
+            let itemPreview = "[Complex Object/Array]";
+            try {
                 if (currentItem === null) itemPreview = 'null';
                 else if (typeof currentItem === 'object') itemPreview = JSON.stringify(currentItem);
                 else itemPreview = String(currentItem);
 
                 if (itemPreview.length > 100) itemPreview = itemPreview.substring(0, 100) + '...';
-             } catch (e) {
-                 itemPreview = "[Preview Error]";
-             }
-             this.onStepComplete(iterResultIndex, { name: `Loop Iteration ${loopItemIndex + 1}/${loopItems.length}`, type: 'System', id: `${currentLevel.parentStepId}-iter-${loopItemIndex}` }, { status: 'success', output: `{{${loopVarName}}} = ${itemPreview}`, error: null }, currentLevel.context, this._getCurrentPathArray());
+            } catch (e) {
+                itemPreview = "[Preview Error]";
+            }
 
-         } else {
-             this.onMessage(`Warning: _prepareLoopIterationContext called with invalid index ${loopItemIndex}`, 'warning');
-         }
+            this.onStepComplete(
+                iterResultIndex,
+                { 
+                    name: `Loop Iteration ${loopItemIndex + 1}/${loopItems.length}`, 
+                    type: 'System', 
+                    id: `${currentLevel.parentStepId}-iter-${loopItemIndex}` 
+                },
+                { 
+                    status: 'success', 
+                    output: `{{${loopVarName}}} = ${itemPreview}`, 
+                    error: null 
+                },
+                currentLevel.context,
+                this._getCurrentPathArray()
+            );
+        } else {
+            this.onMessage(`Warning: _prepareLoopIterationContext called with invalid index ${loopItemIndex}`, 'warning');
+        }
     }
 
 
-     /**
-      * Updates the runtime context based on extraction rules.
-      * Returns an array of failed extractions.
-      * @param {Object} extractConfig - { varName: pathString, ... }
-      * @param {Object} responseOutput - { status, headers, body }
-      * @param {Object} context - The context object to modify directly.
-      * @returns {Array<Object>} An array of objects detailing failed extractions, e.g., [{ varName: 'user', path: 'body.data.user.id', reason: '...' }]
-      */
-     _updateContextFromExtraction(extractConfig, responseOutput, context) { // <-- Modified return type comment
+    /**
+     * Updates the runtime context based on extraction rules.
+     * Returns an array of failed extractions.
+     * @param {Object} extractConfig - { varName: pathString, ... }
+     * @param {Object} responseOutput - { status, headers, body }
+     * @param {Object} context - The context object to modify directly.
+     * @returns {Array<Object>} An array of objects detailing failed extractions, e.g., [{ varName: 'user', path: 'body.data.user.id', reason: '...' }]
+     */
+    _updateContextFromExtraction(extractConfig, responseOutput, context) { // <-- Modified return type comment
         const failures = []; // <-- Initialize failures array
         if (!extractConfig || !responseOutput) return failures; // <-- Return empty failures if no config/output
 
@@ -882,14 +867,14 @@ export class FlowRunner {
             console.log(`[Extraction] Processing rule: Variable="${varName}", Path="${path}"`);
 
             try {
-                 if (!varName || typeof varName !== 'string') {
+                if (!varName || typeof varName !== 'string') {
                     extractionError = `Invalid variable name "${varName}"`;
                     console.warn(`[Extraction] ${extractionError}`);
                     // Don't add to failures, just skip? Or add? Let's add for visibility.
                     failures.push({ varName: varName || 'INVALID', path: path || 'N/A', reason: extractionError });
                     continue;
-                 }
-                 if (path === undefined || path === null || typeof path !== 'string') {
+                }
+                if (path === undefined || path === null || typeof path !== 'string') {
                     extractionError = `Path is missing or invalid`;
                     console.warn(`[Extraction] ${extractionError} for variable "${varName}"`);
                     // --- MODIFICATION: Set context var to undefined and add failure ---
@@ -899,69 +884,69 @@ export class FlowRunner {
                     }
                     failures.push({ varName: varName, path: path || 'N/A', reason: extractionError });
                     continue;
-                 }
+                }
 
                 // --- Path evaluation logic (remains largely the same, added logging/path extraction) ---
-                 if (path === '.status') {
-                     extractedValue = responseOutput.hasOwnProperty('status') ? responseOutput.status : undefined;
-                     console.log(`[Extraction] Path ".status" evaluated to:`, extractedValue);
-                 } else if (path === '$status') { // Legacy/alternative keyword check
-                     extractedValue = responseOutput.status;
-                     console.log(`[Extraction] Path "$status" evaluated to:`, extractedValue);
-                 } else if (path === '$headers') {
-                     extractedValue = responseOutput.headers;
-                      console.log(`[Extraction] Path "$headers" evaluated.`);
-                 } else if (path === '$body') {
-                     extractedValue = responseOutput.body;
-                      console.log(`[Extraction] Path "$body" evaluated.`);
-                 } else if (path.startsWith('$header.')) {
+                if (path === '.status') {
+                    extractedValue = responseOutput.hasOwnProperty('status') ? responseOutput.status : undefined;
+                    console.log(`[Extraction] Path ".status" evaluated to:`, extractedValue);
+                } else if (path === '$status') { // Legacy/alternative keyword check
+                    extractedValue = responseOutput.status;
+                    console.log(`[Extraction] Path "$status" evaluated to:`, extractedValue);
+                } else if (path === '$headers') {
+                    extractedValue = responseOutput.headers;
+                    console.log(`[Extraction] Path "$headers" evaluated.`);
+                } else if (path === '$body') {
+                    extractedValue = responseOutput.body;
+                    console.log(`[Extraction] Path "$body" evaluated.`);
+                } else if (path.startsWith('$header.')) {
                     const headerName = path.substring('$header.'.length).toLowerCase();
                     extractedValue = undefined; // Default if not found
                     if (responseOutput.headers) {
-                        for(const key in responseOutput.headers) {
+                        for (const key in responseOutput.headers) {
                             if (key.toLowerCase() === headerName) {
                                 extractedValue = responseOutput.headers[key];
                                 break;
                             }
                         }
                     }
-                     console.log(`[Extraction] Path "${path}" evaluated to:`, extractedValue);
-                 } else {
+                    console.log(`[Extraction] Path "${path}" evaluated to:`, extractedValue);
+                } else {
                     // Standard path evaluation (Assume body first, then try response if prefixed)
                     let valueFromBody = undefined;
                     let valueFromResponse = undefined;
-                     try {
-                         valueFromBody = evaluatePath(responseOutput.body, path);
-                         console.log(`[Extraction] Path "${path}" on BODY evaluated to:`, valueFromBody);
-                     } catch (evalError) {
-                         // --- MODIFICATION: Capture eval error for failure reason ---
-                         extractionError = `Path evaluation error on body: ${evalError.message}`;
-                         console.warn(`[Extraction] Path "${path}" on BODY failed: ${evalError.message}`);
-                         valueFromBody = undefined;
-                         // --- END MODIFICATION ---
-                     }
+                    try {
+                        valueFromBody = evaluatePath(responseOutput.body, path);
+                        console.log(`[Extraction] Path "${path}" on BODY evaluated to:`, valueFromBody);
+                    } catch (evalError) {
+                        // --- MODIFICATION: Capture eval error for failure reason ---
+                        extractionError = `Path evaluation error on body: ${evalError.message}`;
+                        console.warn(`[Extraction] Path "${path}" on BODY failed: ${evalError.message}`);
+                        valueFromBody = undefined;
+                        // --- END MODIFICATION ---
+                    }
 
-                     if (valueFromBody !== undefined) {
-                         extractedValue = valueFromBody;
-                     }
-                     else if (path.startsWith('response.')) { // Only try response if explicitly prefixed AND body yielded undefined
-                         try {
-                             const responsePath = path.substring('response.'.length);
-                             valueFromResponse = evaluatePath(responseOutput, responsePath);
-                              console.log(`[Extraction] Path "${path}" on RESPONSE evaluated to:`, valueFromResponse);
-                              if(valueFromResponse !== undefined) extractedValue = valueFromResponse;
-                         } catch (evalError) {
-                              // --- MODIFICATION: Capture eval error for failure reason ---
-                              extractionError = `Path evaluation error on response: ${evalError.message}`;
-                              console.warn(`[Extraction] Path "${path}" on RESPONSE failed: ${evalError.message}`);
-                              valueFromResponse = undefined; // Ensure undefined on error
-                              // --- END MODIFICATION ---
-                         }
-                     }
-                 }
-                 // --- End path evaluation logic ---
+                    if (valueFromBody !== undefined) {
+                        extractedValue = valueFromBody;
+                    }
+                    else if (path.startsWith('response.')) { // Only try response if explicitly prefixed AND body yielded undefined
+                        try {
+                            const responsePath = path.substring('response.'.length);
+                            valueFromResponse = evaluatePath(responseOutput, responsePath);
+                            console.log(`[Extraction] Path "${path}" on RESPONSE evaluated to:`, valueFromResponse);
+                            if (valueFromResponse !== undefined) extractedValue = valueFromResponse;
+                        } catch (evalError) {
+                            // --- MODIFICATION: Capture eval error for failure reason ---
+                            extractionError = `Path evaluation error on response: ${evalError.message}`;
+                            console.warn(`[Extraction] Path "${path}" on RESPONSE failed: ${evalError.message}`);
+                            valueFromResponse = undefined; // Ensure undefined on error
+                            // --- END MODIFICATION ---
+                        }
+                    }
+                }
+                // --- End path evaluation logic ---
 
-                 if (extractedValue === undefined) {
+                if (extractedValue === undefined) {
                     // --- MODIFICATION: Don't message, add to failures. Use captured error if available. ---
                     if (!extractionError) { // Only set this reason if no eval error occurred
                         extractionError = `Path "${path}" yielded no value (undefined)`;
@@ -969,20 +954,20 @@ export class FlowRunner {
                     console.warn(`[Extraction] FAILURE: ${extractionError} for variable "${varName}".`);
                     failures.push({ varName: varName, path: path, reason: extractionError });
                     // --- END MODIFICATION ---
-                 }
+                }
 
                 // Store the extracted value (or undefined if not found/error)
                 const oldValue = context[varName];
                 if (oldValue !== extractedValue) { // Update context if value changed (including becoming undefined)
                     context[varName] = extractedValue;
                     contextChanged = true;
-                    if(extractedValue !== undefined) {
+                    if (extractedValue !== undefined) {
                         console.log(`[Extraction] SUCCESS: Stored context["${varName}"] =`, extractedValue);
                     } else {
                         console.log(`[Extraction] INFO: Set context["${varName}"] to undefined.`);
                     }
                 } else {
-                     console.log(`[Extraction] INFO: Value for context["${varName}"] is unchanged (${typeof extractedValue}).`);
+                    console.log(`[Extraction] INFO: Value for context["${varName}"] is unchanged (${typeof extractedValue}).`);
                 }
 
             } catch (e) {
@@ -991,10 +976,10 @@ export class FlowRunner {
                 // --- MODIFICATION: Don't message, add to failures, set context var to undefined ---
                 failures.push({ varName: varName, path: path, reason: extractionError });
                 if (context[varName] !== undefined) {
-                     context[varName] = undefined;
-                     contextChanged = true;
+                    context[varName] = undefined;
+                    contextChanged = true;
                 }
-                 // --- END MODIFICATION ---
+                // --- END MODIFICATION ---
             }
         }
         // Notify context update *once* after all extractions for the step are done, only if changed
@@ -1023,10 +1008,10 @@ export class FlowRunner {
             if (checkStop()) return;
 
             timeoutId = setTimeout(() => {
-                 // Double-check before resolving naturally
-                 if (!checkStop()) {
+                // Double-check before resolving naturally
+                if (!checkStop()) {
                     resolve();
-                 }
+                }
             }, ms);
         });
     }

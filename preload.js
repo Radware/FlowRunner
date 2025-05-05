@@ -47,6 +47,16 @@ const electronAPI = {
     // getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 };
 
+// --- MODIFICATION: Commented out the test-only bridge ---
+/*
+// TEST‑ONLY BRIDGE — let Playwright use Node modules from the renderer
+if (process.env.NODE_ENV === 'test' || process.env.E2E) {
+    console.log("[Preload] Exposing 'require' via contextBridge for testing..."); // Added log
+    contextBridge.exposeInMainWorld('require', require);
+}
+*/
+// --- END MODIFICATION ---
+
 try {
     // Expose the API object under window.electronAPI in the renderer process
     contextBridge.exposeInMainWorld('electronAPI', electronAPI);

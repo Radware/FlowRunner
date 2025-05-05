@@ -1,3 +1,5 @@
+console.log('E2E DEBUG: app.js loaded');
+
 // --- MODIFIED: Import core functions ---
 import {
     flowModelToJson,
@@ -291,7 +293,7 @@ function setLoading(isLoading, scope = 'global') {
 
     // Save buttons also depend on dirty state, handled in setDirty
     const needsSave = appState.isDirty || appState.stepEditorIsDirty;
-    if (domRefs.saveFlowBtn) domRefs.saveFlowBtn.disabled = isLoading || !needsSave || !appState.currentFlowModel;
+    if (domRefs.saveFlowBtn) domRefs.saveFlowBtn.disabled = isLoading || !needsSave || !appState.currentFlowModel || !appState.currentFilePath;
     if (domRefs.saveAsFlowBtn) domRefs.saveAsFlowBtn.disabled = isLoading || !appState.currentFlowModel;
 
     updateRunnerUI(); // Reflects both global loading and runner state
@@ -319,12 +321,13 @@ function setDirty(dirtyFlagFromSource) {
     }
 
     // --- Update Button States based on the calculated `needsSave` ---
-    const canSave = needsSave && !!appState.currentFlowModel && !appState.isLoading;
-    const canSaveAs = !!appState.currentFlowModel && !appState.isLoading; // Can always save-as if a model exists
+    // UPDATED LOGIC: Save only if flow has steps, is dirty, and has a file path; Save As if at least one step and model
+    const hasSteps = !!appState.currentFlowModel?.steps?.length;
+    const canSave = needsSave && hasSteps && !!appState.currentFilePath && !appState.isLoading;
+    const canSaveAs = hasSteps && !!appState.currentFlowModel && !appState.isLoading;
 
     if (domRefs.saveFlowBtn) {
         domRefs.saveFlowBtn.disabled = !canSave;
-        // Optional: Add visual cue like subtle pulse if changes need saving
         domRefs.saveFlowBtn.classList.toggle('needs-save', canSave);
     }
     if (domRefs.saveAsFlowBtn) {
@@ -332,7 +335,7 @@ function setDirty(dirtyFlagFromSource) {
     }
 
     // Log state changes for debugging
-    // console.log(`setDirty called: isDirty=${appState.isDirty}, stepEditorIsDirty=${appState.stepEditorIsDirty}, needsSave=${needsSave}, saveBtnDisabled=${!canSave}`);
+    console.log(`[setDirty] Called. isDirty=${appState.isDirty}, stepEditorIsDirty=${appState.stepEditorIsDirty}. Calculated: needsSave=${needsSave}, canSave=${canSave}. Setting saveBtn.disabled=${!canSave}`);
 }
 
 
@@ -443,8 +446,7 @@ function renderFlowList(recentFiles) {
         li.innerHTML = `
             <span class="flow-item-name">${escapeHTML(getFileName(filePath))}</span>
             <div class="flow-item-actions">
-                 <!-- Add actions like 'Remove from Recents' if needed later -->
-                 <!-- <button class="btn-remove-recent" data-action="remove-recent" title="Remove from Recent List">✕</button> -->
+                <button class="btn-remove-recent" data-action="remove-recent" title="Remove from Recent List">✕</button>
             </div>
         `;
         domRefs.flowList.appendChild(li);
@@ -464,7 +466,6 @@ function handleFlowListActions(event) {
         }
     }
     // Handle other actions like 'remove-recent' if buttons are added later
-    /*
     const targetButton = event.target.closest('button[data-action="remove-recent"]');
     if (targetButton) {
         event.stopPropagation();
@@ -479,7 +480,6 @@ function handleFlowListActions(event) {
              renderFlowList(currentRecent);
         }
     }
-    */
 }
 
 // --- [Modified Code] in app.js ---
@@ -545,11 +545,19 @@ async function handleOpenFile() {
             // Selection highlight updated within loadAndRenderFlow -> addRecentFile
         } else if (result && result.success && result.cancelled) {
             console.log("Open file dialog cancelled.");
-        } else if (result && !result.success) {
-             throw new Error(result.error || 'Failed to show open dialog.');
+        } else if (result && !result.success && result.error) {
+            let userMsg = result.error;
+            if (result.code === 'ENOENT') userMsg = 'File not found. Please check the path.';
+            else if (result.code === 'EACCES') userMsg = 'Permission denied. You do not have access to this file.';
+            else if (result.code === 'EISDIR') userMsg = 'Cannot open: Path is a directory.';
+            else if (result.code === 'EPERM') userMsg = 'Operation not permitted. Check your permissions.';
+            else if (result.code === 'EMFILE') userMsg = 'Too many files open. Please close some files and try again.';
+            showMessage(`Error opening file: ${userMsg}`, 'error');
+            clearWorkspace(true);
+            return;
         } else {
             console.warn("Unexpected response from showOpenFile:", result);
-             throw new Error('Received unexpected response when trying to open file.');
+            throw new Error('Received unexpected response when trying to open file.');
         }
     } catch (error) {
         console.error('Error opening file:', error);
@@ -725,9 +733,16 @@ async function loadAndRenderFlow(filePath) {
                  console.error(`Error parsing JSON from file ${filePath}:`, parseError);
                  throw new Error(`File is not valid JSON: ${parseError.message}`);
             }
-        } else if (result && !result.success) {
-             console.error(`Failed to read file via IPC: ${filePath}`, result.error);
-             throw new Error(result.error || 'Failed to read file.');
+        } else if (result && !result.success && result.error) {
+            let userMsg = result.error;
+            if (result.code === 'ENOENT') userMsg = 'File not found. Please check the path.';
+            else if (result.code === 'EACCES') userMsg = 'Permission denied. You do not have access to this file.';
+            else if (result.code === 'EISDIR') userMsg = 'Cannot open: Path is a directory.';
+            else if (result.code === 'EPERM') userMsg = 'Operation not permitted. Check your permissions.';
+            else if (result.code === 'EMFILE') userMsg = 'Too many files open. Please close some files and try again.';
+            showMessage(`Error opening file: ${userMsg}`, 'error');
+            clearWorkspace(true);
+            return false;
         } else {
             console.warn("Unexpected response from readFile IPC:", result);
             throw new Error('Unexpected response when trying to read file.');
@@ -1089,7 +1104,7 @@ async function saveCurrentFlow(forceSaveAs = false) {
         const writeResult = await window.electronAPI.writeFile(targetFilePath, flowJsonString);
 
         if (writeResult?.success) {
-            console.log("File write successful.");
+            console.log(`[SAVE SUCCESS] File write successful to ${targetFilePath}. Resetting dirty state...`);
             savedSuccessfully = true;
             showMessage(`Flow saved successfully to ${path.basename(targetFilePath)}!`, 'success');
 
@@ -1106,14 +1121,25 @@ async function saveCurrentFlow(forceSaveAs = false) {
             if (forceSaveAs || previousFilePath !== targetFilePath) {
                  renderFlowList(getRecentFiles());
             }
+            console.log("[SAVE SUCCESS] Calling setDirty(false) to update button state.");
             setDirty(false); // Ensure save buttons are disabled
 
+        } else if (writeResult && !writeResult.success && writeResult.error) {
+            let userMsg = writeResult.error;
+            if (writeResult.code === 'ENOENT') userMsg = 'File path does not exist. Please choose a valid location.';
+            else if (writeResult.code === 'EACCES') userMsg = 'Permission denied. You do not have access to write to this file.';
+            else if (writeResult.code === 'EISDIR') userMsg = 'Cannot write: Path is a directory.';
+            else if (writeResult.code === 'EPERM') userMsg = 'Operation not permitted. Check your permissions.';
+            else if (writeResult.code === 'EMFILE') userMsg = 'Too many files open. Please close some files and try again.';
+            showMessage(`Error saving file: ${userMsg}`, 'error');
+            setLoading(false, 'global');
+            return false;
         } else {
             throw new Error(writeResult?.error || 'Failed to write file via IPC.');
         }
 
     } catch (error) {
-        console.error('Save error:', error);
+        console.error('[SAVE FAILURE] Save error occurred:', error);
          if (error.message !== "Save cancelled by user.") {
              showMessage(`Save Failed: ${error.message}`, 'error');
          }
@@ -1227,7 +1253,7 @@ function handleBuilderStepSelect(stepId) {
     // --- CRITICAL: Check for unsaved changes in the *current* editor before switching ---
      if (appState.stepEditorIsDirty) {
          if (!confirm("You have unsaved changes in the current step editor. Discard changes and select the new step?")) {
-             // User canceled, prevent the state change and re-render
+             // User cancelled, prevent the state change and re-render
              // This ensures the builder component doesn't visually switch selection if the state change was prevented.
              // It might be necessary if the component tries to optimistically update UI on click.
              // renderCurrentFlow(); // Optional: Force re-render to ensure UI matches state
@@ -1401,7 +1427,7 @@ function handleVisualizerNodeMove(sourceStepId, targetStepId, position) {
     });
 }
 
-// --- [New Code] in app.js ---
+// --- [Modified Code] in app.js ---
 /**
  * Handles the node position update callback from the FlowVisualizer.
  * Updates the flow model's visualLayout and marks the flow as dirty.
@@ -1415,9 +1441,9 @@ function handleVisualizerNodeLayoutUpdate(stepId, x, y) {
     appState.currentFlowModel.visualLayout = appState.currentFlowModel.visualLayout || {};
     const currentPos = appState.currentFlowModel.visualLayout[stepId];
 
-    // Update only if position actually changed to avoid unnecessary dirty state/renders
+    console.log(`[App LayoutUpdate] Received layout update for ${stepId} to (${x}, ${y})`);
     if (!currentPos || currentPos.x !== x || currentPos.y !== y) {
-        console.log(`[App] Updating visual layout for ${stepId}:`, { x, y });
+        console.log(`[App LayoutUpdate] Position changed! DeltaX: ${currentPos ? x - currentPos.x : 'N/A'}, DeltaY: ${currentPos ? y - currentPos.y : 'N/A'}. Updating model and setting dirty state for ${stepId}. Old:`, currentPos);
         appState.currentFlowModel.visualLayout[stepId] = { x, y };
         appState.isDirty = true; // Mark flow as dirty due to layout change
         setDirty(); // Update buttons/title
@@ -1428,6 +1454,8 @@ function handleVisualizerNodeLayoutUpdate(stepId, x, y) {
         // renderCurrentFlow(); // Uncomment if connector updates are desired immediately, accepting potential flicker.
         // If renderCurrentFlow IS called, ensure the visualizer's render logic correctly uses
         // the updated visualLayout from the model passed to it.
+    } else {
+        console.log(`[App LayoutUpdate] Position NOT changed sufficiently. DeltaX: ${currentPos ? x - currentPos.x : 'N/A'}, DeltaY: ${currentPos ? y - currentPos.y : 'N/A'}.`);
     }
 }
 
@@ -1854,7 +1882,7 @@ function syncPanelVisibility() {
          // Update Icon
          if(icon) icon.textContent = appState.isVariablesPanelVisible ? '▲' : '▼'; // Note: Icon points UP when panel is VISIBLE (like closing it)
          // Update Text
-         if(textSpan) textSpan.textContent = appState.isVariablesPanelVisible ? ' Hide Variables' : ' Show Variables';
+         if (textSpan) textSpan.textContent = appState.isVariablesPanelVisible ? ' Hide Variables' : ' Show Variables';
           // Fallback if spans don't exist
          else {
              // Construct text content manually if spans are missing
@@ -1932,6 +1960,7 @@ function highlightStepInList(stepId, statusClass) {
         return; // Don't try to highlight system steps in the list view DOM
     }
     // --- MODIFICATION END ---
+    
 
     // Original checks for required elements and class
     if (!domRefs.flowBuilderMount || !statusClass) return;
@@ -2058,6 +2087,7 @@ function handleStopFlow() {
 
 // --- [Modified Code] in app.js ---
 function handleRunnerStepStart(step, executionPath) {
+    console.log(`[RUNNER CALLBACK] handleRunnerStepStart: stepId=${step.id}, name=${step.name}`);
     const resultIndex = addResultEntry(step, 'running', executionPath); // Add placeholder
     // Highlight step in the active view
     if (appState.currentView === 'node-graph' && appState.visualizerComponent) {
@@ -2070,6 +2100,7 @@ function handleRunnerStepStart(step, executionPath) {
 
 // --- [Modified Code] in app.js ---
 function handleRunnerStepComplete(resultIndex, step, result, context, executionPath) {
+    console.log(`[RUNNER CALLBACK] handleRunnerStepComplete: stepId=${step.id}, status=${result.status}, error=${result.error}, failures=${result.extractionFailures?.length}`);
     // --- MODIFICATION START: Pass extraction failures ---
     updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || []);
     // --- MODIFICATION END ---
@@ -2143,7 +2174,7 @@ function handleRunnerFlowStopped(finalContext, results) {
 
  // --- [Modified Code] in app.js ---
  function handleRunnerError(resultIndex, step, error, context, executionPath) {
-    console.error(`Runner Error during step ${step?.id} (${step?.name}):`, error);
+    console.error(`[RUNNER CALLBACK] handleRunnerError: stepId=${step?.id}, error=${error?.message}`, error);
     const errorMessage = error?.message || (typeof error === 'string' ? error : 'Unknown execution error');
 
     if (resultIndex !== null && resultIndex >= 0 && resultIndex < appState.executionResults.length) {
@@ -2192,7 +2223,7 @@ function handleRunnerContextUpdate(newContext) {
 // --- Runner Result Rendering (in app.js for DOM access) ---
 
 // [Modified Code] - Add extractionFailures to stored data
-function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = []) { // <-- Add extractionFailures parameter
+function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = []) {
     if (!domRefs.runnerResultsList) return -1; // Exit if list doesn't exist
 
     const noResultsLi = domRefs.runnerResultsList.querySelector('.no-results');
@@ -2201,10 +2232,11 @@ function addResultEntry(step, status = 'pending', executionPath = [], output = n
     const li = document.createElement('li');
     li.className = 'result-item';
     const stepId = step.id || `exec-${Date.now()}`;
-    li.dataset.stepId = stepId;
     const resultIndex = appState.executionResults.length; // Get index *before* pushing
+    li.dataset.stepId = stepId;
     li.dataset.resultIndex = resultIndex;
 
+    console.log(`[DOM UPDATE] addResultEntry: Adding li for stepId=${stepId}, status=${status}, index=${resultIndex}`);
     // Store lightweight result object in appState for tracking
     const resultData = {
         stepId: stepId,
@@ -2244,8 +2276,12 @@ function updateResultEntry(index, status, output, error, extractionFailures = []
     resultData.extractionFailures = extractionFailures || []; // <-- Store failures
 
     const li = domRefs.runnerResultsList.querySelector(`li.result-item[data-result-index="${index}"]`);
-    if (!li) return; // List item not found
+    if (!li) {
+         console.warn(`[DOM UPDATE] updateResultEntry: li element not found for index ${index}`);
+         return;
+    }
 
+    console.log(`[DOM UPDATE] updateResultEntry: Updating li index=${index} (stepId=${resultData.stepId}) to status=${status}`);
     // Re-render the content
     renderResultItemContent(li, resultData);
 
@@ -2851,72 +2887,42 @@ function evaluateCondition(conditionData, context) {
     const { variable, operator, value: conditionValue } = conditionData;
 
     if (!variable) {
-        // Only 'exists' and 'not_exists' can potentially operate without a variable path specified?
-        // Let's assume variable is always required for now.
         throw new Error("Invalid condition data: Variable path is required.");
     }
     if (!operator) {
-         throw new Error("Invalid condition data: Operator is required.");
-    }
-    // Allow 'exists' and 'not_exists' operators without a comparison 'value'
-    if (!(operator === 'exists' || operator === 'not_exists' || operator === 'is_null' || operator === 'is_not_null' || operator === 'is_empty' || operator === 'is_not_empty' || operator === 'is_true' || operator === 'is_false') && conditionValue === undefined) {
-        console.warn(`[Evaluate Condition] Operator '${operator}' typically requires a comparison value, but none was provided. Evaluation might be unexpected.`);
-        // Proceed, but behavior depends on switch case logic for undefined comparison value.
+        throw new Error("Invalid condition data: Operator is required.");
     }
 
-
-    // Evaluate the variable part from context using the variable path
-    // This 'actualValue' could be a string, number (like status code), boolean, object, array, null, or undefined.
-    const actualValue = evaluatePath(context, variable); // Use imported evaluatePath
-
-    // The conditionValue might have already been substituted if it was like {{anotherVar}}
-    // Or it could be a literal value (string, number, boolean from the UI).
+    const actualValue = evaluatePath(context, variable);
     const comparisonValue = conditionValue;
-
-    // console.log(`[Evaluate Condition] Step: ${conditionData.stepId || 'N/A'}, VarPath: '${variable}', Operator: '${operator}', ComparisonVal: '${comparisonValue}' (Type: ${typeof comparisonValue}), ActualVal: '${actualValue}' (Type: ${typeof actualValue})`);
 
     try {
         switch (operator) {
-            // --- Equality Operators (Modified for Robustness) ---
             case 'equals': {
-                // 1. Strict comparison first
                 if (actualValue === comparisonValue) return true;
-                // 2. If strict fails, try numeric comparison (handles number vs string like 200 vs "200")
-                // Avoid coercion if one is clearly not number-like (e.g., object, undefined)
                 if (typeof actualValue !== 'object' && typeof comparisonValue !== 'object' && actualValue != null && comparisonValue != null) {
                     const numActual = Number(actualValue);
                     const numComparison = Number(comparisonValue);
-                    // Only compare numerically if both are valid numbers (not NaN)
-                    if (!isNaN(numActual) && !isNaN(numComparison) && numActual === numComparison) {
-                        return true;
+                    if (!isNaN(numActual) && !isNaN(numComparison)) {
+                        return numActual === numComparison;
                     }
                 }
-                // 3. If both strict and numeric fail, it's false
-                return false;
+                return actualValue == comparisonValue;
             }
             case 'not_equals': {
-                // Implement as the logical inverse of the robust 'equals' logic above
-                let isEqual = false;
-                if (actualValue === comparisonValue) {
-                    isEqual = true;
-                } else {
-                     if (typeof actualValue !== 'object' && typeof comparisonValue !== 'object' && actualValue != null && comparisonValue != null) {
-                        const numActual = Number(actualValue);
-                        const numComparison = Number(comparisonValue);
-                        if (!isNaN(numActual) && !isNaN(numComparison) && numActual === numComparison) {
-                             isEqual = true;
-                        }
+                if (actualValue === comparisonValue) return false;
+                if (typeof actualValue !== 'object' && typeof comparisonValue !== 'object' && actualValue != null && comparisonValue != null) {
+                    const numActual = Number(actualValue);
+                    const numComparison = Number(comparisonValue);
+                    if (!isNaN(numActual) && !isNaN(numComparison)) {
+                        return numActual !== numComparison;
                     }
                 }
-                // Return the inverse of the final equality result
-                return !isEqual;
+                return actualValue != comparisonValue;
             }
-
-            // --- Numeric Comparison Operators (Modified for Robustness) ---
             case 'greater_than': {
                 const numActual = Number(actualValue);
                 const numComparison = Number(comparisonValue);
-                // Return true ONLY if both are valid numbers and the condition holds
                 return !isNaN(numActual) && !isNaN(numComparison) && numActual > numComparison;
             }
             case 'less_than': {
@@ -2924,28 +2930,27 @@ function evaluateCondition(conditionData, context) {
                 const numComparison = Number(comparisonValue);
                 return !isNaN(numActual) && !isNaN(numComparison) && numActual < numComparison;
             }
-            case 'greater_equals': {
+            case 'greater_equals':
+            case 'greater_than_or_equal': {
                 const numActual = Number(actualValue);
                 const numComparison = Number(comparisonValue);
                 return !isNaN(numActual) && !isNaN(numComparison) && numActual >= numComparison;
             }
-            case 'less_equals': {
+            case 'less_equals':
+            case 'less_than_or_equal': {
                 const numActual = Number(actualValue);
                 const numComparison = Number(comparisonValue);
                 return !isNaN(numActual) && !isNaN(numComparison) && numActual <= numComparison;
             }
-
-            // --- String Operators (Modified for Robustness) ---
             case 'contains': {
-                // Ensure actualValue is treated as string for contains check
-                const strActual = String(actualValue ?? ''); // Use empty string for null/undefined
-                const strComparison = String(comparisonValue ?? ''); // Use empty string for null/undefined comparison value too
+                const strActual = String(actualValue ?? '');
+                const strComparison = String(comparisonValue ?? '');
                 return strActual.includes(strComparison);
             }
             case 'not_contains': {
-                 const strActual = String(actualValue ?? '');
-                 const strComparison = String(comparisonValue ?? '');
-                 return !strActual.includes(strComparison);
+                const strActual = String(actualValue ?? '');
+                const strComparison = String(comparisonValue ?? '');
+                return !strActual.includes(strComparison);
             }
             case 'starts_with': {
                 const strActual = String(actualValue ?? '');
@@ -2958,69 +2963,60 @@ function evaluateCondition(conditionData, context) {
                 return strActual.endsWith(strComparison);
             }
             case 'matches_regex': {
-                 try {
-                     const strActual = String(actualValue ?? '');
-                     const pattern = String(comparisonValue ?? '');
-                     if (!pattern) return false; // Need a pattern
-                     // Add flags from comparisonValue if specified (e.g. "/pattern/i")
-                     const regexMatch = pattern.match(/^\/(.+)\/([gimyus]*)$/);
-                     const finalPattern = regexMatch ? regexMatch[1] : pattern;
-                     const flags = regexMatch ? regexMatch[2] : '';
-                     return new RegExp(finalPattern, flags).test(strActual);
-                 } catch { return false; } // Invalid regex pattern provided
-             }
+                try {
+                    const strActual = String(actualValue ?? '');
+                    const pattern = String(comparisonValue ?? '');
+                    if (!pattern) return false;
+                    const regexMatch = pattern.match(/^\/(.+)\/([gimyus]*)$/);
+                    const finalPattern = regexMatch ? regexMatch[1] : pattern;
+                    const flags = regexMatch ? regexMatch[2] : '';
+                    return new RegExp(finalPattern, flags).test(strActual);
+                } catch { return false; }
+            }
             case 'not_matches_regex': {
-                 try {
-                     const strActual = String(actualValue ?? '');
-                     const pattern = String(comparisonValue ?? '');
-                     if (!pattern) return true; // No pattern means nothing matches -> true? Or false? Let's return true (doesn't match empty pattern).
-                     const regexMatch = pattern.match(/^\/(.+)\/([gimyus]*)$/);
-                     const finalPattern = regexMatch ? regexMatch[1] : pattern;
-                     const flags = regexMatch ? regexMatch[2] : '';
-                     return !new RegExp(finalPattern, flags).test(strActual);
-                 } catch { return true; } // Invalid regex doesn't match -> true
-             }
-
-            // --- Existence/Type Operators (Modified for Clarity) ---
+                try {
+                    const strActual = String(actualValue ?? '');
+                    const pattern = String(comparisonValue ?? '');
+                    if (!pattern) return true;
+                    const regexMatch = pattern.match(/^\/(.+)\/([gimyus]*)$/);
+                    const finalPattern = regexMatch ? regexMatch[1] : pattern;
+                    const flags = regexMatch ? regexMatch[2] : '';
+                    return !new RegExp(finalPattern, flags).test(strActual);
+                } catch { return true; }
+            }
             case 'exists':
-                // Checks if the path resolved to a value other than undefined
                 return actualValue !== undefined;
             case 'not_exists':
-                // Checks if the path resolved to undefined
                 return actualValue === undefined;
-             case 'is_null':
-                 return actualValue === null;
-             case 'is_not_null':
-                 // Explicitly check for not null AND not undefined
-                 return actualValue !== null && actualValue !== undefined;
-            case 'is_empty': // Check for empty string, empty array, or null/undefined
-                 return actualValue === '' || actualValue === null || actualValue === undefined || (Array.isArray(actualValue) && actualValue.length === 0);
-            case 'is_not_empty': // Check for non-empty string or non-empty array (and not null/undefined)
-                 return actualValue !== '' && actualValue !== null && actualValue !== undefined && (!Array.isArray(actualValue) || actualValue.length > 0);
+            case 'is_null':
+                return actualValue === null;
+            case 'is_not_null':
+                return actualValue !== null && actualValue !== undefined;
+            case 'is_empty':
+                return actualValue === '' || actualValue === null || actualValue === undefined || (Array.isArray(actualValue) && actualValue.length === 0);
+            case 'is_not_empty':
+                return actualValue !== '' && actualValue !== null && actualValue !== undefined && (!Array.isArray(actualValue) || actualValue.length > 0);
             case 'is_number':
-                // Checks if typeof is number AND it's not NaN
                 return typeof actualValue === 'number' && !isNaN(actualValue);
-            case 'is_text': // Checks if it's specifically a string
+            case 'is_text':
                 return typeof actualValue === 'string';
             case 'is_boolean':
                 return typeof actualValue === 'boolean';
             case 'is_array':
                 return Array.isArray(actualValue);
-            case 'is_object': // Check for plain objects (not arrays, not null)
-                 return typeof actualValue === 'object' && actualValue !== null && !Array.isArray(actualValue);
-            case 'is_true': // Strict check for boolean true
+            case 'is_object':
+                return typeof actualValue === 'object' && actualValue !== null && !Array.isArray(actualValue);
+            case 'is_true':
                 return actualValue === true;
-            case 'is_false': // Strict check for boolean false
+            case 'is_false':
                 return actualValue === false;
-
             default:
-                 console.warn(`Unknown condition operator: ${operator}`);
-                 throw new Error(`Unknown condition operator: ${operator}`); // Throw error for unknown operator
+                console.warn(`Unknown condition operator: ${operator}`);
+                throw new Error(`Unknown condition operator: ${operator}`);
         }
     } catch (evalError) {
         console.error(`Error during condition evaluation (Operator: ${operator}, Variable Path: ${variable}):`, evalError);
-        // Rethrow specific error for condition failure
-        throw new Error(`Condition evaluation failed for operator "${operator}": ${evalError.message}`);
+        throw new Error(`Condition evaluation failed for operator \"${operator}\": ${evalError.message}`);
     }
 }
 

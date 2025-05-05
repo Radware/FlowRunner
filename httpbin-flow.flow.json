@@ -1,0 +1,252 @@
+{
+  "id": "flow_e2e_httpbin_all_features",
+  "name": "E2E All‑Features HTTPBin Flow",
+  "description": "Comprehensive flow that touches every FlowRunner v1.0.0 feature against https://httpbin.org.",
+  "headers": {
+    "X-Global-Header": "FlowRunner E2E",
+    "Accept": "application/json"
+  },
+  "steps": [
+    {
+      "id": "step_e2e_1_get_ip",
+      "name": "Get IP & Headers",
+      "type": "request",
+      "method": "GET",
+      "url": "{{baseUrl}}/get?run={{randomNumber}}",
+      "headers": {
+        "X-Request-Name": "{{userName}}"
+      },
+      "onFailure": "stop",
+      "extract": {
+        "ip": "body.origin",
+        "userAgent": "body.headers.User-Agent",
+        "statusCode": ".status",
+        "echoedRandom": "body.args.run"
+      }
+    },
+    {
+      "id": "step_e2e_2_check_status",
+      "name": "Status OK?",
+      "type": "condition",
+      "condition": "",
+      "conditionData": {
+        "variable": "statusCode",
+        "operator": "equals",
+        "value": "200"
+      },
+      "then": [
+        {
+          "id": "step_e2e_3_post_data",
+          "name": "POST echo data",
+          "type": "request",
+          "method": "POST",
+          "url": "{{baseUrl}}/post",
+          "headers": {
+            "Content-Type": "application/json",
+            "X-User": "{{userName}}"
+          },
+          "onFailure": "stop",
+          "body": {
+            "ip": "##VAR:string:ip##",
+            "msg": "Hello from ##VAR:string:userName##",
+            "testMode": "##VAR:string:testMode##",
+            "run": "##VAR:string:randomNumber##"
+          },
+          "extract": {
+            "echoedIp": "body.json.ip",
+            "echoedRun": "body.json.run",
+            "contentTypeHeader": "headers.Content-Type"
+          }
+        },
+        {
+          "id": "step_e2e_4_check_type",
+          "name": "Check JSON header",
+          "type": "condition",
+          "condition": "",
+          "conditionData": {
+            "variable": "contentTypeHeader",
+            "operator": "contains",
+            "value": "json"
+          },
+          "then": [
+            {
+              "id": "step_e2e_5_get_uuid",
+              "name": "Get UUID",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/uuid",
+              "onFailure": "continue",
+              "extract": {
+                "uuid": "body.uuid"
+              }
+            },
+            {
+              "id": "step_e2e_15_final_anything",
+              "name": "Final echo with UUID",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/anything/final?uuid={{uuid}}",
+              "onFailure": "continue",
+              "extract": {
+                "echoedUuid": "body.args.uuid"
+              }
+            }
+          ],
+          "else": [
+            {
+              "id": "step_e2e_5b_delay",
+              "name": "Else Delay",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/delay/1",
+              "onFailure": "continue",
+              "extract": {
+                "delayStatus": ".status"
+              }
+            }
+          ]
+        }
+      ],
+      "else": [
+        {
+          "id": "step_e2e_6_teapot",
+          "name": "Get Teapot",
+          "type": "request",
+          "method": "GET",
+          "url": "{{baseUrl}}/status/418",
+          "onFailure": "continue",
+          "extract": {
+            "teapotStatus": ".status"
+          }
+        },
+        {
+          "id": "step_e2e_7_check_teapot",
+          "name": "Teapot is 418?",
+          "type": "condition",
+          "condition": "",
+          "conditionData": {
+            "variable": "teapotStatus",
+            "operator": "equals",
+            "value": "418"
+          },
+          "then": [
+            {
+              "id": "step_e2e_8_log_teapot",
+              "name": "Log Teapot Success",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/anything/teapot",
+              "onFailure": "continue",
+              "extract": {
+                "anythingStatus": ".status"
+              }
+            }
+          ],
+          "else": []
+        }
+      ]
+    },
+    {
+      "id": "step_e2e_9_get_json",
+      "name": "Get slideshow JSON",
+      "type": "request",
+      "method": "GET",
+      "url": "{{baseUrl}}/json",
+      "onFailure": "stop",
+      "extract": {
+        "slides": "body.slideshow.slides"
+      }
+    },
+    {
+      "id": "step_e2e_10_has_slides",
+      "name": "Has slides?",
+      "type": "condition",
+      "condition": "",
+      "conditionData": {
+        "variable": "slides",
+        "operator": "is_array",
+        "value": ""
+      },
+      "then": [
+        {
+          "id": "step_e2e_11_loop_slides",
+          "name": "Loop Slides",
+          "type": "loop",
+          "source": "slides",
+          "loopVariable": "slide",
+          "steps": [
+            {
+              "id": "step_e2e_12_check_title",
+              "name": "Title contains Widget??",
+              "type": "condition",
+              "condition": "{{slide}} && typeof {{slide}}.includes === 'function' && {{slide}}.includes(\"Widget\")",
+              "conditionData": {
+                "variable": "slide",
+                "operator": "contains",
+                "value": "Widget",
+                "preview": "slide contains \"Widget\""
+              },
+              "then": [
+                {
+                  "id": "step_e2e_13_echo_slide",
+                  "name": "Echo slide via anything",
+                  "type": "request",
+                  "method": "GET",
+                  "url": "{{baseUrl}}/anything/slide/{{slide.title}}",
+                  "headers": {
+                    "X-Slide-Title": "{{slide.title}}"
+                  },
+                  "onFailure": "continue",
+                  "extract": {
+                    "echoedTitle": "body.headers.X-Slide-Title"
+                  }
+                }
+              ],
+              "else": []
+            }
+          ]
+        }
+      ],
+      "else": []
+    },
+    {
+      "id": "step_e2e_14_get_headers",
+      "name": "Echo headers",
+      "type": "request",
+      "method": "GET",
+      "url": "{{baseUrl}}/headers",
+      "onFailure": "stop",
+      "extract": {
+        "globalHeaderEcho": "body.headers.X-Global-Header"
+      }
+    }
+  ],
+  "staticVars": {
+    "baseUrl": "https://httpbin.org",
+    "testMode": true,
+    "randomNumber": 42,
+    "userName": "FlowRunnerUser"
+  },
+  "visualLayout": {
+    "step_e2e_1_get_ip": {
+      "x": 50,
+      "y": 50
+    },
+    "step_e2e_2_check_status": {
+      "x": 50,
+      "y": 250
+    },
+    "step_e2e_9_get_json": {
+      "x": 50,
+      "y": 450
+    },
+    "step_e2e_10_has_slides": {
+      "x": 50,
+      "y": 650
+    },
+    "step_e2e_14_get_headers": {
+      "x": 50,
+      "y": 850
+    }
+  }
+}

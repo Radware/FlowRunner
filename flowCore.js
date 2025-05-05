@@ -30,6 +30,24 @@ export function flowModelToJson(flowModel) {
     visualLayout: flowModel.visualLayout ? { ...flowModel.visualLayout } : {} // <-- NEW: Include visual layout
   };
 
+  function makeExtractPathsExplicit(extract) {
+    if (!extract) return extract;
+    const explicit = {};
+    for (const [varName, path] of Object.entries(extract)) {
+      if (typeof path === 'string' &&
+          path !== '.status' &&
+          !path.startsWith('body.') &&
+          !path.startsWith('headers.') &&
+          path !== 'body' &&
+          path !== 'headers') {
+        explicit[varName] = `body.${path}`;
+      } else {
+        explicit[varName] = path;
+      }
+    }
+    return explicit;
+  }
+
   function processSteps(steps) {
     if (!steps || !Array.isArray(steps)) return [];
     return steps.map(step => {
@@ -79,7 +97,7 @@ export function flowModelToJson(flowModel) {
 
 
         if (step.extract && Object.keys(step.extract).length > 0) {
-          jsonStep.extract = { ...step.extract };
+          jsonStep.extract = makeExtractPathsExplicit(step.extract);
         }
       } else if (step.type === 'condition') {
         jsonStep.condition = step.condition || '';
@@ -111,7 +129,7 @@ export function flowModelToJson(flowModel) {
  * @param {*} data - The data structure (potentially containing markers) loaded from the file.
  * @returns {*} A new data structure with markers replaced by {{name}} placeholders.
  */
-function decodeMarkersRecursive(data) {
+export function decodeMarkersRecursive(data) {
   if (typeof data === 'string') {
     // Regex to match the entire string as ##VAR:(string|unquoted):ACTUAL_NAME##
     const markerRegex = /^##VAR:(string|unquoted):([^#]+)##$/;
@@ -166,6 +184,24 @@ export function jsonToFlowModel(json) {
     visualLayout: json.visualLayout || {} // <-- NEW: Load visual layout, default to empty object
   };
 
+  function upgradeExtractPaths(extract) {
+    if (!extract) return extract;
+    const upgraded = {};
+    for (const [varName, path] of Object.entries(extract)) {
+      if (typeof path === 'string' &&
+          path !== '.status' &&
+          !path.startsWith('body.') &&
+          !path.startsWith('headers.') &&
+          path !== 'body' &&
+          path !== 'headers') {
+        upgraded[varName] = `body.${path}`;
+      } else {
+        upgraded[varName] = path;
+      }
+    }
+    return upgraded;
+  }
+
   function processJsonSteps(jsonSteps) {
     if (!jsonSteps || !Array.isArray(jsonSteps)) return [];
     return jsonSteps.map(jsonStep => {
@@ -179,56 +215,35 @@ export function jsonToFlowModel(json) {
         step.method = jsonStep.method || 'GET';
         step.url = jsonStep.url || '';
         step.headers = jsonStep.headers || {};
-
-        // --- MODIFICATION START ---
-        // Read onFailure from JSON, default to 'stop' if missing/invalid
         step.onFailure = (jsonStep.onFailure === 'continue' || jsonStep.onFailure === 'stop') ? jsonStep.onFailure : 'stop';
-        // --- MODIFICATION END ---
-
-        // --- Ensure body processing uses the CORRECT decoder ---
-        step.rawBodyWithMarkers = null; // Store the original body from JSON (object or string with markers)
-        step.body = ''; // This will hold the UI-ready string (decoded and possibly stringified)
+        step.rawBodyWithMarkers = null;
+        step.body = '';
         if (jsonStep.body !== undefined && jsonStep.body !== null) {
             try {
-               // Deep copy the original body (which might be object or string)
-               // to preserve the ##VAR:...## markers if needed for re-saving without changes.
                step.rawBodyWithMarkers = JSON.parse(JSON.stringify(jsonStep.body));
             } catch (e) {
-                // If deep copy fails (e.g., non-JSON compatible value), store original directly.
                 console.warn(`Could not deep copy body for step ${step.id}, storing reference.`, e);
                 step.rawBodyWithMarkers = jsonStep.body;
             }
-
-            // *** CRITICAL: This call MUST use the updated decodeMarkersRecursive ***
-            // Decode the markers in the copied body to get UI representation {{var}}
             const decodedBodyForUI = decodeMarkersRecursive(step.rawBodyWithMarkers);
-
-            // Prepare the decoded body for display in the UI textarea
             if (typeof decodedBodyForUI === 'object' && decodedBodyForUI !== null) {
                  try {
-                    // If decoded body is an object (e.g. unquoted var became `{{var}}`), stringify it nicely for the textarea
                     step.body = JSON.stringify(decodedBodyForUI, null, 2);
                  }
                  catch (e) {
-                     // Fallback if stringify fails
-                     console.warn(`Failed to stringify decoded body object for step ${step.id}:`, e);
                      step.body = String(decodedBodyForUI);
                  }
             } else {
-                 // If decoded body is already a string (or number/boolean), use it directly
                 step.body = String(decodedBodyForUI);
             }
         }
-        // --- End body processing ---
-
-        step.extract = jsonStep.extract || {};
+        // Upgrade extract paths for backward compatibility
+        step.extract = upgradeExtractPaths(jsonStep.extract || {});
       } else if (jsonStep.type === 'condition') {
         step.condition = jsonStep.condition || '';
-        // Restore structured condition data if available (preferred)
         if (jsonStep.conditionData) {
           step.conditionData = jsonStep.conditionData;
         } else if (step.condition) {
-          // Attempt to parse legacy string condition into structured data
           step.conditionData = parseConditionString(step.condition);
         } else {
           step.conditionData = { variable: '', operator: '', value: '' };
@@ -240,7 +255,6 @@ export function jsonToFlowModel(json) {
         step.loopVariable = jsonStep.loopVariable || 'item';
         step.loopSteps = processJsonSteps(jsonStep.steps);
       }
-
       return step;
     });
   }
@@ -364,147 +378,84 @@ export function findDefinedVariables(flowModel, runtimeContext = null) {
 
 
 /**
- * Evaluate a simple dot-notation path on a data object.
- * Handles basic array indexing like 'items[0].name'.
- * Added to flowCore as it's generally useful.
- * @param {Object} data - Data object to traverse.
- * @param {string} path - Dot-notation path string (e.g., "body.data.id", "results[0].value").
- * @return {*} Extracted value or undefined if path is invalid or not found.
+ * Evaluate a dotted / bracket path on a data object.
+ *
+ * Rules
+ *   • `.status`                  → data.status  (special case)
+ *   • `body.…`  / `headers.…`    → explicit roots
+ *   • `body`    / `headers`      → return those whole objects
+ *   • anything else (`id`, `user.name`, `arr[3].id`, …)
+ *       – if the object has a `body` key → look inside `data.body`
+ *       – otherwise                     → look in the object itself
+ *
+ * Supports array‑index syntax (`items[3].value`).
  */
 /**
- * Evaluate a path expression on response data or general context data.
- * Handles the special path '.status' to extract the HTTP status code.
- * Handles regular paths including dot notation ('a.b') and array indexing ('a[0].c').
- * Looks for regular paths within 'body' first if applicable, then potentially root/headers.
- * @param {Object} data - Data object (e.g., runner context or step response {status, headers, body}).
- * @param {string} path - Path string (e.g., ".status", "status", "headers.Content-Type", "body.data.id", "items[0]").
- * @return {*} Extracted value or undefined if path is invalid or not found.
+ * Evaluate a dotted / bracket path on a data object.
+ *
+ * Rules
+ * ─────────────────────────────────────────────────────────────
+ *   • `.status`                    → data.status   (special case)
+ *   • `body`                       → data.body  ▸ if it exists, otherwise data
+ *   • `body.…`                     → inside data.body ▸ if it exists, else inside data
+ *   • `headers`                    → data.headers
+ *   • `headers.…`                  → inside data.headers
+ *   • anything else (`id`, `user.name`, `arr[2].id`, …)
+ *         – if the object has a `body` key → look in data.body
+ *         – otherwise                       → look in the object itself
+ *
+ * Array indices like `items[3].value` are supported.
  */
 export function evaluatePath(data, path) {
-  if (data === null || data === undefined || !path || typeof path !== 'string') {
-      return undefined;
-  }
+  /* Sanity checks */
+  if (data == null || typeof path !== 'string' || !path.trim()) return undefined;
 
-  // --- Step 1: Handle EXACTLY '.status' for HTTP status code ---
+  /* 1. ─ Special literal ------------------------------------ */
   if (path === '.status') {
-      if (data.hasOwnProperty('status')) {
-           // console.log(`[evaluatePath] Special case '.status' matched: ${data.status}`);
-           return data.status;
-      } else {
-           // console.log(`[evaluatePath] Special case '.status' used, but data has no 'status' property.`);
-           return undefined; // .status used, but no status property exists
-      }
-  }
-  // --- If we reach here, the path is NOT exactly '.status' ---
-
-
-  // --- Step 2: Handle regular path evaluation ---
-  // Split the path into parts for traversal
-  // Handles: status, a.b, a[0], headers.Content-Type, body.data.items[1].name
-  const parts = path.match(/[^.[\]]+|\[\d+\]/g);
-  if (!parts) {
-      // console.log(`[evaluatePath] Invalid regular path format: ${path}`);
-      return undefined; // Invalid path format
+    return Object.prototype.hasOwnProperty.call(data, 'status') ? data.status : undefined;
   }
 
-  let current = data;
-  let initialPartProcessed = false; // Flag to track if we've handled an initial 'headers' or 'body' part
-
-  // console.log(`[evaluatePath] Starting regular eval. Path: ${path}, Initial Data Type: ${typeof data}`);
-
-  // Process the first part specially to handle potential 'headers' or 'body' prefixes
-  // OR if the path is just a single word like 'status' (without the leading dot).
-  if (parts.length > 0) {
-      const firstPart = parts[0];
-
-      if (firstPart === 'headers' && typeof current === 'object' && current.hasOwnProperty('headers')) {
-          current = current.headers;
-          initialPartProcessed = true;
-          // console.log(`[evaluatePath] Accessed 'headers'. New current type: ${typeof current}`);
-      } else if (firstPart === 'body' && typeof current === 'object' && current.hasOwnProperty('body')) {
-          current = current.body;
-          initialPartProcessed = true;
-          // console.log(`[evaluatePath] Accessed 'body'. New current type: ${typeof current}`);
-      } else if (parts.length === 1 && firstPart === 'status' && typeof current === 'object' && current.hasOwnProperty('status')) {
-          // Handle the case where the user entered 'status' (no dot) AND the root object has 'status'
-          // This is different from the '.status' special case above.
-          // console.log(`[evaluatePath] Direct path 'status' matched root property: ${current.status}`);
-           return current.status; // Return status from root if path is just 'status'
-      } else if (typeof current === 'object' && current.hasOwnProperty('body')) {
-           // Default assumption: If no 'headers.' or 'body.' prefix, try accessing within 'body' first.
-           // This handles paths like 'id' or 'items[0]' assuming they are inside the body.
-           let tempCurrent = current.body;
-            if (tempCurrent !== null && tempCurrent !== undefined && typeof tempCurrent === 'object' && tempCurrent.hasOwnProperty(firstPart)) {
-               // If the first part exists directly within the body, start traversal there.
-               current = tempCurrent;
-               // console.log(`[evaluatePath] Defaulting to 'body' access for first part: '${firstPart}'.`);
-           }
-            // If not found in body, we'll try accessing from the root 'data' object below.
-      }
-      // If initialPartProcessed is true, we skip the first part in the main loop later.
+  /* 2. ─ Explicit BODY handling ------------------------------ */
+  if (path === 'body') {
+    return ('body' in data) ? data.body : data;          // whole body, or the object itself
+  }
+  if (path.startsWith('body.')) {
+    const root = ('body' in data) ? data.body : data;    // fall back when body is absent
+    return walk(root, path.slice(5));                    // drop 'body.'
   }
 
-
-  // --- Step 3: Traverse remaining parts ---
-  const startIndex = initialPartProcessed ? 1 : 0; // Start from index 1 if first part was 'headers' or 'body'
-
-  for (let i = startIndex; i < parts.length; i++) {
-      const part = parts[i];
-
-      if (current === null || current === undefined) {
-          // console.log(`[evaluatePath] Cannot traverse further at part "${part}". Current is null/undefined.`);
-          return undefined;
-      }
-
-      const arrayMatch = part.match(/^\[(\d+)\]$/);
-      if (arrayMatch) {
-          // Array index access
-          const index = parseInt(arrayMatch[1], 10);
-          if (!Array.isArray(current)) {
-              // console.log(`[evaluatePath] Attempted array access on non-array at part "${part}". Current:`, typeof current);
-              return undefined;
-          }
-          if (index < 0 || index >= current.length) {
-              // console.log(`[evaluatePath] Index ${index} out of bounds for part "${part}". Array length: ${current.length}`);
-              return undefined;
-          }
-          current = current[index];
-          // console.log(`[evaluatePath] Accessed array index ${index}.`);
-      } else {
-          // Object property access
-          if (typeof current !== 'object') {
-              // console.log(`[evaluatePath] Attempted property access on non-object at part "${part}". Current:`, typeof current);
-              return undefined;
-          }
-
-          let found = false;
-           // Handle case-insensitive header access if the parent was 'headers'
-           if (initialPartProcessed && parts[0] === 'headers' && i === 1) { // Check if we are accessing a property directly under 'headers'
-              for (const key in current) {
-                  if (current.hasOwnProperty(key) && key.toLowerCase() === part.toLowerCase()) {
-                      current = current[key];
-                      found = true;
-                      break;
-                  }
-              }
-          } else {
-              // Standard case-sensitive property access for body or other objects
-              if (current.hasOwnProperty(part)) {
-                  current = current[part];
-                  found = true;
-              }
-          }
-
-          if (!found) {
-              // console.log(`[evaluatePath] Property "${part}" not found in current object.`);
-              return undefined;
-          }
-          // console.log(`[evaluatePath] Accessed property "${part}".`);
-      }
+  /* 3. ─ Explicit HEADERS handling --------------------------- */
+  if (path === 'headers') {
+    return data.headers;                                 // may be undefined
   }
-  // console.log(`[evaluatePath] Evaluation successful for path "${path}". Final value:`, current);
-  return current;
+  if (path.startsWith('headers.')) {
+    return walk(data.headers, path.slice(8));            // drop 'headers.'
+  }
+
+  /* 4. ─ Implicit (no prefix) ------------------------------- */
+  const implicitRoot = ('body' in data) ? data.body : data;
+  return walk(implicitRoot, path);
+
+  /* --------------------------------------------------------- */
+  function walk(obj, subPath) {
+    if (obj == null) return undefined;
+    if (!subPath)    return obj;                         // caller asked for the whole root
+
+    /* tokenise: items[3].value → ['items','3','value'] */
+    const tokens = subPath
+      .replace(/\[(\d+)\]/g, '.$1')                      // [index] → .index
+      .split('.')
+      .filter(Boolean);
+
+    let cur = obj;
+    for (const key of tokens) {
+      if (cur == null) return undefined;
+      cur = cur[key];
+    }
+    return cur;
+  }
 }
+
 
 
 /**
@@ -534,7 +485,7 @@ export function validateRequestBodyJson(bodyText) {
       if (message.includes('Unexpected token')) {
            const badTokenMatch = message.match(/Unexpected token ({|}) in JSON/);
            if (badTokenMatch) {
-               message = `Likely syntax error near '{{' or '}}'. Use "key": "{{var}}" for strings, "key": {{var}} for numbers/booleans. Original: ${message}`;
+               message = `Likely syntax error near '{{' or '}}'.\n\nFor variables, use:\n  - \"key\": \"{{var}}\" for strings\n  - \"key\": {{var}} for numbers/booleans\n\nCheck for missing or extra braces, or misplaced commas.\nExample: { \"id\": {{userId}} }`;
            } else {
                const positionMatch = message.match(/at position (\d+)/);
                const position = positionMatch ? parseInt(positionMatch[1], 10) : -1;
@@ -542,14 +493,14 @@ export function validateRequestBodyJson(bodyText) {
                if (position !== -1) {
                    const snippetStart = Math.max(0, position - 15);
                    const snippetEnd = Math.min(bodyText.length, position + 15);
-                   context = ` near "...${bodyText.substring(snippetStart, position)}[HERE]${bodyText.substring(position, snippetEnd)}..."`;
+                   context = `\nError near: ...${bodyText.substring(snippetStart, position)}[HERE]${bodyText.substring(position, snippetEnd)}...`;
                }
-               message = `Invalid JSON syntax${context}. Check commas, quotes, brackets. Original: ${message}`;
+               message = `Invalid JSON syntax.${context}\n\nCheck for missing commas, quotes, or brackets.\nTip: Each key-value pair should be separated by a comma, and all keys must be in double quotes.\nExample: { \"name\": \"value\", \"id\": 123 }`;
            }
       } else if (message.includes('Unexpected end of JSON input')) {
-          message = `Incomplete JSON. Check for unclosed brackets or braces. Original: ${message}`;
+          message = `Incomplete JSON.\n\nCheck for unclosed brackets or braces.\nTip: Every opening { or [ must have a matching closing } or ].`;
       } else {
-           message = `JSON validation failed: ${message}`;
+           message = `JSON validation failed: ${message}\n\nTip: Ensure your JSON is properly formatted. All keys must be in double quotes, and values must be valid JSON types.`;
       }
 
     return { valid: false, message: message };
@@ -710,146 +661,223 @@ export function formatJson(bodyText) {
   }
 }
 
+/**
+ * Returns TRUE when an extraction path string is syntactically legal.
+ *
+ * Accepted forms ──────────────────────────────────────────────────────────
+ *   · .status                      – the special status literal
+ *   · status                       – same as above
+ *   · body                         – whole body
+ *   · body.id                      – inside body …
+ *   · body.items[0].value          – array access
+ *   · headers                      – whole headers object
+ *   · headers.Content‑Type         – header look‑ups
+ *   · id, user.profile.name, …     – implicit root (data.body if present)
+ *
+ * Basically: letters, digits, _ , $ , . , [index] , 'string' , "string" and – in
+ * header names – the dash (‑).  **NO white‑space, commas, parens, etc.**
+ */
+export function isValidExtractPath(p) {
+  if (!p || typeof p !== 'string') return false;
+
+  // one big (but still readable) regexp
+  const rx = new RegExp(
+    '^(' +
+      '(?:\\.status|status)' +                         // .status / status
+      '|body(?:\\.[a-zA-Z0-9_$\\.\\[\\]\'"\\-]+)?' +   // body or body.…
+      '|headers?(?:\\.[a-zA-Z0-9_\\-]+)?' +            // headers / headers.X
+      '|[a-zA-Z_$][a-zA-Z0-9_$]*(?:[\\.\\[][a-zA-Z0-9_$\'"\\]]*\\]?)*' + // id / arr[3].x
+    ')$'
+  );
+
+  return rx.test(p);
+}
+
 
 /**
  * Validates the entire flow model for common issues.
- * Checks for required fields, undefined variable references, etc.
+ * Checks for required fields, undefined variable references, syntax errors, etc.
  * @param {Object} flowModel - The flow model to validate.
  * @return {{valid: boolean, errors: string[]}} Validation result.
  */
 export function validateFlow(flowModel) {
   const result = { valid: true, errors: [] };
   if (!flowModel) {
-    return { valid: false, errors: ['Flow model is missing.'] };
+    return { valid: false, errors: ['Flow model is missing. Please create or load a flow before proceeding.'] };
   }
+
+  /* ──────────────────────────────────────────────────────────────────
+   * 1. Flow‑level checks
+   * ────────────────────────────────────────────────────────────────── */
   if (!flowModel.name?.trim()) {
     result.valid = false;
-    result.errors.push('Flow name is required.');
+    result.errors.push('Flow name is required. Please enter a descriptive name for your flow.');
   }
 
   const initialVarNames = new Set(Object.keys(flowModel.staticVars || {}));
 
+  /* helper – variable reference scanner */
   function checkVariableUsage(text, context, stepName, availableVars) {
     if (!text || typeof text !== 'string') return;
-    const referencedVars = extractVariableReferences(text);
-    referencedVars.forEach(varName => {
+    const regex = /\{\{([^}]+)\}\}/g;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      const varName = match[1].trim();
+      const baseName = varName.split('.')[0];          // accept slide.title, slide.foo.bar …
+      if (availableVars.has(baseName)) continue;       // treat as defined if the base exists
       if (!availableVars.has(varName)) {
         result.valid = false;
-        const errorMsg = `${stepName}: ${context} references undefined variable "{{${varName}}}".`;
-        if (!result.errors.includes(errorMsg)) result.errors.push(errorMsg);
+        const msg = `${stepName}: ${context} references undefined variable \"{{${varName}}}\".\n\nHint: Make sure this variable is defined earlier in the flow or as a static variable.`;
+        if (!result.errors.includes(msg)) result.errors.push(msg);
       }
-    });
+    }
   }
 
-  function validateStepsRecursive(steps, pathPrefix = '', currentAvailableVars) {
-    if (!steps || !Array.isArray(steps)) return;
-    const varsDefinedHere = new Set();
+  /* ──────────────────────────────────────────────────────────────────
+   * 2. Step recursion
+   * ────────────────────────────────────────────────────────────────── */
+  function validateStepsRecursive(steps, pathPrefix = '', availableVars = new Set()) {
+    if (!Array.isArray(steps)) return;
 
-    steps.forEach((step, index) => {
-      const stepName = step.name || `Step ${index + 1}`;
-      const currentPath = pathPrefix ? `${pathPrefix} > ${stepName}` : stepName;
+    steps.forEach((step, idx) => {
+      const stepName = step.name || `Step ${idx + 1}`;
+      const here     = pathPrefix ? `${pathPrefix} > ${stepName}` : stepName;
+      const varsDefinedHere = new Set();
 
+      /* — generic requirements — */
       if (!step.name?.trim()) {
         result.valid = false;
-        result.errors.push(`Step ${index + 1}${pathPrefix ? ` in ${pathPrefix}` : ''}: Name is required.`);
+        result.errors.push(`${here}: Step name is required. Please provide a descriptive name for this step.`);
       }
       if (!step.type) {
         result.valid = false;
-        result.errors.push(`${currentPath}: Step type is missing.`);
+        result.errors.push(`${here}: Step type is missing. This usually means the step is incomplete or corrupted. Please select a valid step type.`);
         return;
       }
 
+      /* — type‑specific validation — */
       switch (step.type) {
-        case 'request':
+        /* ■■■ REQUEST ───────────────────────────────────────────── */
+        case 'request': {
+          /* URL */
           if (!step.url) {
             result.valid = false;
-            result.errors.push(`${currentPath}: URL is required.`);
+            result.errors.push(`${here}: Request URL is required. Enter a valid URL (e.g., https://api.example.com/data).`);
           } else {
-            checkVariableUsage(step.url, 'URL', currentPath, currentAvailableVars);
+            checkVariableUsage(step.url, 'URL', here, availableVars);
           }
+
+          /* Headers */
           if (step.headers) {
-            Object.entries(step.headers).forEach(([key, value]) => checkVariableUsage(value, `Header "${key}"`, currentPath, currentAvailableVars));
+            Object.entries(step.headers).forEach(([k, v]) =>
+              checkVariableUsage(v, `Header \"${k}\"`, here, availableVars)
+            );
           }
+
+          /* Body */
           if (step.body && typeof step.body === 'string' && step.body.trim()) {
-             // Validate the UI-facing body string (which should have {{vars}} correctly)
-             const bodyValidation = validateRequestBodyJson(step.body);
-             if (!bodyValidation.valid) {
-                result.valid = false;
-                result.errors.push(`${currentPath}: Body - ${bodyValidation.message || 'Invalid JSON syntax'}.`);
-             } else {
-                // Check variable usage in the potentially complex body string
-                checkVariableUsage(step.body, 'Body', currentPath, currentAvailableVars);
-             }
+            const bodyCheck = validateRequestBodyJson(step.body);
+            if (!bodyCheck.valid) {
+              result.valid = false;
+              result.errors.push(`${here}: Request body is not valid JSON.\n${bodyCheck.message || 'Check for missing commas, brackets, or quotes.'}`);
+            } else {
+              checkVariableUsage(step.body, 'Body', here, availableVars);
+            }
           }
+
+          /* Extraction table */
           if (step.extract) {
             Object.entries(step.extract).forEach(([varName, jsonPath]) => {
-               if (!varName?.trim() || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varName)){
-                   result.valid = false;
-                   result.errors.push(`${currentPath}: Invalid extraction variable name "${varName}".`);
-               } else {
-                   varsDefinedHere.add(varName);
-               }
+              /* variable name */
+              if (!varName?.trim() || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(varName)) {
+                result.valid = false;
+                result.errors.push(`${here}: Extraction variable name \"${varName}\" is invalid.\n\nUse only letters, numbers, and underscores, and do not start with a number. Example: myVar1`);
+              } else {
+                varsDefinedHere.add(varName);
+              }
+
+              /* extraction path */
               if (!jsonPath?.trim()) {
                 result.valid = false;
-                result.errors.push(`${currentPath}: Extraction path for "${varName}" is required.`);
+                result.errors.push(`${here}: Extraction path for \"${varName}\" is required. Enter a valid path, e.g., body.data.token or .status.`);
+              } else if (!isValidExtractPath(jsonPath.trim())) {
+                result.valid = false;
+                result.errors.push(`${here}: Extraction path \"${jsonPath}\" for \"${varName}\" contains invalid characters.\n\nUse dot notation (body.field), array indices (body.items[0].id), or .status. No spaces or special characters allowed.`);
               }
-              // Basic path check (allows dot, bracket, underscore, alphanum, $, status, headers, body)
-               if (jsonPath && !/^(status|headers|body)$|^[a-zA-Z0-9_$.[\]]+$/.test(jsonPath)) {
-                  result.valid = false; // Stricter validation
-                  result.errors.push(`${currentPath}: Extraction path "${jsonPath}" for "${varName}" contains invalid characters.`);
-               }
             });
           }
           break;
-        case 'condition':
-           const conditionVar = step.conditionData?.variable;
-           const conditionOp = step.conditionData?.operator;
-           const conditionVal = step.conditionData?.value;
-           if (!conditionVar || !conditionOp) {
-                result.valid = false;
-                result.errors.push(`${currentPath}: Condition variable and operator are required.`);
-           } else {
-               // Condition variable itself might be a placeholder e.g. {{status_code}}
-               checkVariableUsage(`{{${conditionVar}}}`, 'Condition variable name', currentPath, currentAvailableVars);
-                if (doesOperatorNeedValue(conditionOp) && conditionVal && typeof conditionVal === 'string') {
-                   // Condition value might contain placeholders e.g. "{{expected_id}}"
-                   checkVariableUsage(conditionVal, 'Condition value', currentPath, currentAvailableVars);
-               }
-           }
-           // Validate nested steps
-          const conditionScopeVars = new Set(currentAvailableVars);
-          validateStepsRecursive(step.thenSteps, `${currentPath} > Then`, conditionScopeVars);
-          validateStepsRecursive(step.elseSteps, `${currentPath} > Else`, conditionScopeVars);
+        }
+
+        /* ■■■ CONDITION ────────────────────────────────────────── */
+        case 'condition': {
+          const { variable, operator, value } = step.conditionData || {};
+          if (!variable || !operator) {
+            result.valid = false;
+            result.errors.push(`${here}: Condition step is missing a variable or operator. Please select both.`);
+          } else {
+            checkVariableUsage(`{{${variable}}}`, 'Condition variable', here, availableVars);
+            if (doesOperatorNeedValue(operator) && typeof value === 'string') {
+              checkVariableUsage(value, 'Condition value', here, availableVars);
+            }
+          }
+
+          /* recurse into THEN / ELSE */
+          validateStepsRecursive(step.thenSteps, `${here} > Then`, new Set(availableVars));
+          validateStepsRecursive(step.elseSteps, `${here} > Else`, new Set(availableVars));
           break;
-        case 'loop':
-           const loopVar = step.loopVariable || 'item';
+        }
+
+        /* ■■■ LOOP ─────────────────────────────────────────────── */
+        case 'loop': {
+          const loopVar = step.loopVariable || 'item';
+          const currentPath = here;
+          const currentAvailableVars = new Set(availableVars);
+
+          /* source */
           if (!step.source) {
             result.valid = false;
-            result.errors.push(`${currentPath}: Loop source variable is required.`);
+            result.errors.push(`${currentPath}: Loop source variable is required. Enter a variable or path to an array (e.g., items or body.data.items).`);
           } else {
-             // Loop source must reference an existing variable
-            checkVariableUsage(`{{${step.source}}}`, 'Loop source variable name', currentPath, currentAvailableVars);
+            let sourceVar = step.source.trim();
+            if (sourceVar.startsWith('{{') && sourceVar.endsWith('}}')) {
+              sourceVar = sourceVar.slice(2, -2).trim();
+            }
+            if (!sourceVar) {
+              result.valid = false;
+              result.errors.push(`${currentPath}: Loop source variable is required. Enter a variable or path to an array.`);
+            } else if (!currentAvailableVars.has(sourceVar)) {
+              result.valid = false;
+              result.errors.push(`${currentPath}: Loop source references undefined variable \"{{${sourceVar}}}\".\n\nHint: Make sure this variable is defined earlier in the flow or as a static variable.`);
+            }
           }
-          if (!loopVar?.trim() || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(loopVar)) {
+
+          /* loop variable */
+          if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(loopVar)) {
             result.valid = false;
-            result.errors.push(`${currentPath}: Loop variable name "${loopVar}" is invalid.`);
-          } else {
-               const loopScopeVars = new Set(currentAvailableVars);
-               loopScopeVars.add(loopVar); // Add the loop item variable to the scope
-               validateStepsRecursive(step.loopSteps, `${currentPath} > Loop Body`, loopScopeVars);
+            result.errors.push(`${currentPath}: Loop variable name \"${loopVar}\" is invalid.\n\nUse only letters, numbers, and underscores, and do not start with a number. Example: item1`);
           }
+
+          const nestedScope = new Set(currentAvailableVars);
+          nestedScope.add(loopVar);
+          validateStepsRecursive(step.loopSteps, `${currentPath} > Loop Body`, nestedScope);
           break;
+        }
+
+        /* ■■■ UNKNOWN ─────────────────────────────────────────── */
         default:
           result.valid = false;
-          result.errors.push(`${currentPath}: Unknown step type "${step.type}".`);
+          result.errors.push(`${here}: Unknown step type \"${step.type}\". This may indicate a corrupted or unsupported step. Please check your flow configuration.`);
       }
-      // Add variables defined in this step (e.g., extractions) to the available set for subsequent steps
-      varsDefinedHere.forEach(v => currentAvailableVars.add(v));
+
+      varsDefinedHere.forEach(v => availableVars.add(v));
     });
   }
+
   validateStepsRecursive(flowModel.steps, '', new Set(initialVarNames));
   return result;
 }
+
 
 
 /**

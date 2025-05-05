@@ -1,5 +1,6 @@
 # Project specific files
 output.txt
+output.log
 prd.txt
 roadmap.txt
 *.pem
@@ -77,3 +78,10 @@ Desktop.ini
 dist/
 build/
 out/
+
+# Test outputs
+coverage/
+test-results/
+.nyc_output/
+playwright-report/
+test-report/
