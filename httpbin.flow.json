@@ -229,8 +229,8 @@
   },
   "visualLayout": {
     "step_e2e_1_get_ip": {
-      "x": 50,
-      "y": 50
+      "x": 245,
+      "y": 28
     },
     "step_e2e_2_check_status": {
       "x": 50,
@@ -247,6 +247,10 @@
     "step_e2e_14_get_headers": {
       "x": 50,
       "y": 850
+    },
+    "step_e2e_3_post_data": {
+      "x": 471,
+      "y": 234
     }
   }
 }

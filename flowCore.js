@@ -4,6 +4,8 @@
  * Contains NO DOM manipulation or UI-specific code.
  */
 
+import { logger } from './logger.js';
+
 /**
  * Generate a unique ID for steps
  * @return {string} Unique identifier
@@ -77,7 +79,7 @@ export function flowModelToJson(flowModel) {
                // Preprocess the body text (which might be a stringified object or just a string)
                bodyToStore = preProcessBody(step.body.trim());
              } catch (e) {
-                console.warn(`Failed to preprocess request body for step ${step.id}. Storing as potentially invalid string. Error: ${e.message}`);
+                logger.warn(`Failed to preprocess request body for step ${step.id}. Storing as potentially invalid string. Error: ${e.message}`);
                 bodyToStore = step.body; // Fallback to original string - might be invalid JSON
              }
         }
@@ -90,7 +92,7 @@ export function flowModelToJson(flowModel) {
             } catch (e) {
                  // If JSON.parse fails even after preprocessing, store the (potentially invalid) result as a string.
                  // This might happen if preprocessing failed or the original was fundamentally broken.
-                console.warn(`Storing potentially invalid JSON string for step ${step.id} body after parse failure: ${e.message}`);
+                logger.warn(`Storing potentially invalid JSON string for step ${step.id} body after parse failure: ${e.message}`);
                 jsonStep.body = bodyToStore;
             }
         }
@@ -170,7 +172,7 @@ export function decodeMarkersRecursive(data) {
  */
 export function jsonToFlowModel(json) {
   if (!json) {
-    console.error("jsonToFlowModel received null or undefined input.");
+    logger.error("jsonToFlowModel received null or undefined input.");
     return createTemplateFlow(); // Return a default empty flow
   }
 
@@ -222,7 +224,7 @@ export function jsonToFlowModel(json) {
             try {
                step.rawBodyWithMarkers = JSON.parse(JSON.stringify(jsonStep.body));
             } catch (e) {
-                console.warn(`Could not deep copy body for step ${step.id}, storing reference.`, e);
+                logger.warn(`Could not deep copy body for step ${step.id}, storing reference.`, e);
                 step.rawBodyWithMarkers = jsonStep.body;
             }
             const decodedBodyForUI = decodeMarkersRecursive(step.rawBodyWithMarkers);
@@ -576,15 +578,15 @@ export function preProcessBody(bodyText) {
        // This might happen with complex nested structures or malformed original input.
        // Fallback: Perform a simpler, less robust replacement directly on the original text.
        // This fallback might incorrectly quote numbers/booleans, but aims to preserve data.
-       console.warn(`preProcessBody: Resulting string with markers is not valid JSON (${parseError.message}). Falling back to simple replacement.`);
+       logger.warn(`preProcessBody: Resulting string with markers is not valid JSON (${parseError.message}). Falling back to simple replacement.`);
        // Simple fallback: Treat all {{var}} as string markers.
        return bodyText.replace(/\{\{([^}]+)\}\}/g, (match, varName) => `"##VAR:string:${varName.trim()}##"`);
      }
   } catch (error) {
       // Catch any unexpected errors during the replacement process.
-      console.error("Error during preProcessBody execution:", error);
+      logger.error("Error during preProcessBody execution:", error);
       // Fallback: As above, perform a simple replacement.
-      console.warn("Falling back to simple replacement due to error.");
+      logger.warn("Falling back to simple replacement due to error.");
       return bodyText.replace(/\{\{([^}]+)\}\}/g, (match, varName) => `"##VAR:string:${varName.trim()}##"`);
   }
 }
@@ -607,7 +609,7 @@ export function postProcessFormattedJson(data) {
         // Stringify the object/array with pretty printing
         return JSON.stringify(data, null, 2);
     } catch (e) {
-        console.error("Error stringifying data in postProcessFormattedJson:", e);
+        logger.error("Error stringifying data in postProcessFormattedJson:", e);
         return String(data); // Fallback to basic string conversion
     }
 }
@@ -641,7 +643,7 @@ export function formatJson(bodyText) {
            parsedObject = JSON.parse(processedJsonString);
        } catch(e) {
            // If parsing fails even after preprocessing, the structure is likely fundamentally wrong
-           console.error("JSON parsing failed even after preProcessing:", e.message, "Processed string:", processedJsonString);
+           logger.error("JSON parsing failed even after preProcessing:", e.message, "Processed string:", processedJsonString);
            throw new Error(`JSON parsing failed after attempting to handle placeholders. Check overall structure. Original error: ${e.message}`);
        }
 
@@ -654,7 +656,7 @@ export function formatJson(bodyText) {
 
        return finalFormattedJson;
   } catch (error) {
-    console.warn("JSON formatting failed:", error.message);
+    logger.warn("JSON formatting failed:", error.message);
     // Optionally provide user feedback here, e.g., using an alert or status message
     alert(`Formatting Error: ${error.message}. Please check syntax.`);
     return bodyText; // Return original on error to avoid data loss
@@ -925,7 +927,7 @@ export function cloneStep(step) {
        cloned = JSON.parse(JSON.stringify(step));
        // Note: rawBodyWithMarkers should be handled correctly by this if it was JSON-compatible
    } catch (e) {
-       console.error("Failed to clone step:", e, step); return null;
+       logger.error("Failed to clone step:", e, step); return null;
    }
 
   // Function to recursively assign new IDs to nested steps
@@ -1041,7 +1043,7 @@ export function parseConditionString(conditionString) {
   if ((match = trimmed.match(/^\{\{([^}]+)\}\}\s*!=\s*null/))) return { variable: match[1].trim(), operator: 'exists', value: '', preview: generateConditionPreview({ variable: match[1].trim(), operator: 'exists' }) };
   if ((match = trimmed.match(/^\{\{([^}]+)\}\}\s*==\s*null/))) return { variable: match[1].trim(), operator: 'not_exists', value: '', preview: generateConditionPreview({ variable: match[1].trim(), operator: 'not_exists' }) };
 
-  console.warn(`Could not parse condition string: "${conditionString}" into structured data.`);
+  logger.warn(`Could not parse condition string: "${conditionString}" into structured data.`);
   return { ...fallback, preview: `Unparsed: ${trimmed}` }; // Return original in preview if unparsed
 }
 
@@ -1099,7 +1101,7 @@ export function generateConditionString(conditionObj) {
     case 'is_false':
       return `${varRef} === false`;
     default:
-      console.warn(`Unsupported operator in generateConditionString: ${operator}`);
+      logger.warn(`Unsupported operator in generateConditionString: ${operator}`);
       return '';
   }
 }

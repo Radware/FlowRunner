@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlowRunner Help</title>
+    <link rel="stylesheet" href="help-styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>FlowRunner Help</h1>
+        </header>
+
+        <main>
+            <section id="introduction">
+                <h2>Introduction</h2>
+                <p>
+                    Welcome to FlowRunner! This application allows you to visually create, manage, run, and debug sequences of API calls (known as "Flows"). It's designed for tasks like demonstrating API interactions, testing multi-step processes, and understanding data flows.
+                </p>
+                <p>
+                    Flows are saved locally as <code>.flow.json</code> files. You can work entirely offline for authoring and visualization; network access is only needed when executing API Request steps that target external endpoints.
+                </p>
+            </section>
+
+            <section id="getting-started">
+                <h2>Getting Started</h2>
+                <p>Here's a quick way to run your first flow:</p>
+                <ol>
+                    <li>Click the <strong>"+ New Flow"</strong> button in the sidebar.</li>
+                    <li>A new flow appears. Click the <strong>"+ Add Step"</strong> button at the bottom of the middle-left "Flow Steps" panel.</li>
+                    <li>Select the <strong>"API Request"</strong> step type.</li>
+                    <li>In the editor panel on the right, set the <strong>URL</strong> to <code>https://httpbin.org/get</code> (leave Method as GET).</li>
+                    <li>Click <strong>"Save Step"</strong> at the bottom of the editor.</li>
+                    <li>In the "Runner Panel" on the far right, click the <strong>"▶ Run"</strong> button.</li>
+                    <li>Observe the step highlighting and check the "Execution Results" list for the response from httpbin.</li>
+                </ol>
+            </section>
+
+            <section id="interface">
+                <h2>Interface Overview</h2>
+                <div class="subsection">
+                    <h3>Sidebar (Left)</h3>
+                    <ul>
+                        <li><strong>Branding:</strong> Application logo and name.</li>
+                        <li><strong>Recent Flows:</strong> Lists recently opened/saved <code>.flow.json</code> files. Click to open. Use the '✕' button to remove an entry from this list.</li>
+                        <li><strong>Actions:</strong>
+                            <ul>
+                                <li><strong>+ New Flow:</strong> Creates a blank flow.</li>
+                                <li><strong>Open Flow:</strong> Opens a system dialog to load a <code>.flow.json</code> file.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Toggle Button (Top Right):</strong> Collapses/expands the sidebar.</li>
+                    </ul>
+                </div>
+                <div class="subsection">
+                    <h3>Workspace (Center)</h3>
+                    <ul>
+                        <li><strong>Header:</strong>
+                            <ul>
+                                <li><strong>Title:</strong> Shows the current flow name (with '*' if unsaved).</li>
+                                <li><strong>File Controls:</strong> Save, Save As, Cancel (revert changes), Close. Enabled based on flow state and unsaved changes.</li>
+                                <li><strong>View Controls:</strong>
+                                    <ul>
+                                        <li><strong>Toggle View:</strong> Switches between List/Editor and Node-Graph views.</li>
+                                        <li><strong>Info:</strong> Toggles the Flow Information overlay (Name, Description, Global Headers, Static Variables).</li>
+                                        <li><strong>Show/Hide Variables:</strong> Toggles the Variables Panel (shows defined variable origins).</li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </li>
+                        <li><strong>Content Area:</strong> Displays either the List/Editor View or the Node-Graph View based on the toggle. Shows a placeholder message if no flow is loaded.</li>
+                        <li><strong>Messages:</strong> Important status messages and validation errors appear here (usually top-right).</li>
+                    </ul>
+                </div>
+                <div class="subsection">
+                    <h3>Runner Panel (Right)</h3>
+                    <ul>
+                        <li><strong>Header:</strong> Panel title, Clear Results button, Toggle button to collapse/expand.</li>
+                        <li><strong>Controls:</strong>
+                            <ul>
+                                <li><strong>Run/Step/Stop:</strong> Control flow execution.</li>
+                                <li><strong>Continuous Run:</strong> Checkbox to run the flow repeatedly (uses 'Delay' between runs).</li>
+                                <li><strong>Delay (ms):</strong> Sets pause between steps in 'Run' mode, and between full runs in 'Continuous' mode.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Status Messages:</strong> Shows brief messages about runner state (starting, stopped, errors).</li>
+                        <li><strong>Execution Results:</strong> A detailed log of each step execution, including status, output/error details, and extraction warnings.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="core-concepts">
+                <h2>Core Concepts</h2>
+                <div class="subsection">
+                    <h3>Flows</h3>
+                    <p>A Flow is a sequence of steps saved as a single <code>.flow.json</code> file. You can configure overall flow settings in the <strong>Flow Information</strong> overlay (toggled by the "Info" button):</p>
+                    <ul>
+                        <li><strong>Name & Description:</strong> Basic identification.</li>
+                        <li><strong>Global Headers:</strong> Headers automatically added to all API Request steps (can be overridden by step-specific headers).</li>
+                        <li><strong>Flow Variables (Static):</strong> Key-value pairs defined once and available throughout the flow execution context. Useful for configuration like base URLs or static tokens.</li>
+                    </ul>
+                </div>
+                 <div class="subsection">
+                    <h3>Steps</h3>
+                    <p>Flows are built from individual steps. Configure steps by selecting them in the List/Editor view and using the editor panel on the right.</p>
+                    <ul>
+                        <li><strong>API Request:</strong> Makes an HTTP call. Configure Method, URL, Headers, Body (JSON), Extraction rules, and On Failure behavior (Stop/Continue).</li>
+                        <li><strong>Condition (If/Else):</strong> Executes different branches (Then/Else) based on evaluating a variable against a value using an operator. Add steps to branches via the '+ Add Step' buttons inside the condition step in the List view.</li>
+                        <li><strong>Loop (For Each):</strong> Repeats a sequence of steps (the Loop Body) for each item in a source array variable. Defines an 'Item Variable' (e.g., <code>item</code>) accessible within the loop body. Add steps to the body via the '+ Add Step' button inside the loop step in the List view.</li>
+                    </ul>
+                </div>
+                 <div class="subsection">
+                    <h3>Variables</h3>
+                    <ul>
+                        <li><strong>Definition:</strong> Variables hold data during flow execution. They can be:
+                            <ul>
+                                <li><strong>Static:</strong> Defined in the Flow Information overlay.</li>
+                                <li><strong>Extracted:</strong> Created/updated by 'Extract' rules in API Request steps from the response (status, headers, body path).</li>
+                                <li><strong>Loop Item:</strong> Automatically created within a Loop step to hold the current item.</li>
+                                <li><strong>Runtime:</strong> (Not directly definable by user) Variables potentially modified by future step types like Scripting.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Substitution:</strong> Use <code>{{variableName}}</code> syntax to insert variable values into URLs, Header values, Request bodies, Condition values, and Loop sources. The runner replaces this at execution time.</li>
+                        <li><strong>Insertion Helper (<code>{{…}}</code>):</strong> Click this button next to input fields to get a searchable list of currently defined variables and insert them easily.</li>
+                        <li><strong>Variables Panel:</strong> Toggle this panel (using the "Show/Hide Variables" button) to see a list of variables defined by the flow's structure (Static, Extract, Loop) and where they originate. This does *not* show live runtime values.</li>
+                    </ul>
+                </div>
+                <div class="subsection">
+                    <h3>Views</h3>
+                     <ul>
+                        <li><strong>List/Editor View:</strong> Default view showing steps hierarchically. Best for detailed configuration using the step editor panel. Supports step reordering via drag-and-drop using the ☰ handle.</li>
+                        <li><strong>Node-Graph View:</strong> Visual representation of the flow structure with connecting lines. Useful for understanding branching and looping. Pan by dragging the background. Drag nodes to rearrange the visual layout (positions are saved with the flow). Select nodes by clicking them.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+                <p>Note: Most shortcuts are disabled when focused inside an input field, textarea, or editable content, except for <code>Esc</code> to stop execution.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Windows / Linux</th>
+                            <th>macOS</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Save Flow</td>
+                            <td><code>Ctrl</code> + <code>S</code></td>
+                            <td><code>Cmd</code> + <code>S</code></td>
+                            <td>Saves the current flow if changes exist and a file path is set.</td>
+                        </tr>
+                        <tr>
+                            <td>Open Flow</td>
+                            <td><code>Ctrl</code> + <code>O</code></td>
+                            <td><code>Cmd</code> + <code>O</code></td>
+                            <td>Opens the file dialog to load a flow.</td>
+                        </tr>
+                        <tr>
+                            <td>Run Flow</td>
+                            <td><code>F5</code></td>
+                            <td><code>F5</code></td>
+                            <td>Starts running the entire flow from the beginning.</td>
+                        </tr>
+                        <tr>
+                            <td>Step Flow</td>
+                            <td><code>F10</code></td>
+                            <td><code>F10</code></td>
+                            <td>Executes the next single step in the flow.</td>
+                        </tr>
+                        <tr>
+                            <td>Stop Flow Execution</td>
+                            <td><code>Esc</code></td>
+                            <td><code>Esc</code></td>
+                            <td>Stops any currently running or stepping execution. Works even if focus is in an input field.</td>
+                        </tr>
+                         <tr>
+                            <td>Toggle Flow Info Panel</td>
+                            <td><code>Ctrl</code> + <code>1</code></td>
+                            <td><code>Cmd</code> + <code>1</code></td>
+                            <td>Shows or hides the Flow Information overlay.</td>
+                        </tr>
+                         <tr>
+                            <td>Toggle Variables Panel</td>
+                            <td><code>Ctrl</code> + <code>2</code></td>
+                            <td><code>Cmd</code> + <code>2</code></td>
+                            <td>Shows or hides the defined Variables panel.</td>
+                        </tr>
+                         <tr>
+                            <td>Toggle View (List/Graph)</td>
+                            <td><code>Ctrl</code> + <code>3</code></td>
+                            <td><code>Cmd</code> + <code>3</code></td>
+                            <td>Switches between the List/Editor view and the Node-Graph view.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+             <section id="troubleshooting">
+                <h2>Troubleshooting</h2>
+                <ul>
+                    <li><strong>Windows Installer Warning:</strong> Windows SmartScreen may warn about the unsigned app. Click "More info" then "Run anyway".</li>
+                    <li><strong>macOS "Damaged" Error:</strong> If macOS prevents opening, run this in Terminal: <code>xattr -c /Applications/FlowRunner.app</code> (adjust path if needed), then try opening again (possibly right-click > Open).</li>
+                    <li><strong>Save/Load Issues:</strong> Check file permissions. Ensure the <code>.flow.json</code> isn't corrupted. Look for error messages in the UI.</li>
+                    <li><strong>Request Step Fails:</strong> Verify URL, Method, Headers, Body (use Format button for JSON). Check the Runner Results panel for status codes or network errors. Check the step's 'On Failure' setting.</li>
+                    <li><strong>Variable Issues:</strong> Check spelling in <code>{{varName}}</code>. Ensure variable is defined *before* use (Static, previous Extract/Loop). Use the Variables Panel and the <code>{{…}}</code> helper. Check Extraction warnings in the Results panel.</li>
+                    <li><strong>Condition/Loop Issues:</strong> Verify logic and source variables in the step editor. Check variable values from previous steps in the Results panel.</li>
+                    <li><strong>General/UI Issues:</strong> Restart FlowRunner. Use the <strong>Developer Tools</strong> (View > Toggle Developer Tools) and check the 'Console' tab for errors.</li>
+                </ul>
+            </section>
+
+            <section id="more-info">
+                <h2>More Information</h2>
+                <p>
+                    This help page covers the basics. For comprehensive details on all features, development information, and advanced usage, please consult the full
+                    <a href="https://github.com/Radware/FlowRunner" target="_blank" rel="noopener noreferrer">README.md file</a>
+                    on the FlowRunner GitHub repository.
+                </p>
+                 <p>
+                    Application Version: 1.1.0 <!-- Update this manually or find a way to inject it -->
+                 </p>
+            </section>
+        </main>
+
+        <footer>
+            <p>© 2024 Radware ASE Team</p>
+        </footer>
+    </div>
+</body>
+</html>

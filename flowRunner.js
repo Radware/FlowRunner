@@ -7,6 +7,8 @@
 // Assuming these are passed in or globally available (better to pass in constructor)
 // import { evaluatePath } from './flowCore.js'; // Needs to be defined/imported
 
+import { logger } from './logger.js';
+
 // Helper function for escaping regex characters
 const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -20,6 +22,7 @@ export class FlowRunner {
         this.onMessage = options.onMessage || (() => {}); // (message, type) => {}
         this.onError = options.onError || (() => {}); // (resultIndex, step, error, context, executionPath) => {}
         this.onContextUpdate = options.onContextUpdate || (() => {}); // (context) => {}
+        this.onIterationStart = options.onIterationStart || (() => {}); // NEW: Called at the start of each continuous run iteration
         this.updateRunnerUICallback = options.updateRunnerUICallback || (() => {}); // Callback to request UI update
 
         // Core logic functions provided by the main app
@@ -27,21 +30,51 @@ export class FlowRunner {
         this.evaluateConditionFn = options.evaluateConditionFn || (() => false); // Default false
         this.evaluatePathFn = options.evaluatePathFn; // Use imported or passed function (required for extraction)
 
+        // --- NEW for Continuous Run ---
+        this.isContinuousModeActive = false;
+        this.continuousRunTimeoutId = null;
+        this.currentFlowModelForContinuousRun = null;
+        this.flowModelForNextContinuousRun = null; // NEW: Store next iteration's flow model
+        // --- END NEW ---
+
         this.reset();
     }
 
-    // [Modified Code] - Add currentFetchController to state
-    reset(initialContext = {}) {
+    // [Modified Code] - Add currentFetchController to state and handle continuous run
+    reset(initialContext = {}, isPreparingForContinuousRun = false) {
+        // Check and abort any lingering fetch request
+        if (this.state?.currentFetchController) {
+            logger.info("[FlowRunner] Aborting lingering fetch request during reset");
+            try {
+                this.state.currentFetchController.abort();
+            } catch (e) {
+                logger.error("[FlowRunner] Error aborting fetch controller during reset:", e);
+            }
+        }
+
         this.state = {
             isRunning: false,
-            isStepping: false, // Actively executing a single step action
+            isStepping: false,
             stopRequested: false,
-            executionPath: [], // Stack representing current position [ { steps: [], index: 0, context: {} }, ... ]
-            context: { ...initialContext }, // Runtime variables { varName: value }
-            results: [], // History of step results for this run { stepId, status, output, error }
-            currentResultIndex: null, // Index passed back from onStepStart for updates
-            currentFetchController: null, // <-- NEW: Track active fetch controller
+            executionPath: [],
+            context: { ...initialContext },
+            results: [],
+            currentResultIndex: null,
+            currentFetchController: null
         };
+
+        // Only clear continuous run state if not preparing for next iteration
+        if (!isPreparingForContinuousRun) {
+            logger.debug("[FlowRunner] Full reset: Clearing continuous run state");
+            this.isContinuousModeActive = false;
+            if (this.continuousRunTimeoutId) {
+                clearTimeout(this.continuousRunTimeoutId);
+                this.continuousRunTimeoutId = null;
+            }
+            this.currentFlowModelForContinuousRun = null;
+        } else {
+            logger.debug("[FlowRunner] Partial reset: Preparing for next continuous iteration");
+        }
     }
 
     isRunning() {
@@ -67,54 +100,119 @@ export class FlowRunner {
 
     // [Modified Code] - Abort fetch controller on stop
     stop() {
-        if (this.state.isRunning || this.state.isStepping) {
-            console.log("[FlowRunner] Stop requested."); // Added log
+        if (this.state.isRunning || this.state.isStepping || this.isContinuousModeActive) {
+            logger.info("[FlowRunner] Stop requested.");
             this.state.stopRequested = true;
 
-            // --- NEW: Abort ongoing fetch if any ---
+            // Clean up continuous run state
+            this.isContinuousModeActive = false;
+            if (this.continuousRunTimeoutId) {
+                logger.info("[FlowRunner] Clearing continuous run timeout");
+                clearTimeout(this.continuousRunTimeoutId);
+                this.continuousRunTimeoutId = null;
+            }
+            this.currentFlowModelForContinuousRun = null;
+
+            // Abort any ongoing fetch request
             if (this.state.currentFetchController) {
-                console.log("[FlowRunner] Aborting active fetch request due to stop().");
+                logger.info("[FlowRunner] Aborting active fetch request due to stop()");
                 try {
                     this.state.currentFetchController.abort();
                 } catch (e) {
-                    console.error("[FlowRunner] Error aborting fetch controller:", e);
+                    logger.error("[FlowRunner] Error aborting fetch controller:", e);
                 }
-                // Controller is cleared in the finally block of _executeRequestStep
             }
-            // --- END NEW ---
-            // Callbacks are triggered within the execution loop check
         }
     }
 
     /**
      * Executes the entire flow from the beginning.
      * @param {Object} flowModel - The flow model object.
+     * @param {boolean} isContinuousInvocation - Whether this is a subsequent iteration of a continuous run.
      */
-    async run(flowModel) {
+    async run(flowModel, isContinuousInvocation = false) {
         if (this.state.isRunning || this.state.isStepping) {
+            if (this.isContinuousModeActive && isContinuousInvocation) {
+                logger.warn("[FlowRunner] Continuous run attempted to start while already running. Aborting this invocation.");
+                return;
+            }
             throw new Error("Execution already in progress.");
         }
+
         if (!flowModel || !flowModel.steps) {
             throw new Error("Invalid flow model provided.");
         }
 
-        this.reset(flowModel.staticVars || {}); // Reset with static vars
+        // If this is the first continuous invocation, store the model and activate continuous mode
+        if (!this.currentFlowModelForContinuousRun && isContinuousInvocation) {
+            logger.debug("[FlowRunner] Starting new continuous run series");
+            this.currentFlowModelForContinuousRun = flowModel;
+            this.isContinuousModeActive = true;
+        }
+
+        // If this is a subsequent continuous iteration
+        if (this.isContinuousModeActive && isContinuousInvocation) {
+            logger.debug("[FlowRunner] Processing subsequent continuous iteration");
+            await this.onIterationStart();
+        }
+
+        // Initialize state for this run
         this.state.isRunning = true;
         this.state.stopRequested = false;
-        this.onContextUpdate(this.state.context); // Notify initial context
+
+        // Initialize context, carefully handling continuous mode
+        if (!isContinuousInvocation || this.state.executionPath.length === 0) {
+            const staticVars = flowModel.staticVars || {};
+            this.state.context = { ...staticVars };
+        }
+        this.onContextUpdate(this.state.context);
 
         // Initialize execution path stack
-        this.state.executionPath = [{ steps: flowModel.steps, index: 0, context: this.state.context, type: 'main' }];
+        this.state.executionPath = [{ 
+            steps: flowModel.steps, 
+            index: 0, 
+            context: this.state.context, 
+            type: 'main' 
+        }];
 
+        // Execute the flow
         await this._executeCurrentLevel();
 
-        // Execution finished or stopped
-        this.state.isRunning = false;
-        this.state.isStepping = false; // Ensure stepping mode is off
-        if (this.state.stopRequested) {
-            this.onFlowStopped(this.state.context, this.state.results);
+        // Handle continuous mode scheduling or completion
+        if (this.isContinuousModeActive && !this.state.stopRequested && this.currentFlowModelForContinuousRun) {
+            logger.info("[FlowRunner] Scheduling next continuous iteration");
+            this.onMessage("Continuous run: Iteration complete. Scheduling next run...", "info");
+            this.state.isRunning = false;
+            this.updateRunnerUICallback?.();
+
+            // Schedule next iteration
+            this.continuousRunTimeoutId = setTimeout(async () => {
+                if (this.isContinuousModeActive && !this.state.stopRequested && this.currentFlowModelForContinuousRun) {
+                    logger.info("[FlowRunner] Starting next continuous iteration");
+                    this.reset(this.currentFlowModelForContinuousRun.staticVars || {}, true);
+                    await this.run(this.currentFlowModelForContinuousRun, true);
+                } else {
+                    logger.info("[FlowRunner] Continuous mode was cancelled during delay");
+                    this.isContinuousModeActive = false;
+                    this.currentFlowModelForContinuousRun = null;
+                    this.state.isRunning = false;
+                    this.updateRunnerUICallback?.();
+                    this.onFlowStopped(this.state.context, this.state.results);
+                }
+            }, this.delay);
         } else {
-            this.onFlowComplete(this.state.context, this.state.results);
+            // Handle normal completion or stop
+            const wasContinuousAndStopped = this.isContinuousModeActive && this.state.stopRequested;
+            this.isContinuousModeActive = false;
+            this.currentFlowModelForContinuousRun = null;
+            this.state.isRunning = false;
+            this.state.isStepping = false;
+
+            if (this.state.stopRequested || wasContinuousAndStopped) {
+                this.onFlowStopped(this.state.context, this.state.results);
+            } else {
+                this.onFlowComplete(this.state.context, this.state.results);
+            }
         }
     }
 
@@ -124,8 +222,8 @@ export class FlowRunner {
      * @param {Object} flowModel - The flow model object.
      */
     async step(flowModel) {
-        if (this.state.isRunning || this.state.isStepping) {
-            this.onMessage("Already processing a step.", "warning");
+        if (this.state.isRunning || this.state.isStepping || this.isContinuousModeActive) {
+            this.onMessage("Cannot step: An execution or continuous run is active.", "warning");
             return;
         }
         if (!flowModel || !flowModel.steps) {
@@ -150,7 +248,7 @@ export class FlowRunner {
                 this.onFlowComplete(this.state.context, this.state.results);
             }
         } catch (error) {
-            console.error("[FlowRunner step] Error during step execution:", error);
+            logger.error("[FlowRunner step] Error during step execution:", error);
         } finally {
             this.state.isStepping = false;
             this.updateRunnerUICallback?.();
@@ -161,158 +259,144 @@ export class FlowRunner {
 
     /** Executes steps at the current level in the execution path stack */
     async _executeCurrentLevel() {
-        while (this.state.executionPath.length > 0) {
-            // --- Check stopRequested *before* processing the level ---
-            if (this.state.stopRequested) {
-                console.log("[FlowRunner] Stop request detected in _executeCurrentLevel loop.");
-                break;
-            }
-            // --- End Modification ---
-
-            const levelBeforeExecution = this.state.executionPath[this.state.executionPath.length - 1];
-            const steps = levelBeforeExecution.steps;
-            const index = levelBeforeExecution.index; // Index for the step about to be executed
-
-            if (index >= steps.length) {
-                this._popExecutionLevel();
-                continue; // Process the next level (or finish)
-            }
-
-            // --- Check stopRequested *before* executing the specific step ---
-            if (this.state.stopRequested) {
-                console.log("[FlowRunner] Stop request detected before executing step in _executeCurrentLevel.");
-                break;
-            }
-            // --- End Modification ---
-
-            const step = steps[index];
-            const context = levelBeforeExecution.context; // Context for this level
-
-            // Execute the step
-            await this._executeSingleStepLogic(step, context);
-
-            // If stop requested during step execution, break loop
-            if (this.state.stopRequested) {
-                console.log("[FlowRunner] Stop request detected after executing step in _executeCurrentLevel.");
-                break;
-            }
-
-            // --- FIX START: Increment index of the correct level AFTER step execution ---
-            const levelAfterExecution = this.state.executionPath.length > 0 ? this.state.executionPath[this.state.executionPath.length - 1] : null;
-
-            // If the stack is empty after execution (shouldn't happen mid-loop but safety check)
-            if (!levelAfterExecution) continue;
-
-            // Determine which level's index needs incrementing.
-            // This handles cases where the step execution pushed a new level (e.g., Condition, Loop start)
-            // or popped a level (e.g., Loop end).
-            let levelToIncrement = null;
-            if (levelAfterExecution === levelBeforeExecution) {
-                // No stack change relevant to this level (or the executed level was popped and this is the new top).
-                // Increment the current top level's index.
-                levelToIncrement = levelAfterExecution;
-            } else {
-                // Stack changed. If a new level was pushed, we need to increment the level *below* the new top,
-                // provided it matches the level we started with.
-                const levelBelowTop = this.state.executionPath.length > 1 ? this.state.executionPath[this.state.executionPath.length - 2] : null;
-                if (levelBelowTop === levelBeforeExecution) {
-                    // A new level was pushed by the step we just executed (e.g., Condition branch, Loop start).
-                    // Increment the index of the level that contained the step (levelBeforeExecution).
-                    levelToIncrement = levelBelowTop; // which is levelBeforeExecution
+        try {
+            while (this.state.executionPath.length > 0) {
+                if (this.state.stopRequested) {
+                    logger.info("[FlowRunner] Stop request detected in _executeCurrentLevel loop.");
+                    break;
                 }
-                // If the level we executed was popped (e.g., loop finished), levelToIncrement remains null.
-                // The loop will handle the new top level correctly in the next iteration.
-            }
 
-            // Increment the index of the identified level if found AND if its index matches the one we executed.
-            // This prevents double-incrementing if the index was already updated internally (e.g., loop iteration reset).
-            if (levelToIncrement && levelToIncrement.index === index) {
-                levelToIncrement.index++;
-                // console.log(`[FlowRunner _executeCurrentLevel] Incremented index for level containing step "${step.name}" (ID: ${step.id}) to ${levelToIncrement.index}`);
-            } else if (levelToIncrement && levelToIncrement.index !== index) {
-                // This might indicate the index was already advanced internally (e.g., loop iteration reset). Log for safety.
-                console.warn(`[FlowRunner _executeCurrentLevel] Index mismatch when trying to increment level for step ${step.id}. Expected index ${index}, found ${levelToIncrement.index}. No increment performed.`);
-            } else if (!levelToIncrement && levelAfterExecution !== levelBeforeExecution) {
-                // This likely means the level was popped (e.g. loop/branch finished). No increment needed here.
-                // console.log(`[FlowRunner _executeCurrentLevel] Level for step ${step.id} was popped. No index increment needed at this stage.`);
-            }
-            // --- FIX END ---
+                const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
+                const steps = currentLevel.steps;
+                const currentIndex = currentLevel.index;
+
+                if (currentIndex >= steps.length) {
+                    await this._popExecutionLevel();
+                    
+                    // Check if stop was requested during pop/loop iteration
+                    if (this.state.stopRequested) {
+                        logger.info("[FlowRunner] Stop request detected after popping/loop iteration in _executeCurrentLevel.");
+                        break;
+                    }
+                    continue;
+                }
+
+                // --- Check stopRequested *before* executing the specific step ---
+                if (this.state.stopRequested) {
+                    logger.info("[FlowRunner] Stop request detected before executing step in _executeCurrentLevel.");
+                    break;
+                }
+                // --- End Modification ---
+
+                const step = steps[currentIndex];
+                const context = currentLevel.context; // Context for this level
+
+                // Execute the step
+                await this._executeSingleStepLogic(step, context);
+
+                // If stop requested during step execution, break loop
+                if (this.state.stopRequested) {
+                    logger.info("[FlowRunner] Stop request detected after executing step in _executeCurrentLevel.");
+                    break;
+                }
+
+                // --- FIX START: Increment index of the correct level AFTER step execution ---
+                const levelAfterExecution = this.state.executionPath.length > 0 ? this.state.executionPath[this.state.executionPath.length - 1] : null;
+
+                // If the stack is empty after execution (shouldn't happen mid-loop but safety check)
+                if (!levelAfterExecution) continue;
+
+                // Determine which level's index needs incrementing.
+                // This handles cases where the step execution pushed a new level (e.g., Condition, Loop start)
+                // or popped a level (e.g., Loop end).
+                let levelToIncrement = null;
+                if (levelAfterExecution === currentLevel) {
+                    // No stack change relevant to this level (or the executed level was popped and this is the new top).
+                    // Increment the current top level's index.
+                    levelToIncrement = levelAfterExecution;
+                } else {
+                    // Stack changed. If a new level was pushed, we need to increment the level *below* the new top,
+                    // provided it matches the level we started with.
+                    const levelBelowTop = this.state.executionPath.length > 1 ? this.state.executionPath[this.state.executionPath.length - 2] : null;
+                    if (levelBelowTop === currentLevel) {
+                        // A new level was pushed by the step we just executed (e.g., Condition branch, Loop start).
+                        // Increment the index of the level that contained the step (currentLevel).
+                        levelToIncrement = levelBelowTop; // which is currentLevel
+                    }
+                    // If the level we executed was popped (e.g., loop finished), levelToIncrement remains null.
+                    // The loop will handle the new top level correctly in the next iteration.
+                }
+
+                // Increment the index of the identified level if found AND if its index matches the one we executed.
+                // This prevents double-incrementing if the index was already updated internally (e.g., loop iteration reset).
+                if (levelToIncrement && levelToIncrement.index === currentIndex) {
+                    levelToIncrement.index++;
+                    // console.log(`[FlowRunner _executeCurrentLevel] Incremented index for level containing step "${step.name}" (ID: ${step.id}) to ${levelToIncrement.index}`);
+                } else if (levelToIncrement && levelToIncrement.index !== currentIndex) {
+                    // This might indicate the index was already advanced internally (e.g., loop iteration reset). Log for safety.
+                    logger.warn(`[FlowRunner _executeCurrentLevel] Index mismatch when trying to increment level for step ${step.id}. Expected index ${currentIndex}, found ${levelToIncrement.index}. No increment performed.`);
+                } else if (!levelToIncrement && levelAfterExecution !== currentLevel) {
+                    // This likely means the level was popped (e.g. loop/branch finished). No increment needed here.
+                    // console.log(`[FlowRunner _executeCurrentLevel] Level for step ${step.id} was popped. No index increment needed at this stage.`);
+                }
+                // --- FIX END ---
 
 
-            // Apply delay if running continuously and not the last step at this level
-            // Check the index of the level *just processed* (levelToIncrement might be null if popped)
-            // We need to check the index of the level whose step *was* just run.
-            const levelToCheckForDelay = levelToIncrement || levelBeforeExecution; // Use the level whose index might have just been incremented, or the original if popped
-            if (this.state.isRunning && levelToCheckForDelay && levelToCheckForDelay.index < levelToCheckForDelay.steps.length && this.delay > 0) {
-                // Check if the level still exists on the stack before potentially delaying based on its state
-                const levelStillExists = this.state.executionPath.some(l => l === levelToCheckForDelay);
-                if (levelStillExists) {
-                    await this._sleep(this.delay); // _sleep now checks stopRequested internally
+                // Apply delay if running continuously and not the last step at this level
+                // Check the index of the level *just processed* (levelToIncrement might be null if popped)
+                // We need to check the index of the level whose step *was* just run.
+                const levelToCheckForDelay = levelToIncrement || currentLevel; // Use the level whose index might have just been incremented, or the original if popped
+                if (this.state.isRunning && levelToCheckForDelay && levelToCheckForDelay.index < levelToCheckForDelay.steps.length && this.delay > 0) {
+                    // Check if the level still exists on the stack before potentially delaying based on its state
+                    const levelStillExists = this.state.executionPath.some(l => l === levelToCheckForDelay);
+                    if (levelStillExists) {
+                        await this._sleep(this.delay); // _sleep now checks stopRequested internally
+                    }
                 }
             }
+        } catch (error) {
+            logger.error("[FlowRunner] Error in _executeCurrentLevel:", error);
+            throw error;
         }
     }
 
 
     /** Executes the next step based on the execution path stack (for stepping) */
     async _executeNextStep() {
-        // --- MODIFIED: Check stopRequested at the very beginning ---
         if (this.state.stopRequested) {
-            console.log("[FlowRunner] Stop request detected at start of _executeNextStep.");
-            return false; // Stopped
+            logger.info("[FlowRunner] Stop request detected at start of _executeNextStep.");
+            return false;
         }
-        // --- End Modification ---
 
-        if (this.state.executionPath.length === 0) {
-            return false; // Nothing more to execute
-        }
+        if (this.state.executionPath.length === 0) return false;
 
         const currentLevel = this.state.executionPath[this.state.executionPath.length - 1];
         const steps = currentLevel.steps;
-        const index = currentLevel.index;
+        const currentIndex = currentLevel.index;
 
-        if (index >= steps.length) {
-            // Finished steps at this level, pop and try stepping at parent level
-            this._popExecutionLevel();
-            // If popping finished the flow, return false
-            if (this.state.executionPath.length === 0) return false;
-            // --- MODIFIED: Check stopRequested after popping ---
+        if (currentIndex >= steps.length) {
+            await this._popExecutionLevel();
+            
             if (this.state.stopRequested) {
-                console.log("[FlowRunner] Stop request detected after popping level in _executeNextStep.");
-                return false; // Stopped
+                logger.info("[FlowRunner] Stop request detected after popping level in _executeNextStep.");
+                return false;
             }
-            // --- End Modification ---
-            // Otherwise, attempt to execute the next step at the NEW current level (which might also be finished)
-            return this._executeNextStep(); // Recursive call to step at the new top level
+            
+            if (this.state.executionPath.length === 0) return false;
+            return this._executeNextStep();
         }
 
-        // --- MODIFIED: Check stopRequested *before* executing the specific step ---
-        if (this.state.stopRequested) {
-            console.log("[FlowRunner] Stop request detected before executing step in _executeNextStep.");
-            return false; // Stopped
-        }
-        // --- End Modification ---
-
-        const step = steps[index];
+        const step = steps[currentIndex];
         const context = currentLevel.context;
 
-        // Execute the single step logic
         await this._executeSingleStepLogic(step, context);
 
-        // Increment index for the next step call *after* this one completes,
-        // but only if the current level hasn't been popped or replaced (e.g., by loop finishing or condition branching)
-        // And only if the step logic didn't already push a new level (handled internally by loop/condition)
-        // Check if the level we operated on is still the top level.
         const levelAfterStepExecution = this.state.executionPath[this.state.executionPath.length - 1];
         if (levelAfterStepExecution === currentLevel && !this.state.stopRequested) {
-            // Only increment if the current level is still the one at the top
             currentLevel.index++;
         }
-        // If a different level is now at the top (either pushed or popped),
-        // the next call to _executeNextStep will handle it without incrementing here.
 
-
-        return true; // Indicate a step was executed (or at least attempted)
+        return true;
     }
 
 
@@ -363,12 +447,12 @@ export class FlowRunner {
             if (result.status === 'error') {
                 if (step.type === 'request' && (!step.onFailure || step.onFailure === 'stop')) {
                     const errorReason = result.error || 'Request failed';
-                    console.warn(`[FlowRunner] Request Step "${step.name}" (ID: ${step.id}) failed and onFailure=stop. Requesting stop. Reason: ${errorReason}`);
+                    logger.warn(`[FlowRunner] Request Step \"${step.name}\" (ID: ${step.id}) failed and onFailure=stop. Requesting stop. Reason: ${errorReason}`);
                     this.onMessage(`Execution stopped: Request step "${step.name}" failed (onFailure=stop).`, "error");
                     this.stop();
                 } else if (step.type !== 'request') {
                     const errorReason = result.error || 'Step failed';
-                    console.warn(`[FlowRunner] Non-Request Step "${step.name}" (ID: ${step.id}) failed. Requesting stop. Reason: ${errorReason}`);
+                    logger.warn(`[FlowRunner] Non-Request Step \"${step.name}\" (ID: ${step.id}) failed. Requesting stop. Reason: ${errorReason}`);
                     this.onMessage(`Execution stopped due to error in step "${step.name}".`, "error");
                     this.stop();
                 }
@@ -377,7 +461,7 @@ export class FlowRunner {
             result = { status: 'error', output: null, error: error.message || 'Unknown execution error', extractionFailures: [] };
             this.state.results.push({ stepId: step.id, ...result });
             this.onError(this.state.currentResultIndex, step, error, stepContext, this._getCurrentPathArray());
-            console.error(`[FlowRunner] Uncaught error during execution of step "${step.name}" (ID: ${step.id}). Requesting stop. Error:`, error);
+            logger.error(`[FlowRunner] Uncaught error during execution of step \"${step.name}\" (ID: ${step.id}). Requesting stop. Error:`, error);
             this.onMessage(`Execution stopped due to critical error in step "${step.name}": ${error.message}`, "error");
             this.stop();
         }
@@ -404,11 +488,15 @@ export class FlowRunner {
             // Check if there are more items to process
             finishedLevel.loopItemIndex++; // Move to next item
             if (finishedLevel.loopItemIndex < finishedLevel.loopItems.length) {
-                // --- ADD DELAY BETWEEN LOOP ITERATIONS (only in run mode, not stepping) ---
+                // Add delay between iterations in Run mode
                 if (this.state.isRunning && this.delay > 0) {
-                    // Wait before starting the next iteration
-                    // (If stop requested, _sleep will resolve early)
                     await this._sleep(this.delay);
+                    // Check if stop was requested during the sleep
+                    if (this.state.stopRequested) {
+                        logger.info("[FlowRunner Loop Delay] Stop request detected after delay in _popExecutionLevel.");
+                        this.state.executionPath.pop();
+                        return;
+                    }
                 }
                 // Reset index to start of loop body steps for next iteration
                 finishedLevel.index = 0;
@@ -421,7 +509,6 @@ export class FlowRunner {
                 // Use the context *before* popping the loop level
                 const finalLoopContext = finishedLevel.context;
                 this.onStepComplete(endResultIndex, { name: `Loop End`, type: 'System', id: `${finishedLevel.parentStepId}-end` }, { status: 'success', output: `Finished loop.`, error: null }, finalLoopContext, this._getCurrentPathArray());
-                // Now proceed to pop
             }
         } else if (finishedLevel.type === 'then' || finishedLevel.type === 'else') {
             // Log finishing a branch?
@@ -547,13 +634,13 @@ export class FlowRunner {
                 // --- MODIFICATION START: Clear controller on early exit ---
                 this.state.currentFetchController = null;
                 // --- MODIFICATION END ---
-                console.error(`Error preparing request body for step ${step.id}:`, e);
+                logger.error(`Error preparing request body for step ${step.id}:`, e);
                 // This is a preparation error, should always result in 'error' status for the step
                 return { status: 'error', output: null, error: `Failed to process request body: ${e.message}` };
             }
         } else if (body !== null && body !== undefined && typeof body !== 'string' && !['GET', 'HEAD'].includes(fetchOptions.method.toUpperCase())) {
             // If body is not null/undefined but also not a string after substitution
-            console.warn(`Request body for step ${step.id} is not a string or object/array after substitution. Type: ${typeof body}. Sending as string.`);
+            logger.warn(`Request body for step ${step.id} is not a string or object/array after substitution. Type: ${typeof body}. Sending as string.`);
             fetchOptions.body = String(body);
             // If content-type wasn't set, maybe set to text/plain?
             if (!fetchOptions.headers['Content-Type']) {
@@ -572,7 +659,7 @@ export class FlowRunner {
         try {
             // Set timeout *before* fetch call
             timeoutId = setTimeout(() => {
-                console.warn(`[FlowRunner] Request timeout triggered for step ${step.id}. Aborting.`);
+                logger.warn(`[FlowRunner] Request timeout triggered for step ${step.id}. Aborting.`);
                 controller.abort();
             }, 30000); // 30s timeout
 
@@ -612,7 +699,7 @@ export class FlowRunner {
 
         } catch (error) { // Catch network errors, timeouts, ABORTS etc.
             // clearTimeout(timeoutId); // Clear error/abort timeout -> Moved to finally block
-            console.error(`Fetch error for step ${step.id}:`, error);
+            logger.error(`Fetch error for step ${step.id}:`, error);
             let errorMsg = error.message || 'Network error or invalid request';
 
             // --- MODIFICATION START: Specific message for user abort ---
@@ -620,35 +707,35 @@ export class FlowRunner {
                 // Check if it was aborted by the timeout or by user stop()
                 if (this.state.stopRequested && this.state.currentFetchController === controller) { // Ensure this abort corresponds to the *current* stop request
                     errorMsg = 'Request aborted by user.';
-                    this.onMessage(`Request step \"${step.name}\" was aborted by user.`, 'warning');
+                    this.onMessage(`Request step "${step.name}" was aborted by user.`, 'warning');
                 } else {
                     errorMsg = 'Request timed out (30s)';
-                    this.onMessage(`Request step \"${step.name}\" timed out after 30 seconds.`, 'error');
+                    this.onMessage(`Request step "${step.name}" timed out after 30 seconds.`, 'error');
                 }
             } else if (errorMsg.match(/ENOTFOUND|DNS|getaddrinfo|Failed to fetch|Name or service not known|Could not resolve host/i)) {
                 errorMsg = 'Network error: Could not resolve host or DNS lookup failed.';
-                this.onMessage(`Request step \"${step.name}\": Could not resolve host or DNS lookup failed.\n\nCheck the URL and your network connection.`, 'error');
+                this.onMessage(`Request step "${step.name}": Could not resolve host or DNS lookup failed.\n\nCheck the URL and your network connection.`, 'error');
             } else if (errorMsg.match(/ECONNREFUSED|connection refused|ECONNRESET|Connection refused/i)) {
                 errorMsg = 'Network error: Connection refused by server.';
-                this.onMessage(`Request step \"${step.name}\": Connection refused by server.\n\nCheck if the server is running and reachable.`, 'error');
+                this.onMessage(`Request step "${step.name}": Connection refused by server.\n\nCheck if the server is running and reachable.`, 'error');
             } else if (errorMsg.match(/timeout|timed out|ETIMEDOUT/i)) {
                 errorMsg = 'Network error: Connection timed out.';
-                this.onMessage(`Request step \"${step.name}\": Connection timed out.\n\nCheck your network connection and server status.`, 'error');
+                this.onMessage(`Request step "${step.name}": Connection timed out.\n\nCheck your network connection and server status.`, 'error');
             } else if (errorMsg.match(/NetworkError|network error|TypeError: Failed to fetch/i)) {
                 errorMsg = 'Network error: Failed to connect.';
-                this.onMessage(`Request step \"${step.name}\": Failed to connect.\n\nCheck your network connection and the request URL.`, 'error');
+                this.onMessage(`Request step "${step.name}": Failed to connect.\n\nCheck your network connection and the request URL.`, 'error');
             }
             // --- MODIFICATION END ---
 
             // --- MODIFICATION START: Implement onFailure logic for fetch errors (remains the same logic) ---
             if (effectiveOnFailure === 'continue') {
                 // Continue flow, report step as error (since the request fundamentally failed)
-                this.onMessage(`Request step \"${step.name}\" encountered network/fetch error, continuing flow. Error: ${errorMsg}`, 'warning');
+                this.onMessage(`Request step "${step.name}" encountered network/fetch error, continuing flow. Error: ${errorMsg}`, 'warning');
                 // Return 'error' status, but _executeSingleStepLogic checks onFailure === 'continue' and won't stop the flow
                 return { status: 'error', output: null, error: errorMsg };
             } else { // 'stop' (default)
                 // Stop flow, report step as error
-                this.onMessage(`Request step \"${step.name}\" failed with network/fetch error, stopping flow. Error: ${errorMsg}`, 'error');
+                this.onMessage(`Request step "${step.name}" failed with network/fetch error, stopping flow. Error: ${errorMsg}`, 'error');
                 // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
                 return { status: 'error', output: null, error: errorMsg };
             }
@@ -671,7 +758,7 @@ export class FlowRunner {
             // Use the provided evaluation function
             conditionMet = this.evaluateConditionFn(step.conditionData, context);
         } catch (error) {
-            console.error(`Error evaluating condition for step ${step.id}:`, error);
+            logger.error(`Error evaluating condition for step ${step.id}:`, error);
             evalError = error;
             conditionMet = false; // Ensure condition is false on error
         }
@@ -765,7 +852,7 @@ export class FlowRunner {
             return { status: 'success', output: { itemCount: items.length }, error: null };
 
         } catch (error) {
-            console.error(`Error evaluating loop source for step ${step.id}:`, error);
+            logger.error(`Error evaluating loop source for step ${step.id}:`, error);
             evalError = error;
         }
 
@@ -850,13 +937,13 @@ export class FlowRunner {
         if (typeof evaluatePath !== 'function') {
             // --- MODIFICATION: No global message, log error ---
             // this.onMessage(`Extraction failed: evaluatePath function is not available.`, 'error');
-            console.error("FlowRunner: this.evaluatePathFn is missing or not a function during extraction.");
+            logger.error("FlowRunner: this.evaluatePathFn is missing or not a function during extraction.");
             // Return a general failure indication? Or just empty? Let's return empty for now.
             // failures.push({ varName: 'ALL', path: 'N/A', reason: 'evaluatePathFn missing' });
             return failures;
         }
 
-        console.log("[Extraction] Attempting extractions. Config:", extractConfig, "Response Output:", responseOutput);
+        logger.info("[Extraction] Attempting extractions. Config:", extractConfig, "Response Output:", responseOutput);
         let contextChanged = false;
 
         for (const varName in extractConfig) {
@@ -864,19 +951,19 @@ export class FlowRunner {
             let extractedValue = undefined;
             let extractionError = null; // <-- Track specific error for this extraction
 
-            console.log(`[Extraction] Processing rule: Variable="${varName}", Path="${path}"`);
+            logger.info(`[Extraction] Processing rule: Variable="${varName}", Path="${path}"`);
 
             try {
                 if (!varName || typeof varName !== 'string') {
                     extractionError = `Invalid variable name "${varName}"`;
-                    console.warn(`[Extraction] ${extractionError}`);
+                    logger.warn(`[Extraction] ${extractionError}`);
                     // Don't add to failures, just skip? Or add? Let's add for visibility.
                     failures.push({ varName: varName || 'INVALID', path: path || 'N/A', reason: extractionError });
                     continue;
                 }
                 if (path === undefined || path === null || typeof path !== 'string') {
                     extractionError = `Path is missing or invalid`;
-                    console.warn(`[Extraction] ${extractionError} for variable "${varName}"`);
+                    logger.warn(`[Extraction] ${extractionError} for variable "${varName}"`);
                     // --- MODIFICATION: Set context var to undefined and add failure ---
                     if (context.hasOwnProperty(varName)) {
                         context[varName] = undefined;
@@ -889,16 +976,16 @@ export class FlowRunner {
                 // --- Path evaluation logic (remains largely the same, added logging/path extraction) ---
                 if (path === '.status') {
                     extractedValue = responseOutput.hasOwnProperty('status') ? responseOutput.status : undefined;
-                    console.log(`[Extraction] Path ".status" evaluated to:`, extractedValue);
+                    logger.info(`[Extraction] Path ".status" evaluated to:`, extractedValue);
                 } else if (path === '$status') { // Legacy/alternative keyword check
                     extractedValue = responseOutput.status;
-                    console.log(`[Extraction] Path "$status" evaluated to:`, extractedValue);
+                    logger.info(`[Extraction] Path "$status" evaluated to:`, extractedValue);
                 } else if (path === '$headers') {
                     extractedValue = responseOutput.headers;
-                    console.log(`[Extraction] Path "$headers" evaluated.`);
+                    logger.info(`[Extraction] Path "$headers" evaluated.`);
                 } else if (path === '$body') {
                     extractedValue = responseOutput.body;
-                    console.log(`[Extraction] Path "$body" evaluated.`);
+                    logger.info(`[Extraction] Path "$body" evaluated.`);
                 } else if (path.startsWith('$header.')) {
                     const headerName = path.substring('$header.'.length).toLowerCase();
                     extractedValue = undefined; // Default if not found
@@ -910,18 +997,18 @@ export class FlowRunner {
                             }
                         }
                     }
-                    console.log(`[Extraction] Path "${path}" evaluated to:`, extractedValue);
+                    logger.info(`[Extraction] Path "${path}" evaluated to:`, extractedValue);
                 } else {
                     // Standard path evaluation (Assume body first, then try response if prefixed)
                     let valueFromBody = undefined;
                     let valueFromResponse = undefined;
                     try {
                         valueFromBody = evaluatePath(responseOutput.body, path);
-                        console.log(`[Extraction] Path "${path}" on BODY evaluated to:`, valueFromBody);
+                        logger.info(`[Extraction] Path "${path}" on BODY evaluated to:`, valueFromBody);
                     } catch (evalError) {
                         // --- MODIFICATION: Capture eval error for failure reason ---
                         extractionError = `Path evaluation error on body: ${evalError.message}`;
-                        console.warn(`[Extraction] Path "${path}" on BODY failed: ${evalError.message}`);
+                        logger.warn(`[Extraction] Path "${path}" on BODY failed: ${evalError.message}`);
                         valueFromBody = undefined;
                         // --- END MODIFICATION ---
                     }
@@ -933,12 +1020,12 @@ export class FlowRunner {
                         try {
                             const responsePath = path.substring('response.'.length);
                             valueFromResponse = evaluatePath(responseOutput, responsePath);
-                            console.log(`[Extraction] Path "${path}" on RESPONSE evaluated to:`, valueFromResponse);
+                            logger.info(`[Extraction] Path "${path}" on RESPONSE evaluated to:`, valueFromResponse);
                             if (valueFromResponse !== undefined) extractedValue = valueFromResponse;
                         } catch (evalError) {
                             // --- MODIFICATION: Capture eval error for failure reason ---
                             extractionError = `Path evaluation error on response: ${evalError.message}`;
-                            console.warn(`[Extraction] Path "${path}" on RESPONSE failed: ${evalError.message}`);
+                            logger.warn(`[Extraction] Path "${path}" on RESPONSE failed: ${evalError.message}`);
                             valueFromResponse = undefined; // Ensure undefined on error
                             // --- END MODIFICATION ---
                         }
@@ -951,7 +1038,7 @@ export class FlowRunner {
                     if (!extractionError) { // Only set this reason if no eval error occurred
                         extractionError = `Path "${path}" yielded no value (undefined)`;
                     }
-                    console.warn(`[Extraction] FAILURE: ${extractionError} for variable "${varName}".`);
+                    logger.warn(`[Extraction] FAILURE: ${extractionError} for variable "${varName}".`);
                     failures.push({ varName: varName, path: path, reason: extractionError });
                     // --- END MODIFICATION ---
                 }
@@ -962,17 +1049,17 @@ export class FlowRunner {
                     context[varName] = extractedValue;
                     contextChanged = true;
                     if (extractedValue !== undefined) {
-                        console.log(`[Extraction] SUCCESS: Stored context["${varName}"] =`, extractedValue);
+                        logger.info(`[Extraction] SUCCESS: Stored context["${varName}"] =`, extractedValue);
                     } else {
-                        console.log(`[Extraction] INFO: Set context["${varName}"] to undefined.`);
+                        logger.info(`[Extraction] INFO: Set context["${varName}"] to undefined.`);
                     }
                 } else {
-                    console.log(`[Extraction] INFO: Value for context["${varName}"] is unchanged (${typeof extractedValue}).`);
+                    logger.info(`[Extraction] INFO: Value for context["${varName}"] is unchanged (${typeof extractedValue}).`);
                 }
 
             } catch (e) {
                 extractionError = `Unexpected extraction error: ${e.message}`;
-                console.error(`[Extraction] UNEXPECTED ERROR for "${varName}" path "${path}":`, e);
+                logger.error(`[Extraction] UNEXPECTED ERROR for "${varName}" path "${path}":`, e);
                 // --- MODIFICATION: Don't message, add to failures, set context var to undefined ---
                 failures.push({ varName: varName, path: path, reason: extractionError });
                 if (context[varName] !== undefined) {

@@ -1,4 +1,4 @@
-// flowVisualizer.js
+// ========== FILE: flowVisualizer.js (FULL, UNABRIDGED, UPDATED with logging) ==========
 /**
  * flowVisualizer.js
  * Renders the flow as a dynamic, interactive node-graph using SVG for connectors.
@@ -6,6 +6,7 @@
  */
 import { escapeHTML, generateConditionPreview } from './flowCore.js'; // Import utilities from core
 import { getStepTypeIcon } from './flowStepComponents.js'; // Import UI-related helper
+import { logger } from './logger.js';
 
 // --- Constants for Layout ---
 const NODE_WIDTH = 240;         // MODIFIED: Increased width
@@ -170,6 +171,13 @@ export class FlowVisualizer {
                 }
                 if (savedLayout && typeof savedLayout.collapsed === 'boolean') {
                     nodeData.collapsed = savedLayout.collapsed;
+                    // --- ADDED: Update collapsedNodes set based on loaded state ---
+                    if (nodeData.collapsed) {
+                        this.collapsedNodes.add(nodeData.id);
+                    } else {
+                         this.collapsedNodes.delete(nodeData.id);
+                    }
+                    // --- END ADDED ---
                 }
             });
         }
@@ -215,49 +223,82 @@ export class FlowVisualizer {
         let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0; // Bounds based on final positions
 
         this.nodes.forEach(nodeData => {
-            const hiddenByParent = skipNodes.has(nodeData.id) && !nodeData.collapsed;
-            const nodeEl = this._createNodeElement(nodeData);
+            // Check if this node is a child of a collapsed node and isn't the collapsed node itself
+            const isChildOfCollapsed = skipNodes.has(nodeData.id) && !nodeData.collapsed;
+            const nodeEl = this._createNodeElement(nodeData); // Create element regardless
+
             if (nodeEl) {
                 nodeData.element = nodeEl;
                 nodeEl.style.left = `${nodeData.x}px`;
                 nodeEl.style.top = `${nodeData.y}px`;
-                if (hiddenByParent) nodeEl.style.display = 'none';  // hidden but present
-                this.canvas.appendChild(nodeEl);
-                if (nodeData.collapsed) {
-                    nodeEl.classList.add('collapsed');
+
+                // Hide the element if it's a child of a collapsed node
+                if (isChildOfCollapsed) {
+                    nodeEl.style.display = 'none';
                 }
 
-                // Update height based on actual rendered content
-                const actualHeight = Math.max(NODE_MIN_HEIGHT, nodeEl.offsetHeight);
-                nodeData.height = actualHeight;
-                nodeEl.style.height = `${actualHeight}px`; // Set explicit height
+                // Apply collapsed class if the node *itself* is collapsed
+                if (nodeData.collapsed) {
+                     nodeEl.classList.add('collapsed');
+                }
 
-                // Update bounds calculation based on FINAL positions
-                minX = Math.min(minX, nodeData.x);
-                minY = Math.min(minY, nodeData.y);
-                maxX = Math.max(maxX, nodeData.x + nodeData.width);
-                maxY = Math.max(maxY, nodeData.y + nodeData.height);
-            }
-        });
+                this.canvas.appendChild(nodeEl);
 
-        // --- Phase 4: Update Canvas Size & Render Connectors ---
-        const finalContentWidth = (maxX === 0 && minX === Infinity) ? 0 : maxX - Math.min(minX, CANVAS_PADDING); // Use minX for width calc if nodes are left of padding
-        const finalContentHeight = (maxY === 0 && minY === Infinity) ? 0 : maxY - Math.min(minY, CANVAS_PADDING); // Use minY for height calc if nodes are above padding
-        // Adjust bounds based on actual content size OR default layout size if content is empty/invalid
-        const effectiveWidth = Math.max(defaultLayoutResult.width, finalContentWidth);
-        const effectiveHeight = Math.max(defaultLayoutResult.height, finalContentHeight);
-        this._updateCanvasAndSvgSize(effectiveWidth, effectiveHeight);
+                // Update height based on actual rendered content (do this after appending)
+                 // Use requestAnimationFrame to ensure styles are applied before measuring offsetHeight
+                requestAnimationFrame(() => {
+                     const actualHeight = Math.max(NODE_MIN_HEIGHT, nodeEl.offsetHeight);
+                     nodeData.height = actualHeight;
+                     nodeEl.style.height = `${actualHeight}px`; // Set explicit height
 
-        // hide children of initially–collapsed nodes
-        this.collapsedNodes.forEach(id => {
-            const step = this._findStepById(this.flowModel.steps, id);
-            if (step) {
-                this._collectDescendantIds(step).forEach(dId => {
-                    const nd = this.nodes.get(dId);
-                    if (nd?.element) nd.element.style.display = 'none';
+                     // Update bounds calculation (only if not hidden)
+                     if (!isChildOfCollapsed) {
+                          minX = Math.min(minX, nodeData.x);
+                          minY = Math.min(minY, nodeData.y);
+                          maxX = Math.max(maxX, nodeData.x + nodeData.width);
+                          maxY = Math.max(maxY, nodeData.y + nodeData.height);
+                     }
+
+                     // Defer canvas size update and connector rendering until after heights are measured
+                     this._finalizeRender(defaultLayoutResult, minX, minY, maxX, maxY);
                 });
             }
         });
+
+        // Initial render might have no nodes, handle this case
+         if (this.nodes.size === 0) {
+             this._finalizeRender(defaultLayoutResult, minX, minY, maxX, maxY);
+         }
+    }
+
+    // --- NEW Helper Function to finalize rendering after potential async height updates ---
+    _finalizeRender(defaultLayoutResult, minX, minY, maxX, maxY) {
+        // Calculate final bounds based on possibly updated node dimensions
+        let finalContentWidth = 0;
+        let finalContentHeight = 0;
+        let finalMinX = Infinity;
+        let finalMinY = Infinity;
+        let finalMaxX = 0;
+        let finalMaxY = 0;
+
+        this.nodes.forEach(nodeData => {
+             // Only consider nodes that are not hidden by a collapsed parent
+             const isHidden = nodeData.element?.style.display === 'none';
+            if (!isHidden && nodeData.element) {
+                 finalMinX = Math.min(finalMinX, nodeData.x);
+                 finalMinY = Math.min(finalMinY, nodeData.y);
+                 finalMaxX = Math.max(finalMaxX, nodeData.x + nodeData.width);
+                 finalMaxY = Math.max(finalMaxY, nodeData.y + nodeData.height);
+            }
+        });
+
+        // Calculate width/height based on final bounds
+        finalContentWidth = (finalMaxX === 0 && finalMinX === Infinity) ? 0 : finalMaxX - Math.min(finalMinX, CANVAS_PADDING);
+        finalContentHeight = (finalMaxY === 0 && finalMinY === Infinity) ? 0 : finalMaxY - Math.min(finalMinY, CANVAS_PADDING);
+
+        const effectiveWidth = Math.max(defaultLayoutResult.width, finalContentWidth);
+        const effectiveHeight = Math.max(defaultLayoutResult.height, finalContentHeight);
+        this._updateCanvasAndSvgSize(effectiveWidth, effectiveHeight);
 
         this._renderAllConnectors(); // Render connectors based on FINAL node positions
 
@@ -269,6 +310,7 @@ export class FlowVisualizer {
             }
         }
     }
+    // --- END NEW Helper ---
 
     // --- Layout Calculation ---
 
@@ -285,6 +327,7 @@ export class FlowVisualizer {
         let currentX = startX;
         let maxReachY = startY;
         let maxReachX = startX;
+        let currentLevelMaxStepHeight = 0; // Track max height at this level
 
         if (!steps || steps.length === 0) {
             return { width: 0, height: 0 };
@@ -294,74 +337,93 @@ export class FlowVisualizer {
             let nodeData = this.nodes.get(step.id) || {
                 id: step.id,
                 width: NODE_WIDTH,
-                height: NODE_MIN_HEIGHT,
+                height: NODE_MIN_HEIGHT, // Use min height initially
                 step: step,
                 element: null,
                 childrenLayout: null,
                 ports: {}
             };
 
-            /* -----------------------------------------------------------------
-             *  a) store the node **before** we recurse into its children
-             *     so the parent is appended to the canvas first.                 */
+             // Store the node data if not already present
             if (!this.nodes.has(step.id)) {
                 this.nodes.set(step.id, nodeData);
             }
 
-            /*  b) bootstrap collapsed state from the model */
-            nodeData.collapsed = !!(step.visualState && step.visualState.collapsed);
-            if (nodeData.collapsed) this.collapsedNodes.add(step.id);
+             // --- Assign initial layout position BEFORE recursion ---
+             nodeData.x = currentX;
+             nodeData.y = startY;
+             currentLevelMaxStepHeight = Math.max(currentLevelMaxStepHeight, nodeData.height);
 
-            nodeData.x = currentX;
-            nodeData.y = startY;
-
-            let stepBranchHeight = 0; // Additional height consumed by branches below this step
-            let stepBranchWidth = 0; // Width consumed by branches (relevant for horizontal spacing if needed)
+            // --- Recurse for children and calculate their layout bounds ---
+            let stepBranchHeight = 0; // Additional vertical space consumed by branches below this step
+            let stepBranchWidth = 0; // Width consumed by branches
 
             try {
-                if (step.type === 'condition' && !this.collapsedNodes.has(step.id)) {
-                    const branchStartY = startY + nodeData.height + BRANCH_V_SPACING;
-                    const thenLayout = this._layoutSteps(step.thenSteps || [], currentX, branchStartY);
-                    const elseStartY = branchStartY + (thenLayout.height > 0 ? thenLayout.height + V_SPACING : 0);
-                    const elseLayout = this._layoutSteps(step.elseSteps || [], currentX, elseStartY);
+                 // Bootstrap collapsed state from model if not already set by user interaction
+                if (nodeData.collapsed === undefined) { // Check if undefined
+                     nodeData.collapsed = !!(this.flowModel.visualLayout?.[step.id]?.collapsed);
+                     if (nodeData.collapsed) this.collapsedNodes.add(step.id);
+                }
 
-                    nodeData.childrenLayout = { then: thenLayout, else: elseLayout };
-                    stepBranchHeight = BRANCH_V_SPACING + thenLayout.height + (elseLayout.height > 0 ? V_SPACING + elseLayout.height : 0);
-                    stepBranchWidth = Math.max(thenLayout.width, elseLayout.width);
+                if (step.type === 'condition' && !this.collapsedNodes.has(step.id)) {
+                     const branchStartX = currentX; // Branches start below parent
+                     const branchStartY = startY + nodeData.height + BRANCH_V_SPACING;
+
+                     const thenLayout = this._layoutSteps(step.thenSteps || [], branchStartX, branchStartY);
+                     const elseStartY = branchStartY + (thenLayout.height > 0 ? thenLayout.height + V_SPACING : 0);
+                     const elseLayout = this._layoutSteps(step.elseSteps || [], branchStartX, elseStartY);
+
+                     nodeData.childrenLayout = { then: thenLayout, else: elseLayout };
+                     stepBranchHeight = BRANCH_V_SPACING + thenLayout.height + (thenLayout.height > 0 && elseLayout.height > 0 ? V_SPACING : 0) + elseLayout.height;
+                     stepBranchWidth = Math.max(thenLayout.width, elseLayout.width); // Width is max of branches
+
                 } else if (step.type === 'loop' && !this.collapsedNodes.has(step.id)) {
+                    const branchStartX = currentX; // Loop body starts below parent
                     const branchStartY = startY + nodeData.height + BRANCH_V_SPACING;
-                    const loopLayout = this._layoutSteps(step.loopSteps || [], currentX, branchStartY);
+                    const loopLayout = this._layoutSteps(step.loopSteps || [], branchStartX, branchStartY);
 
                     nodeData.childrenLayout = { loop: loopLayout };
                     stepBranchHeight = BRANCH_V_SPACING + loopLayout.height;
-                    stepBranchWidth = loopLayout.width;
+                    stepBranchWidth = loopLayout.width; // Width is determined by loop body
                 }
+                 // --- Update overall bounds based on this step and its branches ---
+                 const currentStepReachX = currentX + Math.max(nodeData.width, stepBranchWidth);
+                 const currentStepReachY = startY + nodeData.height + stepBranchHeight;
+                 maxReachX = Math.max(maxReachX, currentStepReachX);
+                 maxReachY = Math.max(maxReachY, currentStepReachY);
 
-                const currentStepMaxX = currentX + Math.max(nodeData.width, stepBranchWidth);
-                maxReachX = Math.max(maxReachX, currentStepMaxX);
-                const currentStepMaxY = startY + nodeData.height + stepBranchHeight;
-                maxReachY = Math.max(maxReachY, currentStepMaxY);
-                currentX += nodeData.width + H_SPACING;
+                 // Move to the next horizontal position for the *next* step at *this* level
+                 currentX += nodeData.width + H_SPACING;
 
-                if (!this.nodes.has(step.id)) {
-                    this.nodes.set(step.id, nodeData);
-                }
+
             } catch (error) {
-                console.error(`Layout error for step ${step.id}:`, error);
-                nodeData.x = currentX;
-                nodeData.y = startY;
-                nodeData.height = NODE_MIN_HEIGHT;
-                maxReachY = Math.max(maxReachY, startY + nodeData.height);
-                maxReachX = Math.max(maxReachX, currentX + nodeData.width);
-                currentX += nodeData.width + H_SPACING;
+                logger.error(`Layout error for step ${step.id}:`, error);
+                 // Fallback layout on error
+                 nodeData.x = currentX;
+                 nodeData.y = startY;
+                 nodeData.height = NODE_MIN_HEIGHT; // Reset height
+                 maxReachY = Math.max(maxReachY, startY + nodeData.height);
+                 maxReachX = Math.max(maxReachX, currentX + nodeData.width);
+                 currentX += nodeData.width + H_SPACING; // Still advance X
             }
+
+            // Update the nodeData in the map (redundant if already set, but safe)
+            this.nodes.set(step.id, nodeData);
         });
 
+
+        // --- Calculate final bounds for THIS level ---
+        // Width is the total horizontal distance covered.
+        // Height is the total vertical distance from startY to the maximum Y reached by any node or branch at this level.
+        const finalWidth = maxReachX - startX;
+        const finalHeight = maxReachY - startY;
+
         return {
-            width: maxReachX - startX,
-            height: maxReachY - startY
+            width: finalWidth,
+            height: finalHeight
         };
     }
+
 
     /** Updates the canvas and SVG dimensions to fit content. */
     _updateCanvasAndSvgSize(contentWidth, contentHeight) {
@@ -403,12 +465,13 @@ export class FlowVisualizer {
 
         // --- Build header markup ---
         const headerEl = document.createElement('div');
+        // Check collapsed state using the internal set for initial render
         headerEl.className = 'node-header' + (this.collapsedNodes.has(nodeData.id) ? ' collapsed' : '');
         headerEl.innerHTML = `
             <span class="node-icon">${getStepTypeIcon(step.type)}</span>
             <span class="node-name"></span>
             <div class="node-actions">
-                ${(step.type === 'condition' || step.type === 'loop') ? 
+                ${(step.type === 'condition' || step.type === 'loop') ?
                     `<button class="btn-node-action btn-toggle-collapse node-collapse-toggle" title="Toggle Collapse">
                         ${this.collapsedNodes.has(nodeData.id) ? '▼' : '▲'}
                     </button>` : ''
@@ -433,10 +496,8 @@ export class FlowVisualizer {
         // Delete button wiring
         const delBtn = headerEl.querySelector('.btn-delete-node');
         if (delBtn) {
-            delBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.options.onDeleteStep?.(step.id);
-            });
+             // Use arrow function to bind 'this' if handleDeleteClick isn't already bound
+             delBtn.addEventListener('click', (e) => this.handleDeleteClick(e, step.id));
         }
 
         // Collapse toggle handler
@@ -448,13 +509,14 @@ export class FlowVisualizer {
                 if (wasCollapsed) this.collapsedNodes.delete(nodeData.id);
                 else               this.collapsedNodes.add(nodeData.id);
 
-                nodeData.collapsed = !wasCollapsed;
-                /* notify host so tests can assert on the patch */
+                nodeData.collapsed = !wasCollapsed; // Update internal node data
+
+                // --- Notify host of the collapse state change ---
                 this.options.onNodeLayoutUpdate?.(
                     step.id,
-                    nodeData.x,
+                    nodeData.x, // Use current position
                     nodeData.y,
-                    { collapsed: nodeData.collapsed }
+                    { collapsed: nodeData.collapsed } // Pass the new state
                 );
 
                 /* hide / show descendants */
@@ -463,12 +525,23 @@ export class FlowVisualizer {
                     if (nd?.element) nd.element.style.display = nodeData.collapsed ? 'none' : '';
                 });
 
+                // Update button text and element classes
                 toggleButton.textContent = nodeData.collapsed ? '▼' : '▲';
-                headerEl.classList.toggle('collapsed');
-                nodeEl.classList.toggle('collapsed');
+                headerEl.classList.toggle('collapsed', nodeData.collapsed);
+                nodeEl.classList.toggle('collapsed', nodeData.collapsed);
+                // Redraw connectors after hiding/showing descendants
                 this._renderAllConnectors();
             });
         }
+
+        // Add or improve tooltips for node actions in the visualizer
+        // Only set title, do not redeclare delBtn
+        if (delBtn) delBtn.title = 'Delete this step';
+        const collapseBtn = headerEl.querySelector('.btn-toggle-collapse');
+        if (collapseBtn) collapseBtn.title = 'Expand/collapse this node';
+        // Add tooltip to node drag handle if present
+        const dragHandle = headerEl.querySelector('.node-drag-handle');
+        if (dragHandle) dragHandle.title = 'Drag to move node';
 
         // Node content
         const contentEl = document.createElement('div');
@@ -480,13 +553,14 @@ export class FlowVisualizer {
         nodeEl.appendChild(contentEl);
 
         // Drag and Drop Initialization (mousedown listener for free placement)
-        nodeEl.addEventListener('mousedown', this._handleNodeMouseDown);
+        nodeEl.addEventListener('mousedown', this._handleNodeMouseDown); // Use bound reference
 
         // Add click handler for node selection
-        nodeEl.addEventListener('click', (e) => this.handleNodeClick(e, step.id));
+        nodeEl.addEventListener('click', (e) => this.handleNodeClick(e, step.id)); // Use bound reference
 
+        // Apply collapsed class initially if needed (redundant with header class setting, but safe)
         if (nodeData.collapsed) {
-            nodeEl.classList.add('collapsed');
+             nodeEl.classList.add('collapsed');
         }
 
         return nodeEl;
@@ -509,14 +583,14 @@ export class FlowVisualizer {
                     if (conditionPreview.length > 40) conditionPreview = conditionPreview.substring(0, 37) + '...';
                     return `If: <code class="condition-code" title="${escapeHTML(generateConditionPreview(step.conditionData) || step.condition || '')}">${escapeHTML(conditionPreview)}</code>`;
                 case 'loop':
-                    const sourcePreview = !step.source ? 'No source specified' : 
+                    const sourcePreview = !step.source ? 'No source specified' :
                         (step.source.length > 20 ? step.source.substring(0, 17) + '...' : step.source);
                     return `For <code class="loop-variable">${escapeHTML(step.loopVariable || 'item')}</code> in <code class="loop-source" title="${escapeHTML(step.source || '')}">${escapeHTML(sourcePreview)}</code>`;
                 default:
                     return `Type: ${escapeHTML(step.type)}`;
             }
         } catch (error) {
-            console.error(`Error generating content HTML for step ${step.id}:`, error);
+            logger.error(`Error generating content HTML for step ${step.id}:`, error);
             return `Error displaying content. Type: ${escapeHTML(step.type)}`;
         }
     }
@@ -526,13 +600,19 @@ export class FlowVisualizer {
     /** Renders all connectors based on the node layout. */
     _renderAllConnectors() {
         if (!this.svgConnectors || !this.defs) return;
-        this.svgConnectors.innerHTML = ''; // Clear previous connectors
+        // Store existing defs content temporarily
+        const defsContent = this.defs.innerHTML;
+        this.svgConnectors.innerHTML = ''; // Clear previous connectors AND defs
+        // Recreate defs and restore content
+        this.defs = document.createElementNS(SVG_NS, 'defs');
+        this.defs.innerHTML = defsContent;
         this.svgConnectors.appendChild(this.defs); // Ensure defs remain
 
         if (this.flowModel && this.flowModel.steps) {
             this._renderConnectorsRecursive(this.flowModel.steps);
         }
     }
+
 
     /** Recursively finds connections and calls drawing function. */
     _renderConnectorsRecursive(steps, parentNodeData = null, parentPortType = 'output') {
@@ -545,9 +625,10 @@ export class FlowVisualizer {
 
         steps.forEach((step) => {
             const currentNodeData = this.nodes.get(step.id);
-            if (!currentNodeData) {
-                console.warn(`Node data not found for step ${step.id} during connector render. Skipping connections to/from it.`);
-                prevNodeData = null;
+            // --- Skip hidden nodes (children of collapsed) ---
+            if (!currentNodeData || currentNodeData.element?.style.display === 'none') {
+                // Do not draw connections to/from this node, and DO NOT update prevNodeData
+                // The next visible node will connect from the *last visible* parent/previous node.
                 return;
             }
 
@@ -555,23 +636,38 @@ export class FlowVisualizer {
                 this._drawConnector(prevNodeData, currentNodeData, currentParentPortType, 'input');
             }
 
-            if (step.type === 'condition') {
-                this._renderConnectorsRecursive(step.thenSteps || [], currentNodeData, 'branch-then');
-                this._renderConnectorsRecursive(step.elseSteps || [], currentNodeData, 'branch-else');
-            } else if (step.type === 'loop') {
-                this._renderConnectorsRecursive(step.loopSteps || [], currentNodeData, 'loop-body');
+            // Only recurse if the current node is NOT collapsed
+            if (!this.collapsedNodes.has(step.id)) {
+                if (step.type === 'condition') {
+                    this._renderConnectorsRecursive(step.thenSteps || [], currentNodeData, 'branch-then');
+                    this._renderConnectorsRecursive(step.elseSteps || [], currentNodeData, 'branch-else');
+                } else if (step.type === 'loop') {
+                    this._renderConnectorsRecursive(step.loopSteps || [], currentNodeData, 'loop-body');
+                }
             }
 
+            // Update prevNodeData ONLY if the current node was visible and processed
             prevNodeData = currentNodeData;
-            currentParentPortType = 'output';
+            currentParentPortType = 'output'; // Next connection originates from standard output
         });
     }
+
 
     /** Calculates the absolute position of a conceptual port on a node. */
     _getPortPosition(nodeData, portType) {
         if (!nodeData) return { x: NaN, y: NaN };
-        const x = nodeData.x;
-        const y = nodeData.y;
+
+        let x, y;
+        // If this node is currently being dragged, use its style position for accurate connector drawing during drag
+        if (this.isDraggingNode && this.draggedNode && this.draggedNode.dataset.stepId === nodeData.id) {
+            x = parseFloat(this.draggedNode.style.left || '0');
+            y = parseFloat(this.draggedNode.style.top || '0');
+        } else {
+            // Otherwise, use the stored layout coordinates
+            x = nodeData.x;
+            y = nodeData.y;
+        }
+
         const w = nodeData.width;
         const h = nodeData.height;
 
@@ -585,11 +681,15 @@ export class FlowVisualizer {
         }
     }
 
-    /** Draws a single SVG connector between two nodes. */
+    /** Draws a single SVG connector between two nodes using orthogonal paths. */
     _drawConnector(startNodeData, endNodeData, startPortType, endPortType) {
         if (!startNodeData || !endNodeData) {
-            console.warn("Skipping connector draw: Missing start or end node data.");
+            logger.warn("Skipping connector draw: Missing start or end node data.");
             return;
+        }
+        // Check if either node is hidden
+        if (startNodeData.element?.style.display === 'none' || endNodeData.element?.style.display === 'none') {
+            return; // Skip drawing if connected to a hidden node
         }
 
         try {
@@ -600,34 +700,40 @@ export class FlowVisualizer {
                 throw new Error(`Invalid port positions calculated: Start(${startPos.x},${startPos.y}), End(${endPos.x},${endPos.y}) for nodes ${startNodeData.id} -> ${endNodeData.id}`);
             }
 
-            let pathData;
-            const dx = endPos.x - startPos.x;
-            const dy = endPos.y - startPos.y;
-            const midX = startPos.x + dx / 2;
-            const midY = startPos.y + dy / 2;
+            // --- Start: Orthogonal Path Calculation ---
+            let pathData = '';
+            const hPadding = 20; // Horizontal distance before/after vertical turn
+            const inputExtend = 15; // Horizontal distance the line extends left from the input port
 
-            if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
-                const vSegLength = Math.max(10, Math.min(30, Math.abs(dy) / 3));
-                pathData = `M ${startPos.x} ${startPos.y} ` +
-                           `L ${startPos.x} ${startPos.y + vSegLength} ` +
-                           `L ${endPos.x - H_SPACING/2} ${startPos.y + vSegLength} ` +
-                           `L ${endPos.x - H_SPACING/2} ${endPos.y} ` +
-                           `L ${endPos.x} ${endPos.y}`;
-            } else if (startPortType === 'output' && endPortType === 'input') {
-                pathData = `M ${startPos.x} ${startPos.y} ` +
-                           `L ${midX} ${startPos.y} ` +
-                           `L ${midX} ${endPos.y} ` +
-                           `L ${endPos.x} ${endPos.y}`;
+            if (startPortType === 'output' && endPortType === 'input') {
+                // Standard horizontal connection (Output -> Input)
+                const midX = startPos.x + hPadding;
+                pathData = `M ${startPos.x} ${startPos.y} ` + // Move to start port (middle-right)
+                           `L ${midX} ${startPos.y} ` +      // Line horizontally out
+                           `L ${midX} ${endPos.y} ` +        // Line vertically to target Y
+                           `L ${endPos.x - inputExtend} ${endPos.y} ` + // Line horizontally towards input port
+                           `L ${endPos.x} ${endPos.y}`;      // Line horizontally into input port (middle-left)
+            } else if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
+                // Connection from bottom of a node (branch/loop) to an input port
+                const vSegLength = Math.max(20, V_SPACING / 2); // How far down to go initially
+                pathData = `M ${startPos.x} ${startPos.y} ` + // Move to start port (middle-bottom)
+                           `V ${startPos.y + vSegLength} ` + // Line vertically down
+                           `H ${endPos.x - inputExtend} ` + // Line horizontally across to near target X
+                           `L ${endPos.x - inputExtend} ${endPos.y} ` + // Line vertically to target Y
+                           `L ${endPos.x} ${endPos.y}`;      // Line horizontally into input port (middle-left)
             } else {
-                const hSegLengthBase = Math.max(5, Math.abs(dx) / 4);
-                const hSegLength = Math.min(30, hSegLengthBase);
-                const startXCtrl = startPos.x + (dx >= 0 ? hSegLength : -hSegLength);
-                const endXCtrl = endPos.x - (dx >= 0 ? hSegLength : -hSegLength);
-                const effectiveStartXCtrl = (dx >= 0) ? Math.min(startXCtrl, startPos.x + Math.max(0, dx / 2)) : Math.max(startXCtrl, startPos.x + Math.min(0, dx / 2));
-                const effectiveEndXCtrl = (dx >= 0) ? Math.max(endXCtrl, endPos.x - Math.max(0, dx / 2)) : Math.min(endXCtrl, endPos.x - Math.min(0, dx / 2));
-                pathData = `M ${startPos.x} ${startPos.y} ` +
-                           `C ${effectiveStartXCtrl} ${startPos.y}, ${effectiveEndXCtrl} ${endPos.y}, ${endPos.x} ${endPos.y}`;
+                // Fallback (e.g., if connecting from branch to another branch - might need refinement)
+                // Use the standard horizontal logic as a default fallback for now
+                const midX = startPos.x + hPadding;
+                 pathData = `M ${startPos.x} ${startPos.y} ` +
+                            `L ${midX} ${startPos.y} ` +
+                            `L ${midX} ${endPos.y} ` +
+                            `L ${endPos.x - inputExtend} ${endPos.y} ` +
+                            `L ${endPos.x} ${endPos.y}`;
+                 logger.warn(`[Visualizer] Using fallback orthogonal path for connection: ${startPortType} -> ${endPortType}`);
             }
+            // --- End: Orthogonal Path Calculation ---
+
 
             const path = document.createElementNS(SVG_NS, 'path');
             path.setAttribute('d', pathData);
@@ -637,17 +743,18 @@ export class FlowVisualizer {
             path.dataset.startPort = startPortType;
             path.dataset.endPort = endPortType;
 
-            const markerId = `arrow-${startNodeData.id}-${startPortType}-to-${endNodeData.id}-${endPortType}`;
+            const markerId = `arrow-${startNodeData.id}-${startPortType}-to-${endNodeData.id}-${endPortType}`.replace(/[^a-zA-Z0-9-_]/g, '_'); // Sanitize ID
             const marker = document.createElementNS(SVG_NS, 'marker');
             marker.setAttribute('id', markerId);
             marker.setAttribute('viewBox', '0 -5 10 10');
-            marker.setAttribute('refX', '8');
+            marker.setAttribute('refX', '8'); // Position arrowhead slightly before endpoint
             marker.setAttribute('refY', '0');
             marker.setAttribute('markerWidth', '6');
             marker.setAttribute('markerHeight', '6');
             marker.setAttribute('orient', 'auto-start-reverse');
             marker.innerHTML = `<path d="M0,-5L10,0L0,5" class="connector-arrowhead"></path>`;
 
+            // Only add marker definition if it doesn't exist already
             if (this.defs && !this.defs.querySelector(`#${markerId}`)) {
                 this.defs.appendChild(marker);
             }
@@ -656,12 +763,14 @@ export class FlowVisualizer {
             this.svgConnectors.appendChild(path);
 
         } catch (error) {
-            console.error(`Error drawing connector from ${startNodeData?.id} (${startPortType}) to ${endNodeData?.id} (${endPortType}):`, error);
+            logger.error(`Error drawing connector from ${startNodeData?.id} (${startPortType}) to ${endNodeData?.id} (${endPortType}):`, error);
         }
     }
 
+
     // --- Interaction Handlers ---
 
+    // Bound arrow functions to handle 'this' context automatically
     _handleMouseMove = (e) => {
         if (this.isDraggingNode) {
             this._handleNodeDragMove(e);
@@ -679,10 +788,12 @@ export class FlowVisualizer {
     }
 
     _handleMouseDown = (e) => {
-        if (e.button === PAN_BUTTON && !e.target.closest(`.${NODE_CLASS}`)) {
+        // Pan only if clicking the background (mountPoint or canvas directly)
+        if (e.button === PAN_BUTTON && (e.target === this.mountPoint || e.target === this.canvas)) {
             this._handlePanStart(e);
         }
     }
+    // --- End Bound Handlers ---
 
     _handlePanStart(e) {
         this.isPanning = true;
@@ -691,13 +802,14 @@ export class FlowVisualizer {
         this.scrollLeftStart = this.mountPoint.scrollLeft;
         this.scrollTopStart = this.mountPoint.scrollTop;
         this.mountPoint.style.cursor = 'grabbing';
-        this.mountPoint.style.userSelect = 'none';
+        this.mountPoint.style.userSelect = 'none'; // Prevent text selection during pan
         document.addEventListener('mousemove', this._handleMouseMove);
         document.addEventListener('mouseup', this._handleMouseUp);
         e.preventDefault();
     }
 
     _handlePanMove(e) {
+        if (!this.isPanning) return;
         const dx = e.clientX - this.panStartX;
         const dy = e.clientY - this.panStartY;
         this.mountPoint.scrollLeft = this.scrollLeftStart - dx;
@@ -707,34 +819,36 @@ export class FlowVisualizer {
     _handlePanEnd(e) {
         this.isPanning = false;
         this.mountPoint.style.cursor = 'grab';
-        this.mountPoint.style.userSelect = '';
+        this.mountPoint.style.userSelect = ''; // Re-enable text selection
         document.removeEventListener('mousemove', this._handleMouseMove);
         document.removeEventListener('mouseup', this._handleMouseUp);
     }
 
-    _handleNodeMouseDown = (e) => {
+    _handleNodeMouseDown = (e) => { // Arrow function binds 'this'
         const nodeEl = e.currentTarget;
-        console.log(`[Visualizer DragStart] Mousedown on node ${nodeEl.dataset.stepId}`);
-        if (e.button !== 0 || e.target.closest('.node-actions button, .node-content')) {
+        logger.debug(`[Visualizer DragStart] Mousedown on node ${nodeEl.dataset.stepId}`);
+        // Allow drag only from header, not content or specific action buttons
+        if (e.button !== 0 || !e.target.closest('.node-header') || e.target.closest('button')) {
             return;
         }
 
         this.isDraggingNode = true;
         this.draggedNode = nodeEl;
         nodeEl.classList.add(NODE_DRAGGING_CLASS);
-        if (this.canvas) this.canvas.classList.add('nodes-dragging');
+        if (this.canvas) this.canvas.classList.add('nodes-dragging'); // Add class to canvas
 
         const rect = nodeEl.getBoundingClientRect();
         const mountRect = this.mountPoint.getBoundingClientRect();
 
+        // Calculate offset relative to the node's top-left corner
         this.dragOffsetX = e.clientX - rect.left;
         this.dragOffsetY = e.clientY - rect.top;
 
-        this.dragStartX = e.clientX;
+        this.dragStartX = e.clientX; // Store initial mouse position
         this.dragStartY = e.clientY;
 
-        this.isPanning = false;
-        this.mountPoint.style.cursor = 'grabbing';
+        this.isPanning = false; // Prevent panning during node drag
+        this.mountPoint.style.cursor = 'grabbing'; // Change cursor for mount point
 
         document.addEventListener('mousemove', this._handleMouseMove);
         document.addEventListener('mouseup', this._handleMouseUp);
@@ -748,30 +862,26 @@ export class FlowVisualizer {
         const newPageX = e.clientX;
         const newPageY = e.clientY;
         const mountRect = this.mountPoint.getBoundingClientRect();
+
+        // Calculate new position relative to the canvas, considering scroll and drag offset
         let newX = newPageX - mountRect.left + this.mountPoint.scrollLeft - this.dragOffsetX;
         let newY = newPageY - mountRect.top + this.mountPoint.scrollTop - this.dragOffsetY;
 
+        // Directly update style, remove internal data update
         this.draggedNode.style.left = `${newX}px`;
         this.draggedNode.style.top = `${newY}px`;
-        this.draggedNode.style.zIndex = '1001';
+        this.draggedNode.style.zIndex = '1001'; // Keep on top while dragging
 
         const stepId = this.draggedNode.dataset.stepId;
         const nodeData = this.nodes.get(stepId);
-        if (nodeData) {
-            const originalX = nodeData.x;
-            const originalY = nodeData.y;
-            nodeData.x = newX;
-            nodeData.y = newY;
 
-            try {
-                this._updateNodeConnectors(nodeData);
-            } finally {
-                nodeData.x = originalX;
-                nodeData.y = originalY;
-            }
+        if (nodeData) {
+            // Update connectors based on the current visual position (using the modified _getPortPosition)
+            this._updateNodeConnectors(nodeData);
         }
     }
 
+    /** Updates connectors attached to a specific node, using orthogonal path logic */
     _updateNodeConnectors(nodeData) {
         if (!nodeData || !this.svgConnectors) return;
         const stepId = nodeData.id;
@@ -796,78 +906,115 @@ export class FlowVisualizer {
                         throw new Error(`Invalid port positions during connector update: Start(${startPos.x},${startPos.y}), End(${endPos.x},${endPos.y})`);
                     }
 
-                    let pathData;
-                    const dx = endPos.x - startPos.x;
-                    const dy = endPos.y - startPos.y;
-                    const midX = startPos.x + dx / 2;
+                    // --- Start: Orthogonal Path Calculation ---
+                    let pathData = '';
+                    const hPadding = 20;
+                    const inputExtend = 15;
 
-                    if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
-                        const vSegLength = Math.max(10, Math.min(30, Math.abs(dy) / 3));
-                        pathData = `M ${startPos.x} ${startPos.y} L ${startPos.x} ${startPos.y + vSegLength} L ${endPos.x - H_SPACING/2} ${startPos.y + vSegLength} L ${endPos.x - H_SPACING/2} ${endPos.y} L ${endPos.x} ${endPos.y}`;
-                    } else if (startPortType === 'output' && endPortType === 'input') {
-                        pathData = `M ${startPos.x} ${startPos.y} L ${midX} ${startPos.y} L ${midX} ${endPos.y} L ${endPos.x} ${endPos.y}`;
+                    if (startPortType === 'output' && endPortType === 'input') {
+                        const midX = startPos.x + hPadding;
+                        pathData = `M ${startPos.x} ${startPos.y} L ${midX} ${startPos.y} L ${midX} ${endPos.y} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
+                    } else if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
+                        const vSegLength = Math.max(20, V_SPACING / 2);
+                        pathData = `M ${startPos.x} ${startPos.y} V ${startPos.y + vSegLength} H ${endPos.x - inputExtend} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
                     } else {
-                        const hSegLengthBase = Math.max(5, Math.abs(dx) / 4);
-                        const hSegLength = Math.min(30, hSegLengthBase);
-                        const startXCtrl = startPos.x + (dx >= 0 ? hSegLength : -hSegLength);
-                        const endXCtrl = endPos.x - (dx >= 0 ? hSegLength : -hSegLength);
-                        const effectiveStartXCtrl = (dx >= 0) ? Math.min(startXCtrl, startPos.x + Math.max(0, dx / 2)) : Math.max(startXCtrl, startPos.x + Math.min(0, dx / 2));
-                        const effectiveEndXCtrl = (dx >= 0) ? Math.max(endXCtrl, endPos.x - Math.max(0, dx / 2)) : Math.min(endXCtrl, endPos.x - Math.min(0, dx / 2));
-                        pathData = `M ${startPos.x} ${startPos.y} C ${effectiveStartXCtrl} ${startPos.y}, ${effectiveEndXCtrl} ${endPos.y}, ${endPos.x} ${endPos.y}`;
+                        const midX = startPos.x + hPadding;
+                        pathData = `M ${startPos.x} ${startPos.y} L ${midX} ${startPos.y} L ${midX} ${endPos.y} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
                     }
+                    // --- End: Orthogonal Path Calculation ---
 
                     path.setAttribute('d', pathData);
                 } catch (error) {
-                    console.error(`Error updating connector d attribute for path ${fromId}->${toId}:`, error);
+                    logger.error(`Error updating connector d attribute for path ${fromId}->${toId}:`, error);
                 }
             } else {
-                console.warn(`Skipping connector update for ${fromId}->${toId}: Missing node data for start or end.`);
+                logger.warn(`Skipping connector update for ${fromId}->${toId}: Missing node data for start or end.`);
             }
         });
     }
 
-    _handleNodeDragEnd(e) {
-        const draggedNodeAtStart = this.draggedNode;
+
+    // --- UPDATED: _handleNodeDragEnd with Logging ---
+     _handleNodeDragEnd(e) {
+        const draggedNodeAtStart = this.draggedNode; // Store ref before potential reset
         const sourceId = draggedNodeAtStart?.dataset?.stepId;
-        console.log(`[Visualizer DragEnd] Mouseup detected. Dragged node ID: ${sourceId}`);
+        logger.debug(`[Visualizer DragEnd] Mouseup detected. Dragged node ID: ${sourceId}`);
+
+        // Capture final position from style
+        const finalX = parseFloat(draggedNodeAtStart?.style?.left || '0');
+        const finalY = parseFloat(draggedNodeAtStart?.style?.top || '0');
+         // +++ ADD LOGGING +++
+        logger.debug(`[Visualizer DragEnd] Calculated final position from style: (${finalX}, ${finalY})`);
+        // +++ END LOGGING +++
+
+
         try {
-            if (!draggedNodeAtStart || !sourceId) return;
+            if (!draggedNodeAtStart || !sourceId) {
+                logger.warn("[Visualizer DragEnd] No valid node was being dragged.");
+                return;
+            }
 
-            const finalX = parseFloat(draggedNodeAtStart.style.left || '0');
-            const finalY = parseFloat(draggedNodeAtStart.style.top || '0');
-
+            // --- Check if position is valid AND callback exists ---
             if (!isNaN(finalX) && !isNaN(finalY) && this.options.onNodeLayoutUpdate) {
-                console.log(`[Visualizer DragEnd] Calling onNodeLayoutUpdate for ${sourceId} at (${finalX}, ${finalY})`);
+                 // +++ ADD LOGGING +++
+                logger.debug(`[Visualizer DragEnd] BEFORE calling onNodeLayoutUpdate for ${sourceId} with: x=${finalX}, y=${finalY}`);
+                // +++ END LOGGING +++
                 try {
+                    // Call the callback to update the application state (model)
                     this.options.onNodeLayoutUpdate(sourceId, finalX, finalY);
+                    // +++ ADD LOGGING +++
+                    logger.debug(`[Visualizer DragEnd] AFTER calling onNodeLayoutUpdate successfully for ${sourceId}.`);
+                    // +++ END LOGGING +++
+
+
+                    // Update the visualizer's internal state as well AFTER successful callback
+                    const nodeData = this.nodes.get(sourceId);
+                    if (nodeData) {
+                        nodeData.x = finalX;
+                        nodeData.y = finalY;
+                        logger.debug(`[Visualizer DragEnd] Updated internal nodeData for ${sourceId} to (${finalX}, ${finalY})`);
+                    } else {
+                         logger.warn(`[Visualizer DragEnd] Could not find internal nodeData for ${sourceId} to update its position.`);
+                    }
+
                 } catch (callbackError) {
-                    console.error("Error in onNodeLayoutUpdate callback:", callbackError);
+                    logger.error("Error in onNodeLayoutUpdate callback:", callbackError);
+                    // Revert visual position if callback failed
                     const originalNodeData = this.nodes.get(sourceId);
                     if (originalNodeData && draggedNodeAtStart) {
                         draggedNodeAtStart.style.left = `${originalNodeData.x}px`;
                         draggedNodeAtStart.style.top = `${originalNodeData.y}px`;
+                         // Also redraw connectors based on reverted position
+                         this._updateNodeConnectors(originalNodeData);
                     }
                 }
             } else {
-                const originalNodeData = this.nodes.get(sourceId);
-                if (originalNodeData && draggedNodeAtStart) {
-                    draggedNodeAtStart.style.left = `${originalNodeData.x}px`;
-                    draggedNodeAtStart.style.top = `${originalNodeData.y}px`;
-                }
+                 // If callback doesn't exist or position is invalid, revert visual position
+                 logger.warn("[Visualizer DragEnd] Invalid position or no layout update callback. Reverting visual position.");
+                 const originalNodeData = this.nodes.get(sourceId);
+                 if (originalNodeData && draggedNodeAtStart) {
+                     draggedNodeAtStart.style.left = `${originalNodeData.x}px`;
+                     draggedNodeAtStart.style.top = `${originalNodeData.y}px`;
+                     // Also redraw connectors based on reverted position
+                     this._updateNodeConnectors(originalNodeData);
+                 }
             }
         } catch (error) {
-            console.error("Error during node drag end logic:", error);
-            if (draggedNodeAtStart && sourceId) {
-                const originalNodeData = this.nodes.get(sourceId);
-                if (originalNodeData) {
-                    draggedNodeAtStart.style.left = `${originalNodeData.x}px`;
-                    draggedNodeAtStart.style.top = `${originalNodeData.y}px`;
-                }
-            }
+            logger.error("Error during node drag end logic:", error);
+             // General error handling: attempt to revert visual position
+             if (draggedNodeAtStart && sourceId) {
+                 const originalNodeData = this.nodes.get(sourceId);
+                 if (originalNodeData) {
+                     draggedNodeAtStart.style.left = `${originalNodeData.x}`;
+                     draggedNodeAtStart.style.top = `${originalNodeData.y}`;
+                      this._updateNodeConnectors(originalNodeData);
+                 }
+             }
         } finally {
+             // Cleanup
             if (draggedNodeAtStart) {
                 draggedNodeAtStart.classList.remove(NODE_DRAGGING_CLASS);
-                draggedNodeAtStart.style.zIndex = '';
+                draggedNodeAtStart.style.zIndex = ''; // Reset z-index
             }
             if (this.canvas) this.canvas.classList.remove('nodes-dragging');
             if (this.mountPoint) this.mountPoint.style.cursor = 'grab';
@@ -877,8 +1024,12 @@ export class FlowVisualizer {
 
             document.removeEventListener('mousemove', this._handleMouseMove);
             document.removeEventListener('mouseup', this._handleMouseUp);
+             // +++ ADD LOGGING +++
+             logger.debug("[Visualizer DragEnd] Cleanup complete.");
+             // +++ END LOGGING +++
         }
     }
+    // --- END UPDATED _handleNodeDragEnd ---
 
     // --- Runner Highlighting ---
 
@@ -888,50 +1039,58 @@ export class FlowVisualizer {
      * @param {string} [highlightType='active'] - The type of highlight ('active', 'success', 'error', 'stopped').
      */
     highlightNode(stepId, highlightType = 'active') {
-        this.clearHighlights();
+        this.clearHighlights(); // Clear previous before applying new
 
         const nodeData = this.nodes.get(stepId);
         if (!nodeData || !nodeData.element) {
-            console.warn(`Highlight Error: Node data or element not found for step ${stepId}.`);
+            logger.warn(`Highlight Error: Node data or element not found for step ${stepId}.`);
             return;
         }
 
         try {
-            const highlightClass = highlightType === 'active' ? 'active-step'
-                                : highlightType === 'success' ? 'success'
-                                : highlightType === 'error' ? 'error'
-                                : highlightType === 'stopped' ? 'stopped'
-                                : highlightType;
+             // Determine the CSS class based on highlightType
+             const highlightClass = highlightType === 'active' ? 'active-step'
+                                 : highlightType === 'success' ? 'success'
+                                 : highlightType === 'error' ? 'error'
+                                 : highlightType === 'stopped' ? 'stopped'
+                                 : highlightType; // Allow passing custom class names directly
 
-            nodeData.element.classList.add(highlightClass);
+             // Add class to the node element
+             nodeData.element.classList.add(highlightClass);
 
-            // Only call scrollIntoView if it exists (for JSDOM compatibility)
+            // Scroll node into view if necessary
             if (typeof nodeData.element.scrollIntoView === 'function') {
                 try {
                     nodeData.element.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
                 } catch (scrollError) {
-                    try { nodeData.element.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' }); } catch (fallbackError) {}
+                     // Fallback for browsers that don't support smooth scrolling well with options
+                     try { nodeData.element.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'nearest' }); }
+                     catch (fallbackError) { logger.warn("ScrollIntoView failed:", fallbackError); }
                 }
             }
 
+            // Highlight the incoming connector path and arrowhead
             const connectorPath = this.svgConnectors?.querySelector(`.${CONNECTOR_CLASS}[data-to="${stepId}"]`);
             if (connectorPath) {
-                connectorPath.classList.add(CONNECTOR_ACTIVE_CLASS);
-                connectorPath.classList.add(`status-${highlightType}`);
+                 const statusClass = `status-${highlightType}`; // Map highlightType to status- class
+                 connectorPath.classList.add(CONNECTOR_ACTIVE_CLASS); // General active state
+                 connectorPath.classList.add(statusClass); // Specific status state
 
-                const markerId = connectorPath.getAttribute('marker-end')?.replace(/url\(#|\)/g, '');
-                if (markerId && this.defs) {
-                    const markerPath = this.defs.querySelector(`#${markerId} path.connector-arrowhead`);
-                    if (markerPath) {
-                        markerPath.classList.add('active-arrowhead');
-                        markerPath.classList.add(`status-${highlightType}`);
-                    }
-                }
+                 // Highlight the arrowhead via its marker definition
+                 const markerId = connectorPath.getAttribute('marker-end')?.replace(/url\(#|\)/g, '');
+                 if (markerId && this.defs) {
+                     const markerPath = this.defs.querySelector(`#${markerId} path.connector-arrowhead`);
+                     if (markerPath) {
+                         markerPath.classList.add('active-arrowhead');
+                         markerPath.classList.add(statusClass);
+                     }
+                 }
             }
         } catch (error) {
-            console.error(`Error applying highlight (type: ${highlightType}) to node ${stepId}:`, error);
+            logger.error(`Error applying highlight (type: ${highlightType}) to node ${stepId}:`, error);
         }
     }
+
 
     /** Removes all runner-related highlights from nodes and connectors. */
     clearHighlights() {
@@ -939,22 +1098,24 @@ export class FlowVisualizer {
             const highlightClasses = ['active-step', 'success', 'error', 'stopped'];
             const statusClasses = ['status-active', 'status-success', 'status-error', 'status-stopped'];
 
+            // Clear node highlights and runtime info
             this.nodes.forEach(nodeData => {
                 if (nodeData.element) {
                     nodeData.element.classList.remove(...highlightClasses);
-
                     const runtimeInfoDiv = nodeData.element.querySelector('.node-runtime-details');
                     if (runtimeInfoDiv) {
-                        runtimeInfoDiv.innerHTML = '';
+                        runtimeInfoDiv.innerHTML = ''; // Clear runtime info display
                     }
                 }
             });
 
+            // Clear connector path highlights
             if (this.svgConnectors) {
                 this.svgConnectors.querySelectorAll(`.${CONNECTOR_CLASS}`).forEach(path => {
                     path.classList.remove(CONNECTOR_ACTIVE_CLASS, ...statusClasses);
                 });
             }
+            // Clear connector arrowhead highlights
             if (this.defs) {
                 this.defs.querySelectorAll(`.connector-arrowhead`).forEach(markerPath => {
                     markerPath.classList.remove('active-arrowhead', ...statusClasses);
@@ -962,9 +1123,10 @@ export class FlowVisualizer {
             }
 
         } catch (error) {
-            console.error("Error clearing highlights:", error);
+            logger.error("Error clearing highlights:", error);
         }
     }
+
 
     /**
      * Updates a node in the visualizer to display runtime information (e.g., status, extracted vars).
@@ -978,71 +1140,87 @@ export class FlowVisualizer {
     updateNodeRuntimeInfo(stepId, result) {
         const nodeData = this.nodes.get(stepId);
         if (!nodeData || !nodeData.element || !nodeData.step) {
-            console.warn(`[Vis UpdateInfo] Node data/element/step not found for ID: ${stepId}`);
+            logger.warn(`[Vis UpdateInfo] Node data/element/step not found for ID: ${stepId}`);
             return;
         }
 
         const runtimeInfoDiv = nodeData.element.querySelector('.node-runtime-details');
         if (!runtimeInfoDiv) {
-            console.warn(`[Vis UpdateInfo] Node runtime details container not found for ID: ${stepId}`);
+            logger.warn(`[Vis UpdateInfo] Node runtime details container not found for ID: ${stepId}`);
             return;
         }
 
-        runtimeInfoDiv.innerHTML = '';
-        let detailsParts = [];
+        runtimeInfoDiv.innerHTML = ''; // Clear previous info
+        let detailsParts = []; // Array to hold HTML parts
 
+        // --- Specific Info for Request Steps ---
         if (nodeData.step.type === 'request') {
-            let infoHtml = '';
-            let hasInfo = false;
+            let requestInfoHtml = '';
+            let hasRequestInfo = false;
 
+            // Display HTTP Status Code
             if (result.output && result.output.status !== undefined && result.output.status !== null) {
                 const statusClass = result.output.status >= 400 ? 'error' : (result.output.status >= 300 ? 'warn' : 'success');
-                infoHtml += `<span class="info-item status-${statusClass}">Status: <strong>${escapeHTML(result.output.status)}</strong></span>`;
-                hasInfo = true;
-            } else if (result.status === 'error') {
-                infoHtml += `<span class="info-item error">Request Error</span>`;
-                hasInfo = true;
+                requestInfoHtml += `<span class="info-item status-${statusClass}">Status: <strong>${escapeHTML(result.output.status)}</strong></span>`;
+                hasRequestInfo = true;
+            } else if (result.status === 'error') { // Display general error if no output status
+                 requestInfoHtml += `<span class="info-item error">Request Error</span>`;
+                 hasRequestInfo = true;
             }
 
+            // Display Extraction Status
             const hasConfiguredExtractions = nodeData.step.extract && Object.keys(nodeData.step.extract).length > 0;
-            let extractionStatus = 'N/A';
+            let extractionStatus = 'N/A'; // Not Applicable if no extractions configured
             let extractionStatusClass = 'neutral';
 
             if (hasConfiguredExtractions) {
-                if (result.extractionFailures && result.extractionFailures.length > 0) {
-                    extractionStatus = 'Failed';
-                    extractionStatusClass = 'error';
+                if (result.status === 'success' || (result.status === 'error' && nodeData.step.onFailure === 'continue')) {
+                     // Show extraction status only if the request completed (even if non-2xx but continuing)
+                    if (result.extractionFailures && result.extractionFailures.length > 0) {
+                        extractionStatus = 'Failed';
+                        extractionStatusClass = 'error';
+                    } else {
+                        extractionStatus = 'OK';
+                        extractionStatusClass = 'success';
+                    }
                 } else {
-                    extractionStatus = 'OK';
-                    extractionStatusClass = 'success';
+                     extractionStatus = 'Skipped'; // Skipped if request errored and stopped
+                     extractionStatusClass = 'neutral';
                 }
             }
 
+            // Add extraction status if applicable
             if (extractionStatus !== 'N/A') {
-                infoHtml += `<span class="info-item extract-${extractionStatusClass}">Extract: <strong>${extractionStatus}</strong></span>`;
-                hasInfo = true;
+                requestInfoHtml += `<span class="info-item extract-${extractionStatusClass}">Extract: <strong>${extractionStatus}</strong></span>`;
+                hasRequestInfo = true;
             }
 
-            if (hasInfo) {
-                detailsParts.push(infoHtml);
+            if (hasRequestInfo) {
+                detailsParts.push(requestInfoHtml);
             }
-        } else if (result.status === 'error' && nodeData.step.type !== 'request') {
+        }
+        // --- General Error Info for Non-Request Steps ---
+        else if (result.status === 'error') {
             detailsParts.push('<span class="info-item error">Step Error</span>');
         }
 
-        // --- Show loop iteration progress in runtime info ---
+        // --- Loop Iteration Info (if applicable, based on custom result properties) ---
+        // Check for properties potentially added by a custom onStepComplete handler
         const iter = result.currentIteration ?? result.loopIteration;
         const tot  = result.totalIterations ?? result.loopTotal;
-        if (iter !== undefined && tot !== undefined) {
-            detailsParts.push(`<span class="info-item loop-iteration">${iter}/${tot}</span>`);
-        }
-        // --- Show status indicator for running state ---
-        if (result.status === 'running') {
-            detailsParts.push('<span class="status-indicator status-running"></span>');
+        if (iter !== undefined && tot !== undefined && typeof iter === 'number' && typeof tot === 'number') {
+            detailsParts.push(`<span class="info-item loop-iteration">Iter: ${iter + 1}/${tot}</span>`);
         }
 
-        runtimeInfoDiv.innerHTML = detailsParts.join(' · ');
+        // --- General Status Indicator (Optional, could be redundant with border) ---
+        // if (result.status === 'running') {
+        //     detailsParts.push('<span class="status-indicator status-running">Running...</span>');
+        // }
+
+        // --- Combine and Render ---
+        runtimeInfoDiv.innerHTML = detailsParts.join(' · '); // Use a separator
     }
+
 
     /** Optional: Clean up listeners when the component is destroyed. */
     destroy() {
@@ -1050,130 +1228,116 @@ export class FlowVisualizer {
             this.resizeObserver.disconnect();
             this.resizeObserver = null;
         }
+        // Remove dynamically added document listeners
         document.removeEventListener('mousemove', this._handleMouseMove);
         document.removeEventListener('mouseup', this._handleMouseUp);
 
+        // Remove listeners attached to the mount point itself
         this.mountPoint?.removeEventListener('mousedown', this._handleMouseDown);
+        // Remove listeners attached to nodes (more complex, requires iterating nodes if needed)
+        this.nodes?.forEach(nodeData => { // Add safe navigation
+            if (nodeData.element) {
+                nodeData.element.removeEventListener('mousedown', this._handleNodeMouseDown);
+                // Assuming handleNodeClick is an instance method or bound function
+                nodeData.element.removeEventListener('click', (e) => this.handleNodeClick(e, nodeData.id));
+                 // Remove button listeners if they were attached individually
+                 const delBtn = nodeData.element.querySelector('.btn-delete-node');
+                 if (delBtn) {
+                     // Need a way to remove the specific listener added in _createNodeElement
+                     // This might require storing listener references or using a different approach
+                     // For now, this won't remove the specific listener effectively
+                 }
+                 const toggleBtn = nodeData.element.querySelector('.btn-toggle-collapse');
+                 if (toggleBtn) {
+                      // Similar issue as delete button listener removal
+                 }
+            }
+        });
 
         clearTimeout(this.debounceTimer);
 
-        this.clear();
+        this.clear(); // Clears nodes map, canvas, svg
+        // Nullify properties
         this.nodes = null;
         this.flowModel = null;
         this.svgConnectors = null;
         this.canvas = null;
         this.defs = null;
         this.draggedNode = null;
+        this.options = null; // Release options/callbacks
 
-        if (this.mountPoint) this.mountPoint.innerHTML = '';
+        if (this.mountPoint) this.mountPoint.innerHTML = ''; // Clear mount point content
         this.mountPoint = null;
 
-        console.log("FlowVisualizer destroyed.");
+        logger.info("FlowVisualizer destroyed.");
     }
 
-    handleNodeClick(event, nodeId) {
+    // --- Bound Event Handlers for Click/Delete (to handle 'this' context) ---
+    // Method used as a listener
+    handleNodeClick = (event, nodeId) => { // Use arrow function for auto-binding 'this'
+        // Prevent selection if dragging just ended on this element
+        const dx = Math.abs(event.clientX - this.dragStartX);
+        const dy = Math.abs(event.clientY - this.dragStartY);
+        if (this.isDraggingNode || dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+            // If it looks like a drag happened, don't treat it as a click for selection
+            return;
+        }
+
         if (this.options.onNodeSelect) {
             this.options.onNodeSelect(nodeId);
         }
-        this.selectedNodeId = nodeId;
-        this.render(this.flowModel, nodeId); // Pass current flowModel and nodeId
+        // The main render call handles the visual selection based on appState.selectedStepId
     }
 
-    handleDeleteClick(event, nodeId) {
-        event.stopPropagation();
+    // Method used as a listener
+    handleDeleteClick = (event, nodeId) => { // Use arrow function for auto-binding 'this'
+        event.stopPropagation(); // Prevent triggering node selection
         if (this.options.onDeleteStep) {
             this.options.onDeleteStep(nodeId);
         }
     }
-
-    createLoopNode(step) {
-        const label = step.type === 'loop' ? 'Process Items' : step.label || 'Unknown Step';
-        // ...existing code...
-    }
-
-    updateRuntimeState(nodeId, state) {
-        if (state.type === 'loop') {
-            const node = this.nodes.get(nodeId);
-            if (node) {
-                node.iterationCount = state.iteration;
-                node.totalIterations = state.total;
-                this.render();
-            }
-        }
-    }
-
-    setCollapsedState(nodeId, collapsed) {
-        const node = this.nodes.get(nodeId);
-        if (node) {
-            node.collapsed = collapsed;
-            this.persistCollapsedStates();
-            this.render();
-        }
-    }
-
-    persistCollapsedStates() {
-        const states = {};
-        this.nodes.forEach(node => {
-            if (node.collapsed) {
-                states[node.id] = true;
-            }
-        });
-        localStorage.setItem('flowVisualizer.collapsedStates', JSON.stringify(states));
-    }
-
-    loadCollapsedStates() {
-        try {
-            const states = JSON.parse(localStorage.getItem('flowVisualizer.collapsedStates') || '{}');
-            this.nodes.forEach(node => {
-                if (states[node.id]) {
-                    node.collapsed = true;
-                }
-            });
-        } catch (e) {
-            console.warn('Failed to load collapsed states:', e);
-        }
-    }
+    // --- End Bound Handlers ---
 
     // --- Helper: Find step by id (depth-first) ---
     _findStepById(steps, id) {
+        if (!steps || !Array.isArray(steps)) return null; // Added check for steps array
         for (const step of steps) {
             if (step.id === id) return step;
-            if (step.thenSteps) {
-                const found = this._findStepById(step.thenSteps, id);
+            let found = null;
+            if (step.type === 'condition') {
+                found = this._findStepById(step.thenSteps || [], id); // Use default empty array
                 if (found) return found;
-            }
-            if (step.elseSteps) {
-                const found = this._findStepById(step.elseSteps, id);
+                found = this._findStepById(step.elseSteps || [], id);
                 if (found) return found;
-            }
-            if (step.loopSteps) {
-                const found = this._findStepById(step.loopSteps, id);
+            } else if (step.type === 'loop') {
+                found = this._findStepById(step.loopSteps || [], id);
                 if (found) return found;
             }
         }
         return null;
     }
 
+
     // --- Helper: Collect all descendant step IDs (recursive) ---
     _collectDescendantIds(step, acc = new Set()) {
-        if (step.thenSteps) {
-            for (const s of step.thenSteps) {
-                acc.add(s.id);
-                this._collectDescendantIds(s, acc);
-            }
+        const collect = (steps) => {
+             if (!steps || !Array.isArray(steps)) return;
+             for (const s of steps) {
+                 if (!acc.has(s.id)) { // Avoid infinite loops in case of bad data
+                     acc.add(s.id);
+                     this._collectDescendantIds(s, acc); // Recurse using the instance method
+                 }
+             }
+        };
+
+        if (step.type === 'condition') {
+            collect(step.thenSteps);
+            collect(step.elseSteps);
+        } else if (step.type === 'loop') {
+            collect(step.loopSteps);
         }
-        if (step.elseSteps) {
-            for (const s of step.elseSteps) {
-                acc.add(s.id);
-                this._collectDescendantIds(s, acc);
-            }
-        }
-        if (step.loopSteps) {
-            for (const s of step.loopSteps) {
-                acc.add(s.id);
-                this._collectDescendantIds(s, acc);
-            }
-        }
-        return acc;
+        // No collection needed for 'request' or other simple types
+
+        return acc; // Return the accumulated set
     }
 }

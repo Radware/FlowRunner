@@ -1,49 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Force latest IE rendering engine or Chrome Frame -->
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <!-- Recommended practice for Electron apps -->
-    <!-- MODIFIED: Added https://*.radware.net to connect-src -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: assets:; connect-src 'self' http://* https://*; "><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: assets:; connect-src 'self' http://* https://*; ">    <title>FlowRunner</title>
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: assets:; connect-src 'self' http://* https://*; ">
+    <title>FlowRunner</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
     <div class="app-container">
         <!-- Sidebar: Flow List & Management -->
-        <aside class="sidebar collapsible-pane" id="sidebar"> <!-- Added class -->
-            <!-- --- [New Code] --- Branding Element -->
+        <aside class="sidebar collapsible-pane" id="sidebar">
+            <!-- Branding Element -->
             <div class="app-branding">
-              <img src="assets/ase-logo.png" alt="Radware ASE Group Logo" class="ase-logo">
-              <svg class="flow-icon" viewBox="0 0 24 24" width="24" height="24" title="FlowRunner">
-                <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
-                <!-- Add colored circles for nodes -->
-                <circle cx="18" cy="4" r="2" fill="#4CAF50"/>
-                <circle cx="6" cy="12" r="2" fill="#FFC107"/>
-                <circle cx="18" cy="20" r="2" fill="#F44336"/>
-              </svg>
-              <span class="app-name-text">FlowRunner</span>
+                <img src="assets/ASE-logo.svg" alt="Radware ASE Group Logo" class="ase-logo">
+                <!-- Removed the SVG graphic between logo and FlowRunner -->
+                <span class="app-name-text">FlowRunner</span>
             </div>
-            <!-- --- End [New Code] --- -->
-            <div class="sidebar-header"> <!-- New wrapper for header content -->
+            <!-- Sidebar Header -->
+            <div class="sidebar-header">
                 <h2>Recent Flows</h2>
-                <!-- Toggle Button -->
                 <button class="btn-toggle-collapse sidebar-toggle" id="sidebar-toggle-btn" title="Toggle Sidebar">
                     <svg viewBox="0 0 24 24" width="24" height="24">
-                        <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/>
+                        <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z" />
                     </svg>
                 </button>
             </div>
-            <div class="sidebar-content"> <!-- New wrapper for existing content -->
+            <div class="sidebar-content">
                 <div class="sidebar-actions">
                     <button id="add-flow-btn" class="btn btn-primary">+ New Flow</button>
                     <button id="open-flow-btn" class="btn btn-secondary">Open Flow</button>
                 </div>
                 <div class="flow-list-container">
                     <ul id="flow-list" class="flow-list">
-                        <!-- Recent file items will be dynamically inserted here -->
                         <li class="loading-flows">Loading recent files...</li>
                     </ul>
                 </div>
@@ -54,139 +49,213 @@
         <main class="workspace" id="workspace">
             <div class="workspace-header">
                 <h2 id="workspace-title">Select or Create a Flow</h2>
-                 <!-- File Operation Buttons -->
-                 <div class="workspace-file-controls">
-                    <button id="save-flow-btn" class="btn btn-sm btn-primary" disabled title="Save current flow">Save</button>
-                    <button id="save-as-flow-btn" class="btn btn-sm btn-secondary" disabled title="Save current flow to a new file">Save As...</button>
-                 </div>
-                 <!-- View & Panel Toggles -->
+                <div class="workspace-file-controls">
+                    <button id="save-flow-btn" class="btn btn-sm btn-primary" disabled
+                        title="Save current flow (Ctrl+S)">Save</button>
+                    <button id="save-as-flow-btn" class="btn btn-sm btn-secondary" disabled
+                        title="Save current flow to a new file">Save As...</button>
+                    <button id="cancel-flow-btn" class="btn btn-sm btn-warning" disabled
+                        title="Cancel changes and revert to last saved">Cancel</button>
+                    <button id="close-flow-btn" class="btn btn-sm btn-danger" disabled
+                        title="Close the current flow">Close</button>
+                </div>
                 <div class="workspace-view-controls">
-                     <button id="toggle-view-btn" class="btn btn-sm btn-secondary" style="display: none;" title="Switch Views">Visual View</button>
-                     <button class="btn btn-sm btn-toggle-info" id="toggle-info-btn" style="display: none;" title="Show/Hide Flow Information">Info ▼</button>
-                     <button class="btn btn-sm btn-toggle-variables" id="toggle-variables-btn" style="display: none;" title="Show/Hide Defined Variables">
-                         <!-- Icon and text managed by JS/CSS -->
-                         <span class="toggle-icon">▲</span>
-                         <span class="btn-text"> Show Variables</span>
+                    <button id="toggle-view-btn" class="btn btn-sm btn-secondary" style="display: none;"
+                        title="Switch Views (Ctrl+3)">Visual View</button>
+                    <button class="btn btn-sm btn-toggle-info" id="toggle-info-btn" style="display: none;"
+                        title="Show/Hide Flow Information (Ctrl+1)">
+                        <span class="btn-text">Info</span>
+                        <span class="toggle-icon">▼</span>
+                    </button>
+                    <button class="btn btn-sm btn-toggle-variables" id="toggle-variables-btn" style="display: none;"
+                        title="Show/Hide Defined Variables (Ctrl+2)">
+                        <span class="btn-text">Show Variables</span>
+                        <span class="toggle-icon">▼</span>
                     </button>
                 </div>
             </div>
+
             <div class="workspace-content" id="workspace-content">
-                <!-- Placeholder shown when no flow is loaded -->
                 <div class="placeholder-message" id="workspace-placeholder">
-                     <p>Select a flow from the sidebar, or click "Open Flow" / "+ New Flow".</p>
+                    <p>Select a flow from the sidebar, or click "Open Flow" / "+ New Flow".</p>
                 </div>
 
-                <!-- FlowBuilderComponent renders its main UI here (List/Editor View) -->
-                 <div id="flow-builder-mount" class="view-mode list-editor-view">
-                    <!-- Builder content injected here, including its own info overlay structure -->
-                 </div>
+                <!-- MOVED & UPDATED: Flow Info Overlay Area -->
+                <div class="flow-info-overlay" data-ref="infoOverlay">
+                    <div class="info-header">
+                        <h4>Flow Information</h4>
+                        <button class="btn btn-sm btn-secondary" id="actual-close-info-btn">Close Info</button>
+                    </div>
+                    <div class="form-group">
+                        <label for="global-flow-name">Flow Name</label>
+                        <input type="text" id="global-flow-name" data-ref="flowNameInput" placeholder="Enter a name for this flow">
+                    </div>
+                    <div class="form-group">
+                        <label for="global-flow-description">Description</label>
+                        <textarea id="global-flow-description" data-ref="flowDescTextarea" rows="2" placeholder="Enter a description"></textarea>
+                    </div>
 
-                 <!-- Flow Visualizer renders its UI here (Node-Graph View) -->
-                 <div id="flow-visualizer-mount" class="view-mode node-graph-view">
-                     <!-- Visualizer content (SVG, Canvas) injected here -->
-                 </div>
+                    <div class="form-group global-headers-section">
+                        <button class="collapsible-header" data-ref="globalHeadersToggle">
+                            <span class="header-label">Global Headers</span>
+                            <span class="toggle-icon">▼</span>
+                        </button>
+                        <div class="collapsible-content" data-ref="globalHeadersContent">
+                            <div class="global-headers-list" data-ref="globalHeadersList">
+                                 <!-- Headers added dynamically -->
+                            </div>
+                            <button class="btn-add-global-header" data-ref="addGlobalHeaderBtn" style="margin-top: 10px;">+ Add Header</button>
+                        </div>
+                    </div>
 
-                 <!-- Message Area for Workspace/Builder -->
-                 <div class="flow-messages" id="builder-messages"></div>
-            </div>
-
-             <!-- Variables Panel (Positioned absolutely relative to workspace, content managed by builder/app) -->
-            <div class="variables-panel" id="variables-panel">
-                <div class="variables-header">
-                    <h4>Defined Variables</h4>
-                    <!-- Ensure this button simulates the main toggle click -->
-                    <button class="btn-close-panel" id="close-variables-panel" title="Close Variables Panel" onclick="document.getElementById('toggle-variables-btn')?.click();">✕</button>
+                    <div class="form-group flow-variables-section">
+                        <button class="collapsible-header" data-ref="flowVarsToggle">
+                            <span class="header-label">Flow Variables</span>
+                            <span class="toggle-icon">▼</span>
+                        </button>
+                        <div class="collapsible-content" data-ref="flowVarsContent">
+                            <div class="flow-vars-list" data-ref="flowVarsList">
+                                 <!-- Variables added dynamically -->
+                            </div>
+                            <button class="btn-add-flow-var" data-ref="addFlowVarBtn" style="margin-top: 10px;">+ Add Variable</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="variables-container" id="variables-container">
-                    <!-- Variables table content injected here -->
-                    <div class="no-variables-message"><p>No variables defined</p></div>
+                <!-- End MOVED -->
+
+                <!-- Variables Panel (matching info overlay structure) -->
+                <div class="variables-panel" data-ref="variablesPanel">
+                    <div class="variables-header">
+                        <h4>Variables</h4>
+                        <button class="btn btn-sm btn-secondary" id="actual-close-variables-btn">Close Variables</button>
+                    </div>
+                    <div class="variables-container" data-ref="variablesContainer">
+                        <!-- Variables content rendered here -->
+                    </div>
                 </div>
+
+                <div id="flow-builder-mount" class="view-mode list-editor-view">
+                    <!-- Builder content injected here -->
+                </div>
+
+                <div id="flow-visualizer-mount" class="view-mode node-graph-view">
+                    <!-- Visualizer content injected here -->
+                </div>
+
+                <div class="flow-messages" id="builder-messages"></div>
             </div>
         </main>
 
         <!-- Runner Panel: Flow Execution -->
-        <aside class="runner-panel collapsible-pane" id="runner-panel"> <!-- Added class -->
+        <aside class="runner-panel collapsible-pane" id="runner-panel">
             <div class="runner-header">
                 <h2>Flow Runner</h2>
-                 <!-- Toggle Button -->
-                 <button class="btn-toggle-collapse runner-toggle" id="runner-toggle-btn" title="Toggle Runner Panel">
+                <button class="btn-toggle-collapse runner-toggle" id="runner-toggle-btn" title="Toggle Runner Panel">
                     <svg viewBox="0 0 24 24" width="24" height="24">
-                        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/>
+                        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
                     </svg>
-                 </button>
-                 <button id="clear-results-btn" class="btn btn-secondary btn-sm" title="Clear execution results" disabled>Clear Results</button>
+                </button>
+                <button id="clear-results-btn" class="btn btn-secondary btn-sm" title="Clear execution results"
+                    disabled>Clear Results</button>
             </div>
-             <div class="runner-content"> <!-- New wrapper for existing content -->
+            <div class="runner-content">
                 <div class="runner-controls">
-                     <div class="control-group">
-                        <button id="run-flow-btn" class="btn btn-success" disabled title="Run the entire flow">▶ Run</button>
-                        <button id="step-flow-btn" class="btn btn-warning" disabled title="Execute the next step">Step</button>
-                        <button id="step-into-flow-btn" class="btn btn-warning" disabled style="display: none;" title="Step into nested steps (Not Implemented)">Step Into</button> <!-- Keep hidden until implemented -->
-                        <button id="stop-flow-btn" class="btn btn-danger" disabled title="Stop the current execution">⏹ Stop</button>
-                     </div>
-                     <div class="control-group delay-group">
+                    <div class="control-group">
+                        <button id="run-flow-btn" class="btn btn-success" disabled
+                            title="Run the entire flow (F5)">▶ Run</button>
+                        <button id="step-flow-btn" class="btn btn-warning" disabled
+                            title="Execute the next step (F10)">Step</button>
+                        <button id="step-into-flow-btn" class="btn btn-warning" disabled style="display: none;"
+                            title="Step into nested steps (Not Implemented)">Step Into</button>
+                        <button id="stop-flow-btn" class="btn btn-danger" disabled
+                            title="Stop the current execution (Esc)">⏹ Stop</button>
+                    </div>
+                    <div class="control-group">
+                        <input type="checkbox" id="continuous-run-checkbox" style="margin-right: 5px; accent-color: var(--primary-color);" disabled>
+                        <label for="continuous-run-checkbox" style="margin-right: 10px; cursor:pointer;" title="Run the flow repeatedly. The 'Delay (ms)' setting will be used as the delay between each full flow run.">Continuous Run</label>
+                    </div>
+                    <div class="control-group delay-group">
                         <label for="request-delay">Delay (ms):</label>
-                        <input type="number" id="request-delay" value="500" min="0" step="100" title="Delay between steps during 'Run' mode">
-                     </div>
+                        <input type="number" id="request-delay" value="500" min="0" step="100"
+                            title="Delay between steps during 'Run' mode, and between full runs in 'Continuous Run' mode">
+                    </div>
                 </div>
+
+                <!-- Runner Status Message Area -->
+                <div id="runner-status-messages" class="runner-status-messages">
+                    <!-- showMessage will populate this -->
+                </div>
+                <!-- End Runner Status Message Area -->
+
                 <div class="runner-results-container">
                     <h3>Execution Results</h3>
                     <ul id="runner-results" class="runner-results-list">
                         <li class="no-results">Run a flow to see results here.</li>
-                        <!-- Results will be dynamically added -->
                     </ul>
                 </div>
-             </div>
+            </div>
         </aside>
     </div>
 
-    <!-- Step Type Selection Dialog Structure (initially hidden, managed by app.js) -->
+    <!-- Step-Type Selection Dialog -->
     <div class="step-type-dialog" id="step-type-dialog" style="display: none;">
         <div class="step-type-container">
-          <div class="step-type-header">
-            <h3>Select Step Type</h3>
-            <button class="step-type-close" title="Close">✕</button>
-          </div>
-          <div class="step-type-options">
-            <div class="step-type-option" data-type="request" title="Make an HTTP request">
-              <div class="type-icon request-icon"><!-- SVG injected by JS --></div>
-              <h4>API Request</h4>
-              <p>Call an external API endpoint.</p>
+            <div class="step-type-header">
+                <h3>Select Step Type</h3>
+                <button class="step-type-close" title="Close">✕</button>
             </div>
-            <div class="step-type-option" data-type="condition" title="Branch based on a condition">
-              <div class="type-icon condition-icon"><!-- SVG injected by JS --></div>
-              <h4>Condition (If/Else)</h4>
-              <p>Execute steps based on data.</p>
+            <div class="step-type-options">
+                <div class="step-type-option" data-type="request" title="Make an HTTP request">
+                    <div class="type-icon request-icon"></div>
+                    <h4>API Request</h4>
+                    <p>Call an external API endpoint.</p>
+                </div>
+                <div class="step-type-option" data-type="condition" title="Branch based on a condition">
+                    <div class="type-icon condition-icon"></div>
+                    <h4>Condition (If/Else)</h4>
+                    <p>Execute steps based on data.</p>
+                </div>
+                <div class="step-type-option" data-type="loop" title="Iterate over an array">
+                    <div class="type-icon loop-icon"></div>
+                    <h4>Loop (For Each)</h4>
+                    <p>Repeat steps for items in a list.</p>
+                </div>
             </div>
-            <div class="step-type-option" data-type="loop" title="Iterate over an array">
-              <div class="type-icon loop-icon"><!-- SVG injected by JS --></div>
-              <h4>Loop (For Each)</h4>
-              <p>Repeat steps for items in a list.</p>
-            </div>
-          </div>
         </div>
-      </div>
-
-    <!-- Variable Insertion Dropdown Structure (initially hidden, managed by app.js) -->
-    <div class="var-dropdown" id="var-dropdown" style="display: none; position: absolute;">
-        <div class="var-dropdown-header">
-          <input type="text" class="var-search" placeholder="Search variables...">
-          <button class="var-close" title="Close">✕</button>
-        </div>
-        <div class="var-list">
-          <!-- Variable items added dynamically -->
-        </div>
-        <div class="no-results-msg" style="display: none; padding: 8px 12px; color: #888; text-align: center;">No matching variables</div>
-      </div>
-
-    <!-- Global Loading Overlay (Managed by JS) -->
-    <div class="loading-overlay global-loading" id="global-loading-overlay" style="display: none;">
-      <div class="loading-spinner"></div>
-      <div class="loading-text">Processing...</div>
     </div>
 
-    <!-- Main Application Script (Ensure type="module") -->
+    <!-- Variable Insertion Dropdown -->
+    <div class="var-dropdown" id="var-dropdown" style="display: none; position: absolute;">
+        <div class="var-dropdown-header">
+            <input type="text" class="var-search" placeholder="Search variables...">
+            <button class="var-close" title="Close">✕</button>
+        </div>
+        <div class="var-list"></div>
+        <div class="no-results-msg" style="display: none;">No matching variables</div>
+    </div>
+
+    <!-- Global Loading Overlay -->
+    <div class="loading-overlay global-loading" id="global-loading-overlay" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Processing...</div>
+    </div>
+
+    <!-- NEW: Update Info Dialog -->
+    <div class="update-info-dialog" id="update-info-dialog" style="display: none;">
+        <div class="update-info-container">
+            <div class="update-info-header">
+                <h3 class="update-info-title">Update Information</h3>
+                <button class="update-info-close" title="Close">✕</button>
+            </div>
+            <div class="update-info-body">
+                <p class="update-info-message">Checking for updates...</p>
+                <!-- Content will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+    <!-- End Update Info Dialog -->
+
     <script type="module" src="app.js"></script>
-    <!-- Other modules (flowCore, flowBuilderComponent, flowStepComponents, flowRunner, flowVisualizer) are imported by app.js -->
 </body>
+
 </html>

@@ -22,6 +22,7 @@ import {
   escapeRegExp // General utility
 } from './flowCore.js'; // <--- Ensure this path is correct
 
+import { logger } from './logger.js';
 
 /**
  * Render a flow step element for the steps list view.
@@ -62,12 +63,12 @@ export function renderStep(step, options) {
   const header = document.createElement('div');
   header.className = 'flow-step-header';
   header.innerHTML = `
-    <div class="flow-step-drag-handle" title="Drag to reorder">☰</div>
-    <div class="flow-step-icon">${getStepTypeIcon(step.type)}</div>
-    <div class="flow-step-title">${escapeHTML(step.name || 'Unnamed Step')}</div>
+    <span class="flow-step-drag-handle" title="Drag to reorder step" tabindex="0">☰</span>
+    <span class="flow-step-icon">${getStepTypeIcon(step.type)}</span>
+    <div class="flow-step-title" title="${escapeHTML(step.name || 'Unnamed Step')}">${escapeHTML(step.name || 'Unnamed Step')}</div>
     <div class="flow-step-actions">
-      <button class="btn-clone" title="Clone Step">⧉</button>
-      <button class="btn-delete btn-delete-node" title="Delete Step">✕</button>
+      <button class="btn-clone" title="Clone this step">⧉</button>
+      <button class="btn-delete btn-delete-node" title="Delete this step">✕</button>
     </div>
   `;
 
@@ -146,7 +147,7 @@ function renderRequestStepContent(container, step, variables) {
   container.innerHTML = `
     <div class="request-info">
       <span class="request-method ${step.method || 'GET'}">${step.method || 'GET'}</span>
-      <span class="request-url">${highlightVariables(step.url, varNames)}</span>
+      <span class="request-url" title="${escapeHTML(step.url || '')}">${highlightVariables(step.url, varNames)}</span>
     </div>
     <div class="request-details">
       ${step.extract && Object.keys(step.extract).length > 0 ? `<div class="request-extractions"><span>Extracts:</span> ${Object.keys(step.extract).map(varName => `<span class="extraction-badge">${escapeHTML(varName)}</span>`).join('')}</div>` : ''}
@@ -202,8 +203,8 @@ function renderConditionStepContent(container, step, variables, options) {
                            onUpdate({ type: 'add', step: newStep, parentId: parentId, branch: targetBranch });
                        }
                    });
-                } else { console.error("App's step type dialog function not found."); }
-            } else { console.error("Cannot add nested step: Missing onUpdate or parentId (condition ID)."); }
+                } else { logger.error("App's step type dialog function not found."); }
+            } else { logger.error("Cannot add nested step: Missing onUpdate or parentId (condition ID)."); }
         });
     });
 }
@@ -238,8 +239,8 @@ function renderLoopStepContent(container, step, variables, options) {
                      onUpdate({ type: 'add', step: newStep, parentId: parentId, branch: null });
                  }
                });
-           } else { console.error("App's step type dialog function not found."); }
-      } else { console.error("Cannot add loop step: Missing onUpdate or parentId (loop ID)."); }
+           } else { logger.error("App's step type dialog function not found."); }
+      } else { logger.error("Cannot add loop step: Missing onUpdate or parentId (loop ID)."); }
    });
 }
 
@@ -343,13 +344,13 @@ function setupDragAndDrop(stepEl, options) {
     stepEl.classList.remove('drop-before', 'drop-after');
     if (draggingEl) draggingEl.classList.remove('dragging'); // Also remove dragging class from source
 
-    console.log(`Drop detected: Move ${sourceStepId} ${position} ${targetStepId}`);
+    logger.info(`Drop detected: Move ${sourceStepId} ${position} ${targetStepId}`);
 
     // Trigger the move action via the onUpdate callback provided in options
     try {
         options.onUpdate({ type: 'move', sourceStepId, targetStepId, position });
     } catch (updateError) {
-        console.error("Error triggering move update from drop:", updateError);
+        logger.error("Error triggering move update from drop:", updateError);
         // Optionally show message, though app.js handler should manage errors
     }
   });
@@ -371,7 +372,7 @@ function setupDragAndDrop(stepEl, options) {
 export function createStepEditor(step, options) {
   // --- CRITICAL: Check if step data is valid ---
   if (!step || !step.id || !step.type) {
-      console.error("Cannot create step editor: Invalid step data provided.", step);
+      logger.error("Cannot create step editor: Invalid step data provided.", step);
       const errorEl = document.createElement('div');
       errorEl.className = 'step-editor error-message';
       errorEl.textContent = "Error: Could not load editor for this step. Step data is missing or invalid.";
@@ -386,7 +387,7 @@ export function createStepEditor(step, options) {
        localStep = JSON.parse(JSON.stringify(step));
        originalStep = JSON.parse(JSON.stringify(step)); // Keep clean copy for revert
    } catch (e) {
-       console.error("Failed to clone step for editing:", e);
+       logger.error("Failed to clone step for editing:", e);
        const errorEl = document.createElement('div'); errorEl.textContent="Error initializing editor state."; return errorEl;
    }
   let isDirty = false;
@@ -398,7 +399,7 @@ export function createStepEditor(step, options) {
       if (saveBtn) saveBtn.disabled = !isDirty; // Update save button state (check if saveBtn exists)
       if (typeof onDirtyChange === 'function') {
           try { onDirtyChange(isDirty); } // Notify parent component
-          catch (callbackError) { console.error("Error in onDirtyChange callback:", callbackError); }
+          catch (callbackError) { logger.error("Error in onDirtyChange callback:", callbackError); }
       }
   }
 
@@ -433,7 +434,7 @@ export function createStepEditor(step, options) {
           default: typeContentContainer.textContent = `Editor not available for type: ${localStep.type}`;
        }
   } catch (subEditorError) {
-       console.error(`Error creating editor for type ${localStep.type}:`, subEditorError);
+       logger.error(`Error creating editor for type ${localStep.type}:`, subEditorError);
        typeContentContainer.innerHTML = `<p style="color: red;">Error loading ${localStep.type} editor fields.</p>`;
        // Disable save button if sub-editor failed
        if (saveBtn) saveBtn.disabled = true;
@@ -489,7 +490,7 @@ export function createStepEditor(step, options) {
       // If validation passes, call parent's onChange with the updated local step data
       if (onChange) {
           try { onChange(localStep); } // Pass the modified localStep
-          catch (callbackError) { console.error("Error in editor save onChange callback:", callbackError); }
+          catch (callbackError) { logger.error("Error in editor save onChange callback:", callbackError); }
       }
       if (saveMessageEl) { // Check element exists
            saveMessageEl.style.display = 'block';
@@ -509,7 +510,7 @@ export function createStepEditor(step, options) {
 
       // --- CRITICAL: Reset localStep object to original state ---
       try { localStep = JSON.parse(JSON.stringify(originalStep)); }
-      catch(e) { console.error("Failed to revert localStep on cancel:", e); /* Handle error */ return; }
+      catch(e) { logger.error("Failed to revert localStep on cancel:", e); /* Handle error */ return; }
 
       // Reset the UI by re-rendering the editor with original data
       nameInput.value = localStep.name || ''; // Reset name input
@@ -525,7 +526,7 @@ export function createStepEditor(step, options) {
               default: typeContentContainer.textContent = `Editor not available for type: ${localStep.type}`;
            }
       } catch (revertError) {
-           console.error(`Error reverting editor for type ${localStep.type}:`, revertError);
+           logger.error(`Error reverting editor for type ${localStep.type}:`, revertError);
            typeContentContainer.innerHTML = `<p style="color: red;">Error reverting editor fields.</p>`;
       }
 
@@ -533,7 +534,7 @@ export function createStepEditor(step, options) {
        if (saveBtn) saveBtn.disabled = true;
        if (typeof onDirtyChange === 'function') {
             try { onDirtyChange(false); }
-            catch (callbackError) { console.error("Error in onDirtyChange callback during cancel:", callbackError); }
+            catch (callbackError) { logger.error("Error in onDirtyChange callback during cancel:", callbackError); }
        }
 
        // Note: We do NOT call onChange(originalStep) here anymore. The editor simply resets itself.
@@ -629,6 +630,14 @@ function createRequestEditor(container, options) {
             btn.classList.add('active');
             container.querySelector(`#tab-${btn.dataset.tab}-${localStep.id}`).classList.add('active');
         });
+    });
+
+    // Add tooltips to tab buttons in editors
+    container.querySelectorAll('.tab-button').forEach(btn => {
+      if (btn.dataset.tab === 'headers') btn.title = 'Edit request headers';
+      else if (btn.dataset.tab === 'body') btn.title = 'Edit request body';
+      else if (btn.dataset.tab === 'extract') btn.title = 'Extract variables from response';
+      else if (btn.dataset.tab === 'options') btn.title = 'Request options and error handling';
     });
 
     // Setup variable insert buttons (delegated to app.js listener)
@@ -807,7 +816,7 @@ function setupKeyValueEditor(editorContainer, initialItems, availableVarNames, o
                 const valueInput = row.querySelector(`.${config.valueClass}`);
                 // --- Add checks ---
                 if (!keyInput || !valueInput) {
-                    console.warn("KeyValueEditor: Skipping row due to missing input elements.");
+                    logger.warn("KeyValueEditor: Skipping row due to missing input elements.");
                     return;
                 }
                 const key = keyInput.value.trim();
@@ -819,7 +828,7 @@ function setupKeyValueEditor(editorContainer, initialItems, availableVarNames, o
                      // console.warn(`KeyValueEditor: Ignoring item with value but empty key: "${valueInput.value}"`);
                 }
             } catch (error) {
-                console.error("Error processing key-value row:", error, row);
+                logger.error("Error processing key-value row:", error, row);
             }
         });
         // Only update if the object actually changed (shallow compare for simple cases)
@@ -906,7 +915,7 @@ export function showStepTypeDialog(onSelect) {
     if (typeof window.showAppStepTypeDialog === 'function') {
         window.showAppStepTypeDialog(onSelect); // Call the function exposed by app.js
     } else {
-        console.error("App's step type dialog function (window.showAppStepTypeDialog) not found.");
+        logger.error("App's step type dialog function (window.showAppStepTypeDialog) not found.");
         alert("Error: Cannot open step type selector.");
         // Fallback or alternative behavior if needed
     }

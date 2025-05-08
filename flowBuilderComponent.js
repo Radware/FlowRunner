@@ -7,7 +7,9 @@
  */
 
 import { findDefinedVariables, escapeHTML, createNewStep, cloneStep } from './flowCore.js';
-import { renderStep, createStepEditor, showStepTypeDialog as showComponentStepTypeDialog } from './flowStepComponents.js'; // Import component's dialog
+import { renderStep, createStepEditor, showStepTypeDialog as showComponentStepTypeDialog } from './flowStepComponents.js';
+import { domRefs } from './state.js'; // <<< ADD THIS IMPORT TO ACCESS GLOBAL DOMREFS
+import { logger } from './logger.js';
 
 export class FlowBuilderComponent {
     /**
@@ -33,58 +35,19 @@ export class FlowBuilderComponent {
         this.variables = {};
         // Panel visibility is managed by the wrapper (app.js) based on user clicks on toggle buttons
 
-        this.uiRefs = {};
+        this.uiRefs = {}; // For elements *within* the builder section
         // These refs to external panels are set during render()
         this.variablesPanelRef = null;
         this.variablesContainerRef = null;
 
-        this._renderBaseLayout(); // Render the static structure
+        this._renderBaseLayout(); // Render the static structure for steps list and editor
         this._bindBaseEventListeners(); // Bind listeners for base elements
     }
 
     _renderBaseLayout() {
-        // Renders the main static HTML structure into the parentElement
+        // Renders the main static HTML structure for steps list and editor panel
+        // The flow-info-overlay is now a static element in index.html
         this.parentElement.innerHTML = `
-            <!-- Flow Info Overlay Area -->
-            <div class="flow-info-overlay" data-ref="infoOverlay">
-                <div class="form-group">
-                    <label for="flow-name-${Date.now()}">Flow Name</label> <!-- Unique ID -->
-                    <input type="text" id="flow-name-${Date.now()}" data-ref="flowNameInput" placeholder="Enter a name for this flow">
-                </div>
-                <div class="form-group">
-                    <label for="flow-description-${Date.now()}">Description</label> <!-- Unique ID -->
-                    <textarea id="flow-description-${Date.now()}" data-ref="flowDescTextarea" rows="2" placeholder="Enter a description"></textarea>
-                </div>
-
-                <!-- GLOBAL HEADERS COLLAPSIBLE -->
-                <div class="form-group global-headers-section">
-                    <button class="collapsible-header" data-ref="globalHeadersToggle">
-                        <span class="header-label">Global Headers</span>
-                        <span class="toggle-icon">▼</span>
-                    </button>
-                    <div class="collapsible-content" data-ref="globalHeadersContent">
-                        <div class="global-headers-list" data-ref="globalHeadersList">
-                             <!-- Headers added dynamically -->
-                        </div>
-                        <button class="btn-add-global-header" data-ref="addGlobalHeaderBtn" style="margin-top: 10px;">+ Add Header</button>
-                    </div>
-                </div>
-
-                <!-- FLOW VARIABLES COLLAPSIBLE -->
-                <div class="form-group flow-variables-section">
-                    <button class="collapsible-header" data-ref="flowVarsToggle">
-                        <span class="header-label">Flow Variables</span>
-                        <span class="toggle-icon">▼</span>
-                    </button>
-                    <div class="collapsible-content" data-ref="flowVarsContent">
-                        <div class="flow-vars-list" data-ref="flowVarsList">
-                             <!-- Variables added dynamically -->
-                        </div>
-                        <button class="btn-add-flow-var" data-ref="addFlowVarBtn" style="margin-top: 10px;">+ Add Variable</button>
-                    </div>
-                </div>
-            </div>
-
             <!-- Main Builder Section (Steps & Editor) -->
             <div class="flow-builder-section" data-ref="builderSection">
                 <div class="flow-steps-panel" data-ref="stepsPanel">
@@ -96,6 +59,9 @@ export class FlowBuilderComponent {
                         <button class="btn-add-step" data-ref="addTopLevelStepBtn">+ Add Step</button>
                     </div>
                 </div>
+
+                <div class="pane-resizer" title="Drag to resize"></div>
+
                 <div class="step-editor-panel" data-ref="editorPanel">
                     <div class="step-editor-placeholder" data-ref="editorPlaceholder">
                         <p>Select a step to edit its properties</p>
@@ -107,258 +73,200 @@ export class FlowBuilderComponent {
             </div>
         `;
 
-        // Store references to key elements within the main builder UI
+        // Store references to key elements *within the builder section UI*
         this.parentElement.querySelectorAll('[data-ref]').forEach(el => {
             this.uiRefs[el.dataset.ref] = el;
         });
 
-        /* ----------  NEW: default empty-state placeholders  ---------- */
         this.uiRefs.stepsContainer.innerHTML =
           '<div class="empty-flow-message"><p>No steps defined.</p><p>Click "+ Add Step" below.</p></div>';
-        this.uiRefs.globalHeadersList.textContent = 'No global headers';
-        this.uiRefs.flowVarsList.textContent   = 'No flow variables';
-        /* ------------------------------------------------------------- */
-
-        // Note: The variables toggle button is assumed to exist in the wrapper's HTML
-        // It's passed in as `variablesToggleMountPoint` but we don't render it.
-        this.uiRefs.variablesToggleBtn = this.variablesToggleMountPoint;
-
-        // Removes the one-line placeholders once real rows are added
-        this._clearPlaceholder = (el) => {
+        
+        // This helper is for placeholders WITHIN the builder's direct control, if any.
+        // Placeholders for global info overlay are handled by uiUtils.js or app.js
+        this._clearPlaceholder = (el, messageClass) => {
           if (!el) return;
-          if (el.textContent.includes('No global headers') ||
-              el.textContent.includes('No flow variables')) {
-            el.textContent = '';
-          }
-          const msg = el.querySelector && el.querySelector('.empty-flow-message');
+          const msg = el.querySelector(messageClass || '.empty-flow-message'); // Default to steps container placeholder
           if (msg) msg.remove();
         };
-
-        // --- FLOW-INFO INPUT LISTENERS (needed by tests) ---
-        const fireFlowUpdate = () => {
-          this.options.onFlowUpdate?.({
-            name: this.uiRefs.flowNameInput.value,
-            description: this.uiRefs.flowDescTextarea.value
-          });
-        };
-        this.uiRefs.flowNameInput .addEventListener('input', fireFlowUpdate);
-        this.uiRefs.flowDescTextarea.addEventListener('input', fireFlowUpdate);
     }
 
     _bindBaseEventListeners() {
-        // Flow Info Input Listeners are bound specifically in _updateFlowInfoUI after render
-        // to avoid stale closures if render is called multiple times.
-
-        // Collapsibles
-        this._setupCollapsible(this.uiRefs.globalHeadersToggle, this.uiRefs.globalHeadersContent);
-        this._setupCollapsible(this.uiRefs.flowVarsToggle, this.uiRefs.flowVarsContent);
-
-        // Add Buttons for Headers/Vars
-        this.uiRefs.addGlobalHeaderBtn.addEventListener('click', () => {
-            this._clearPlaceholder(this.uiRefs.globalHeadersList);
-            this._addGlobalHeaderRow('', '', true);
-        });
-        this.uiRefs.addFlowVarBtn.addEventListener('click', () => {
-            this._clearPlaceholder(this.uiRefs.flowVarsList);
-            this._addFlowVarRow('', '', true);
-        });
-
         // Add Top-Level Step Button
         this.uiRefs.addTopLevelStepBtn.addEventListener('click', () => this.options.onRequestAddStep());
-
-        // Variables Panel Toggle (Listener handled by wrapper - app.js)
     }
 
+    // This _setupCollapsible was for the Info Overlay when it was part of the builder.
+    // The global Info Overlay's collapsibles are set up in app.js
+    // This local one can be removed if not used by other parts of *this specific component*.
+    // For safety, let's keep it commented out for now, but it's likely unused.
+    /*
      _setupCollapsible(toggleBtn, contentEl) {
-        toggleBtn.addEventListener('click', () => {
-            const isActive = toggleBtn.classList.toggle('active');
-            const icon = toggleBtn.querySelector('.toggle-icon');
-            if (isActive) {
-                contentEl.style.padding = '15px'; // Apply padding *before* measuring scrollHeight
-                contentEl.style.maxHeight = contentEl.scrollHeight + 'px'; // Set max-height based on content
-                if(icon) icon.textContent = '▲';
-            } else {
-                contentEl.style.maxHeight = '0px'; // Collapse
-                // Remove padding after transition completes (or nearly)
-                setTimeout(() => {
-                    if (!toggleBtn.classList.contains('active')) { // Check again in case it reopened quickly
-                       contentEl.style.padding = '0 15px';
-                    }
-                }, 300); // Match transition duration
-                if(icon) icon.textContent = '▼';
-            }
-        });
-        // Ensure initial state is correct (closed by default)
-        contentEl.style.maxHeight = '0px';
-        contentEl.style.padding = '0 15px'; // Initial padding state for closed
-        const icon = toggleBtn.querySelector('.toggle-icon');
-        if(icon) icon.textContent = '▼';
+        // ... (original logic) ...
     }
+    */
 
     /** Public method to update the entire component UI */
     render(flowModel, selectedStepId, variablesPanelEl, variablesContainerEl) {
         this.flowModel = flowModel;
         this.selectedStepId = selectedStepId;
-        this.variablesPanelRef = variablesPanelEl; // Get reference to external panel
-        this.variablesContainerRef = variablesContainerEl; // Get reference to external panel's content area
+        this.variablesPanelRef = variablesPanelEl;
+        this.variablesContainerRef = variablesContainerEl;
 
         if (!this.flowModel) {
             this.uiRefs.stepsContainer.innerHTML = '<div class="empty-flow-message"><p>No steps defined</p></div>';
             this.uiRefs.editorPlaceholder.style.display = 'flex';
             this.uiRefs.editorContainer.style.display = 'none';
             this.uiRefs.editorContainer.innerHTML = '';
-            this.uiRefs.flowNameInput.value = '';
-            this.uiRefs.flowDescTextarea.value = '';
-            this.uiRefs.globalHeadersList.innerHTML = '<div class="no-headers-message">No global headers</div>';
-            this.uiRefs.flowVarsList.innerHTML = '<div class="no-flow-vars">No flow variables</div>';
+            
+            // Clear global info overlay as well if no flow model
+            if (domRefs.infoOverlayNameInput) domRefs.infoOverlayNameInput.value = '';
+            if (domRefs.infoOverlayDescTextarea) domRefs.infoOverlayDescTextarea.value = '';
+            if (domRefs.infoOverlayGlobalHeadersList) domRefs.infoOverlayGlobalHeadersList.innerHTML = '<div class="global-header-row-no-items">No global headers</div>';
+            if (domRefs.infoOverlayFlowVarsList) domRefs.infoOverlayFlowVarsList.innerHTML = '<div class="no-flow-vars">No flow variables</div>';
+
             if (this.variablesContainerRef) {
                 this.variablesContainerRef.innerHTML = '<div class="no-variables-message"><p>No variables defined</p></div>';
             }
             return;
         }
 
-        // Update defined variables cache (used by steps list and editor)
         this.variables = findDefinedVariables(this.flowModel);
 
-        // Update UI sections
+        // Update UI sections - these now target the global info overlay elements via domRefs
         this._updateFlowInfoUI();
         this._updateGlobalHeadersUI();
         this._updateFlowVarsUI();
+        
+        // Update builder-specific sections
         this._updateStepsUI();
         this._updateStepEditorUI();
-        this._updateVariablesPanelUI(); // Update the external variables panel content
+        this._updateVariablesPanelUI();
     }
 
     // --- Private UI Update Methods ---
 
     _updateFlowInfoUI() {
-        const nameInput = this.uiRefs.flowNameInput;
-        const descTextarea = this.uiRefs.flowDescTextarea;
+        // Targets the global info overlay elements via domRefs
+        const nameInput = domRefs.infoOverlayNameInput;
+        const descTextarea = domRefs.infoOverlayDescTextarea;
 
-        nameInput.value = this.flowModel.name || '';
-        descTextarea.value = this.flowModel.description || '';
+        if (nameInput) nameInput.value = this.flowModel.name || '';
+        if (descTextarea) descTextarea.value = this.flowModel.description || '';
 
-        // Remove potential old listeners before adding new ones
-         const newNameInput = nameInput.cloneNode(true);
-         nameInput.parentNode.replaceChild(newNameInput, nameInput);
-         this.uiRefs.flowNameInput = newNameInput; // Update ref
-
-         const newDescTextarea = descTextarea.cloneNode(true);
-         descTextarea.parentNode.replaceChild(newDescTextarea, descTextarea);
-         this.uiRefs.flowDescTextarea = newDescTextarea; // Update ref
-
-
-        // Bind listeners to the new nodes
-        this.uiRefs.flowNameInput.addEventListener('input', (e) => {
-            // Don't modify this.flowModel directly here, let the callback handle it
-            this.options.onFlowUpdate({ name: e.target.value, description: this.uiRefs.flowDescTextarea.value });
-        });
-        this.uiRefs.flowDescTextarea.addEventListener('input', (e) => {
-            this.options.onFlowUpdate({ name: this.uiRefs.flowNameInput.value, description: e.target.value });
-        });
+        // Event listeners for name/description are set up globally in app.js,
+        // so no need to re-bind them here. The onFlowUpdate callback will be triggered by app.js.
     }
 
      _updateGlobalHeadersUI() {
-        const container = this.uiRefs.globalHeadersList;
-        container.innerHTML = ''; // Clear previous
+        const container = domRefs.infoOverlayGlobalHeadersList; // Target global element
+        if (!container) return;
+        container.innerHTML = '';
         const headers = this.flowModel.headers || {};
 
         if (Object.keys(headers).length === 0) {
-            container.innerHTML = '<div class="no-headers-message">No global headers</div>';
+            container.innerHTML = '<div class="global-header-row-no-items">No global headers defined</div>';
         } else {
             Object.entries(headers).forEach(([key, value]) => {
-                this._addGlobalHeaderRow(key, value, false); // Add rows without triggering update initially
+                this._addGlobalHeaderRow(key, value, false); // Add rows, listeners will be set up by this method
             });
         }
-         this._adjustCollapsibleHeight(this.uiRefs.globalHeadersToggle, this.uiRefs.globalHeadersContent);
+        // The "Add Header" button listener is global (in app.js).
+        // Collapsible height adjustment is handled by app.js or uiUtils.js
+        this._adjustCollapsibleHeight(domRefs.infoOverlayGlobalHeadersToggle, domRefs.infoOverlayGlobalHeadersContent);
     }
 
      _addGlobalHeaderRow(key, value, triggerUpdate = true) {
-        const container = this.uiRefs.globalHeadersList;
+        // This method is responsible for creating a row in the GLOBAL info overlay
+        const container = domRefs.infoOverlayGlobalHeadersList;
+        if (!container) return;
+
         const noItemsMsg = container.querySelector('.global-header-row-no-items');
         if (noItemsMsg) noItemsMsg.remove();
 
         const row = document.createElement('div');
-        row.className = 'global-header-row'; // Use specific class
-        // --- REMOVED btn-insert-var button ---
+        row.className = 'global-header-row';
+        const keyId = `gh-key-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
+        const valueId = `gh-val-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
         row.innerHTML = `
-            <input type="text" class="header-key" value="${escapeHTML(key)}" placeholder="Header Name">
-            <input type="text" class="header-value" value="${escapeHTML(value)}" placeholder="Header Value">
+            <input type="text" class="header-key" id="${keyId}" value="${escapeHTML(key)}" placeholder="Header Name">
+            <input type="text" class="header-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Header Value">
+            <button class="btn-insert-var" data-target-input="${valueId}" title="Insert Variable">{{…}}</button>
             <button class="btn-remove-global-header" title="Remove Header">✕</button>
         `;
         container.appendChild(row);
 
-        // Bind listeners for this new row
         const keyInput = row.querySelector('.header-key');
         const valueInput = row.querySelector('.header-value');
         const removeBtn = row.querySelector('.btn-remove-global-header');
-        // --- REMOVED insertVarBtn reference ---
-        // const insertVarBtn = row.querySelector('.btn-insert-var'); // Removed
-
 
         const updateCallback = () => {
             const currentHeaders = this._getCurrentGlobalHeadersFromUI();
-            this.options.onHeadersUpdate(currentHeaders); // Notify wrapper immediately
+            this.options.onHeadersUpdate?.(currentHeaders); // Call app.js handler
         };
 
         keyInput.addEventListener('input', updateCallback);
         valueInput.addEventListener('input', updateCallback);
-        removeBtn.addEventListener('click', () => {
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             row.remove();
-            const currentHeaders = this._getCurrentGlobalHeadersFromUI();
-            if (container.children.length === 0) { // Check if empty after removing
+            updateCallback();
+            if (container.children.length === 0) {
                 container.innerHTML = '<div class="global-header-row-no-items">No global headers defined</div>';
             }
-            this.options.onHeadersUpdate(currentHeaders); // Notify wrapper
-             this._adjustCollapsibleHeight(this.uiRefs.globalHeadersToggle, this.uiRefs.globalHeadersContent); // Adjust height
+            this._adjustCollapsibleHeight(domRefs.infoOverlayGlobalHeadersToggle, domRefs.infoOverlayGlobalHeadersContent);
         });
+        
+        setupVariableInsertButton(row.querySelector('.btn-insert-var'), valueInput, Object.keys(this.variables || {}));
 
-        // --- REMOVED setupVariableInsertButton call ---
-        // setupVariableInsertButton(insertVarBtn, valueInput, Object.keys(this.variables || {})); // Removed
 
-
-        if (triggerUpdate) {
-            updateCallback(); // Trigger update if manually added
+        if (triggerUpdate) { // Usually false during initial render, true if user clicks "+"
+            updateCallback();
         }
-         this._adjustCollapsibleHeight(this.uiRefs.globalHeadersToggle, this.uiRefs.globalHeadersContent); // Adjust height after add
+        this._adjustCollapsibleHeight(domRefs.infoOverlayGlobalHeadersToggle, domRefs.infoOverlayGlobalHeadersContent);
     }
 
     _getCurrentGlobalHeadersFromUI() {
         const headers = {};
-        this.uiRefs.globalHeadersList.querySelectorAll('.global-header-row').forEach(row => {
-            const key = row.querySelector('.header-key').value.trim();
-            const value = row.querySelector('.header-value').value;
-            if (key) headers[key] = value;
+        // This should read from domRefs.infoOverlayGlobalHeadersList
+        domRefs.infoOverlayGlobalHeadersList?.querySelectorAll('.global-header-row').forEach(row => {
+            const key = row.querySelector('.header-key')?.value.trim();
+            const value = row.querySelector('.header-value')?.value;
+            if (key) headers[key] = value ?? '';
         });
         return headers;
     }
 
      _updateFlowVarsUI() {
-        const container = this.uiRefs.flowVarsList;
+        const container = domRefs.infoOverlayFlowVarsList; // Target global element
+        if (!container) return;
         container.innerHTML = '';
         const staticVars = this.flowModel.staticVars || {};
 
         if (Object.keys(staticVars).length === 0) {
-            container.innerHTML = `<div class="no-flow-vars">No flow variables</div>`;
+            container.innerHTML = `<div class="no-flow-vars">No flow variables defined</div>`;
         } else {
             Object.entries(staticVars).forEach(([key, value]) => {
                 this._addFlowVarRow(key, value, false);
             });
         }
-         this._adjustCollapsibleHeight(this.uiRefs.flowVarsToggle, this.uiRefs.flowVarsContent);
+        this._adjustCollapsibleHeight(domRefs.infoOverlayFlowVarsToggle, domRefs.infoOverlayFlowVarsContent);
     }
 
      _addFlowVarRow(key, value, triggerUpdate = true) {
-        const container = this.uiRefs.flowVarsList;
-        const noItemsMsg = container.querySelector('.flow-var-row-no-items');
+        const container = domRefs.infoOverlayFlowVarsList;
+        if (!container) return;
+
+        const noItemsMsg = container.querySelector('.no-flow-vars'); // Corrected class
         if (noItemsMsg) noItemsMsg.remove();
 
         const row = document.createElement('div');
         row.className = 'flow-var-row';
-        // --- REMOVED btn-insert-var button ---
+        const keyId = `fv-key-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
+        const valueId = `fv-val-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
         row.innerHTML = `
-            <input type="text" class="flow-var-key" value="${escapeHTML(key)}" placeholder="Variable Name">
-            <input type="text" class="flow-var-value" value="${escapeHTML(value)}" placeholder="Variable Value">
+            <input type="text" class="flow-var-key" id="${keyId}" value="${escapeHTML(key)}" placeholder="Variable Name">
+            <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value">
+            <button class="btn-insert-var" data-target-input="${valueId}" title="Insert Variable">{{…}}</button>
             <button class="btn-remove-flow-var" title="Remove Variable">✕</button>
         `;
         container.appendChild(row);
@@ -366,64 +274,76 @@ export class FlowBuilderComponent {
         const keyInput = row.querySelector('.flow-var-key');
         const valueInput = row.querySelector('.flow-var-value');
         const removeBtn = row.querySelector('.btn-remove-flow-var');
-        // --- REMOVED insertVarBtn reference ---
-        // const insertVarBtn = row.querySelector('.btn-insert-var'); // Removed
-
 
         const updateCallback = () => {
             const currentVars = this._getCurrentFlowVarsFromUI();
-            this.options.onFlowVarsUpdate(currentVars);
+            this.options.onFlowVarsUpdate?.(currentVars); // Call app.js handler
         };
 
         keyInput.addEventListener('input', updateCallback);
         valueInput.addEventListener('input', updateCallback);
-        removeBtn.addEventListener('click', () => {
+        removeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
             row.remove();
-            const currentVars = this._getCurrentFlowVarsFromUI();
+            updateCallback();
             if (container.children.length === 0) {
-                container.innerHTML = '<div class="no-flow-vars">No flow variables</div>';
+                container.innerHTML = '<div class="no-flow-vars">No flow variables defined</div>';
             }
-            this.options.onFlowVarsUpdate(currentVars);
-             this._adjustCollapsibleHeight(this.uiRefs.flowVarsToggle, this.uiRefs.flowVarsContent);
+            this._adjustCollapsibleHeight(domRefs.infoOverlayFlowVarsToggle, domRefs.infoOverlayFlowVarsContent);
         });
-
-        // --- REMOVED setupVariableInsertButton call ---
-        // setupVariableInsertButton(insertVarBtn, valueInput, Object.keys(this.variables || {})); // Removed
-
+        
+        setupVariableInsertButton(row.querySelector('.btn-insert-var'), valueInput, Object.keys(this.variables || {}));
 
         if (triggerUpdate) {
             updateCallback();
         }
-         this._adjustCollapsibleHeight(this.uiRefs.flowVarsToggle, this.uiRefs.flowVarsContent);
+        this._adjustCollapsibleHeight(domRefs.infoOverlayFlowVarsToggle, domRefs.infoOverlayFlowVarsContent);
     }
 
     _getCurrentFlowVarsFromUI() {
         const staticVars = {};
-        this.uiRefs.flowVarsList.querySelectorAll('.flow-var-row').forEach(row => {
-            const key = row.querySelector('.flow-var-key').value.trim();
-            const value = row.querySelector('.flow-var-value').value;
-            // Basic validation for variable names
+        domRefs.infoOverlayFlowVarsList?.querySelectorAll('.flow-var-row').forEach(row => {
+            const keyInput = row.querySelector('.flow-var-key');
+            const valueInput = row.querySelector('.flow-var-value');
+            const key = keyInput?.value.trim();
+            const value = valueInput?.value;
+
             if (key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
-                 staticVars[key] = value;
+                 staticVars[key] = value ?? '';
+                 if(keyInput) keyInput.style.borderColor = '';
             } else if (key) {
-                 // Maybe add visual feedback for invalid key? For now, just ignore invalid ones.
-                 console.warn(`Invalid variable name ignored: ${key}`);
+                 logger.warn(`Invalid variable name ignored: ${key}`);
+                 if(keyInput) keyInput.style.borderColor = 'red';
+            } else {
+                if(keyInput) keyInput.style.borderColor = '';
             }
         });
         return staticVars;
     }
 
-    // Helper to readjust collapsible height after dynamic content change
+    // This is the builder's local version, which will call the global app.js one if needed
     _adjustCollapsibleHeight(toggleBtn, contentEl) {
-         if (toggleBtn.classList.contains('active')) {
-             contentEl.style.maxHeight = contentEl.scrollHeight + 'px';
+         // This function now needs to be robust as it's called from render.
+         // It should use the same logic as the one in app.js or uiUtils.js.
+         // For simplicity, let's assume the global adjustCollapsibleHeight in app.js
+         // is the source of truth and this component just ensures it's called
+         // if the app.js `setupGlobalOverlayListeners` didn't already cover it or if this component makes direct changes.
+
+         // However, since the builder's `render` populates these, it should ensure they are adjusted.
+         if (!toggleBtn || !contentEl) return;
+         if (toggleBtn.classList.contains('active')) { // Only if open
+             contentEl.style.paddingTop = '15px';
+             contentEl.style.paddingBottom = '15px';
+             requestAnimationFrame(() => {
+                contentEl.style.maxHeight = contentEl.scrollHeight + "px";
+             });
          }
     }
 
 
     _updateStepsUI() {
         const container = this.uiRefs.stepsContainer;
-        container.innerHTML = ''; // Clear previous steps
+        container.innerHTML = '';
 
         const steps = this.flowModel.steps || [];
         if (steps.length === 0) {
@@ -435,8 +355,7 @@ export class FlowBuilderComponent {
             variables: this.variables,
             selectedStepId: this.selectedStepId,
             onSelect: this.options.onStepSelect,
-            onUpdate: this.options.onStepUpdate, // Pass wrapper's update handler
-            // Map the step component's onDelete request to the wrapper's onUpdate handler
+            onUpdate: this.options.onStepUpdate,
             onDelete: (stepId) => this.options.onStepUpdate({ type: 'delete', stepId: stepId }),
             isNested: false
         };
@@ -449,8 +368,7 @@ export class FlowBuilderComponent {
     _updateStepEditorUI() {
         const editorContainer = this.uiRefs.editorContainer;
         const placeholder = this.uiRefs.editorPlaceholder;
-
-        editorContainer.innerHTML = ''; // Clear previous editor
+        editorContainer.innerHTML = '';
 
         if (!this.selectedStepId) {
             placeholder.style.display = 'flex';
@@ -461,31 +379,27 @@ export class FlowBuilderComponent {
         const selectedStepData = this._findStepByIdRecursive(this.flowModel.steps, this.selectedStepId);
 
         if (!selectedStepData) {
-            console.warn(`Selected step ID ${this.selectedStepId} not found in model.`);
+            logger.warn(`Selected step ID ${this.selectedStepId} not found in model.`);
             placeholder.style.display = 'flex';
             editorContainer.style.display = 'none';
-            // Optionally notify parent to clear selection if step data is missing
-            // this.options.onStepSelect(null);
             return;
         }
 
         placeholder.style.display = 'none';
-        editorContainer.style.display = 'flex'; // Use flex for editor structure
+        editorContainer.style.display = 'flex';
 
-        // Create and append the editor, passing the onEditorDirtyChange callback
         const editorElement = createStepEditor(selectedStepData, {
             variables: this.variables,
-            onChange: this.options.onStepEdit, // Callback when editor saves/cancels
-            onDirtyChange: this.options.onEditorDirtyChange // Callback for editor dirty status change
+            onChange: this.options.onStepEdit,
+            onDirtyChange: this.options.onEditorDirtyChange
         });
         editorContainer.appendChild(editorElement);
     }
 
      _updateVariablesPanelUI() {
-        // This method populates the content of the variables panel passed from the wrapper
         const container = this.variablesContainerRef;
-        if (!container) return; // Do nothing if the container wasn't provided
-        container.innerHTML = ''; // Clear previous content
+        if (!container) return;
+        container.innerHTML = '';
 
         if (Object.keys(this.variables).length === 0) {
             container.innerHTML = `<div class="no-variables-message"><p>No variables defined or extracted yet.</p></div>`;
@@ -526,7 +440,6 @@ export class FlowBuilderComponent {
         container.appendChild(table);
     }
 
-    // Helper to find step recursively within the component's flowModel cache
     _findStepByIdRecursive(steps, id) {
         if (!steps || !Array.isArray(steps)) return null;
         for (const step of steps) {
@@ -542,76 +455,16 @@ export class FlowBuilderComponent {
         return null;
     }
 
-    // --- Public methods to control parts of the UI if needed ---
-    toggleInfoOverlay(forceState) {
-         const overlay = this.uiRefs.infoOverlay;
-         let isOpen;
-         if (typeof forceState === 'boolean') {
-             isOpen = forceState;
-         } else {
-             isOpen = !overlay.classList.contains('open');
-         }
-         overlay.classList.toggle('open', isOpen);
-         // Return the state so the wrapper can update its button text
-         return isOpen;
-    }
-
-     // Optional: Cleanup method
      destroy() {
-         // Remove specific listeners if needed, though removing innerHTML usually suffices
          this.parentElement.innerHTML = '';
          this.uiRefs = {};
-         console.log("FlowBuilderComponent destroyed.");
+         logger.info("FlowBuilderComponent destroyed.");
      }
-
-    _notifyFlowUpdated() {
-        if (this.onFlowUpdate) {
-            this.onFlowUpdate(this.flowModel);
-        }
-        this.dispatchEvent(new CustomEvent('flowupdate', { detail: { flow: this.flowModel } }));
-    }
-
-    updateStep(stepId, updates) {
-        const step = this.flowModel.steps.find(s => s.id === stepId);
-        if (step) {
-            Object.assign(step, updates);
-            this._notifyFlowUpdated();
-            this.render(this.flowModel, this.selectedStepId);
-        }
-    }
-
-    addStep(stepConfig) {
-        if (!this.flowModel.steps) {
-            this.flowModel.steps = [];
-        }
-        this.flowModel.steps.push(stepConfig);
-        this._notifyFlowUpdated();
-        this.render(this.flowModel, stepConfig.id);
-    }
-
-    deleteStep(stepId) {
-        const index = this.flowModel.steps.findIndex(s => s.id === stepId);
-        if (index !== -1) {
-            this.flowModel.steps.splice(index, 1);
-            this._notifyFlowUpdated();
-            this.render(this.flowModel, null);
-        }
-    }
-
-    updateFlowMetadata(updates) {
-        Object.assign(this.flowModel, updates);
-        this._notifyFlowUpdated();
-        this.render(this.flowModel, this.selectedStepId);
-    }
 }
-// Helper function (could be in flowStepComponents or here)
-// Sets up variable insertion using the external dropdown mechanism
+
 function setupVariableInsertButton(button, targetInput, availableVarNames) {
     if (!button || !targetInput) return;
-    // The actual showing/handling of the dropdown is managed by app.js listener
-    // This function might just ensure the button has the right class or data attributes if needed.
-    button.classList.add('btn-insert-var'); // Ensure class is present
-    // Optionally store target input reference if needed by the global listener logic
-     if (!targetInput.id) { targetInput.id = `target-input-${Date.now()}-${Math.random()}`; } // Ensure target has ID
-     button.dataset.targetInput = targetInput.id; // Link button to target ID
-  }
+    button.classList.add('btn-insert-var');
+    if (!targetInput.id) { targetInput.id = `target-input-${Date.now()}-${Math.random()}`; }
+    button.dataset.targetInput = targetInput.id;
+}

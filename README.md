@@ -1,15 +1,45 @@
-# FlowRunner <img src="assets/favicon.svg" alt="FlowRunner Icon" height="32" style="vertical-align: -15px;">
+# FlowRunner 
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
 <!-- Optional: Add build status/license badges here if desired -->
 <!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
 <div align="center" style="margin-bottom: 25px; margin-top: 10px;">
-  <img src="assets/ASE.svg" alt="ASE Team Logo" height="100">
+  <div style="display: inline-block; background: #fff; border-radius: 18px; padding: 18px 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);">
+    <img src="assets/RadwareASETeam.svg" alt="ASE Team Logo" height="100" style="display: block; margin: 0 auto;" />
+  </div>
   <p style="font-size: 2.85em; color: #555; margin-top: 0px; margin-bottom: 0; font-weight: 500; letter-spacing: 0.5px;">
-    Team
+    
   </p>
 </div>
+
+---
+
+## Release Notes / Changelog
+
+### v1.1.0 (May 2025)
+- **Continuous Flow Runner:**
+  - Added a simple "continuous run" mode that allows you to run flows repeatedly in sequence. This is not a true background runner: the main UI is not usable during continuous execution, and there is no configurable delay between full flow runs.
+  - Removed references to background/parallel execution and per-run delay configuration from documentation and UI.
+- **Recent Files Management:**
+  - Added UI to remove recent files from the sidebar list.
+  - Improved localStorage handling for recent files.
+- **Validation & Error Handling:**
+  - Improved error messages for file operations and network errors.
+  - Enhanced feedback for invalid loop variable names and extraction errors.
+- **UI/UX Improvements:**
+  - Better spacing, tooltips, and keyboard shortcuts.
+  - Improved overlays and handling of deeply nested steps.
+  - Results panel now retains all outputs after flow finishes.
+- **Testing:**
+  - Expanded E2E and unit test coverage for flows, file operations, and UI.
+- **Update Notification:**
+  - App checks for new releases on GitHub and notifies the user if available.
+
+### v1.0.0 (Initial Release)
+- First public release with visual flow authoring, dual views, variable management, and local file operations.
+
+---
 
 ## Introduction
 
@@ -58,17 +88,17 @@ This tool is particularly useful for:
 ## Prerequisites
 
 *   Windows (x64) or macOS (Apple Silicon / arm64).
-*   The appropriate FlowRunner installer package downloaded from the [v1.0.0 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.0.0) (or latest release).
+*   The appropriate FlowRunner installer package downloaded from the [v1.1.0 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.0) (or latest release).
 *   Network access is required *only* when executing flows that contain 'API Request' steps which need to reach external endpoints. Flow authoring, saving, loading, and visualization can be done offline.
 
 ## Installation
 
 1.  **Download the Correct Installer:**
     *   Go to the [FlowRunner Releases Page](https://github.com/Radware/FlowRunner/releases) on GitHub.
-    *   Find the latest release (e.g., v1.0.0).
+    *   Find the latest release (e.g., v1.1.0).
     *   Under **Assets**:
-        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.0.0.zip`. Unzip the file to find the `Setup.exe`.
-        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.0.0.dmg`.
+        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.0.zip`. Unzip the file to find the `Setup.exe`.
+        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.0.dmg`.
 2.  **Install on Windows:**
     *   Double-click the extracted `Setup.exe` file.
     *   The installation will proceed silently in the background (using Squirrel.Windows). It typically installs to your `AppData\Local\FlowRunner` folder.
