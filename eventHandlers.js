@@ -67,12 +67,13 @@ export function initializeEventListeners() {
     domRefs.requestDelayInput?.addEventListener('change', handleDelayChange);
     // Listener for continuous run checkbox needs to be handled carefully due to state management
     domRefs.continuousRunCheckbox?.addEventListener('change', (event) => {
-        // Update app state, but potentially prompt if a run is active?
-        // For now, let's assume UI updates handle disabling, and this just sets the desired state for the *next* run.
-        appState.isContinuousRunActive = event.target.checked;
-        // Note: handleRunFlow reads this state when starting. Stopping handles resetting it.
-        logger.info(`Continuous Run checkbox changed. New desired state: ${appState.isContinuousRunActive}`);
-        updateRunnerUI(); // Update UI potentially, though run/step buttons handle the main logic
+        // The checkbox state is now just a UI preference.
+        // appState.isContinuousRunActive will be set by handleRunFlow when a continuous run *actually starts*.
+        // No need to call updateRunnerUI() from here as the run button's availability isn't directly
+        // tied to the checkbox's state, but rather to whether a run is *already* in progress.
+        logger.info(`Continuous Run checkbox preference changed by user. User selected: ${event.target.checked}`);
+        // appState.isContinuousRunActive = event.target.checked; // <-- THIS LINE SHOULD BE REMOVED OR COMMENTED
+        // updateRunnerUI(); // <-- THIS LINE SHOULD BE REMOVED OR COMMENTED
     });
 
 
