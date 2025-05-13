@@ -3,6 +3,7 @@ output.txt
 output.log
 prd.txt
 roadmap.txt
+development_tasks.md
 *.pem
 
 # Logs

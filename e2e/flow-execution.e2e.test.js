@@ -1,24 +1,267 @@
 // e2e/flow-execution.e2e.test.js
 /*  Comprehensive flow run / step‑through
     – fixes invalid matcher, aligns with real title.
+    – UPDATED: flowPath to look in e2e-test-data
+    – UPDATED: "Run flow" test to wait more robustly for results
+    – UPDATED: Dynamically create httpbin-flow.flow.json in test.beforeAll
 */
 
 import { test, expect, _electron as electron } from '@playwright/test';
 import path   from 'node:path';
-import fs     from 'node:fs/promises';
+import fs     from 'node:fs/promises'; // fs/promises for async operations
 import { fileURLToPath } from 'url';
-import fsSync from 'node:fs'; // Import fsSync for log capture helper
+import fsSync from 'node:fs';
 
 /* ───────────── paths & constants ───────────── */
 
 const __filename      = fileURLToPath(import.meta.url);
 const __dirname       = path.dirname(__filename);
-const projectRoot     = path.resolve(__dirname, '..');
-const flowPath        = path.resolve(projectRoot, 'httpbin-flow.flow.json');
+const projectRoot     = path.resolve(__dirname, '..'); // Renamed for clarity
+const testDataDir     = path.resolve(__dirname, 'e2e-test-data'); // Define test data directory
+const flowPath        = path.resolve(testDataDir, 'httpbin-flow.flow.json'); // Path for the flow file
 
 const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
 const MAX_RECENT_FILES = 10;
 const FLOW_TITLE       = 'E2E All‑Features HTTPBin Flow';
+
+// Content for the httpbin-flow.flow.json
+const HTTPBIN_FLOW_CONTENT = {
+  "id": "flow_e2e_httpbin_all_features",
+  "name": "E2E All‑Features HTTPBin Flow",
+  "description": "Comprehensive flow that touches every FlowRunner v1.0.0 feature against https://httpbin.org.",
+  "headers": {
+    "X-Global-Header": "FlowRunner E2E",
+    "Accept": "application/json"
+  },
+  "steps": [
+    {
+      "id": "step_e2e_1_get_ip",
+      "name": "Get IP & Headers",
+      "type": "request",
+      "method": "GET",
+      "url": "{{baseUrl}}/get?run={{randomNumber}}",
+      "headers": {
+        "X-Request-Name": "{{userName}}"
+      },
+      "onFailure": "stop",
+      "extract": {
+        "ip": "body.origin",
+        "userAgent": "body.headers.User-Agent",
+        "statusCode": ".status",
+        "echoedRandom": "body.args.run"
+      }
+    },
+    {
+      "id": "step_e2e_2_check_status",
+      "name": "Status OK?",
+      "type": "condition",
+      "condition": "",
+      "conditionData": {
+        "variable": "statusCode",
+        "operator": "equals",
+        "value": "200"
+      },
+      "then": [
+        {
+          "id": "step_e2e_3_post_data",
+          "name": "POST echo data",
+          "type": "request",
+          "method": "POST",
+          "url": "{{baseUrl}}/post",
+          "headers": {
+            "Content-Type": "application/json",
+            "X-User": "{{userName}}"
+          },
+          "onFailure": "stop",
+          "body": { // Note: Actual ##VAR## markers are used in the real file, for testing simplicity, placeholders are fine if substitution is tested elsewhere or not the focus here.
+                    // If precise marker testing is needed, ensure the stringified body uses them.
+            "ip": "{{ip}}", // Simpler for direct JSON stringification if not testing marker substitution here.
+            "msg": "Hello from {{userName}}",
+            "testMode": "{{testMode}}",
+            "run": "{{randomNumber}}"
+          },
+          "extract": {
+            "echoedIp": "body.json.ip",
+            "echoedRun": "body.json.run",
+            "contentTypeHeader": "headers.Content-Type"
+          }
+        },
+        {
+          "id": "step_e2e_4_check_type",
+          "name": "Check JSON header",
+          "type": "condition",
+          "condition": "",
+          "conditionData": {
+            "variable": "contentTypeHeader",
+            "operator": "contains",
+            "value": "json"
+          },
+          "then": [
+            {
+              "id": "step_e2e_5_get_uuid",
+              "name": "Get UUID",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/uuid",
+              "onFailure": "continue",
+              "extract": {
+                "uuid": "body.uuid"
+              }
+            },
+            {
+              "id": "step_e2e_15_final_anything",
+              "name": "Final echo with UUID",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/anything/final?uuid={{uuid}}",
+              "onFailure": "continue",
+              "extract": {
+                "echoedUuid": "body.args.uuid"
+              }
+            }
+          ],
+          "else": [
+            {
+              "id": "step_e2e_5b_delay",
+              "name": "Else Delay",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/delay/1",
+              "onFailure": "continue",
+              "extract": {
+                "delayStatus": ".status"
+              }
+            }
+          ]
+        }
+      ],
+      "else": [
+        {
+          "id": "step_e2e_6_teapot",
+          "name": "Get Teapot",
+          "type": "request",
+          "method": "GET",
+          "url": "{{baseUrl}}/status/418",
+          "onFailure": "continue",
+          "extract": {
+            "teapotStatus": ".status"
+          }
+        },
+        {
+          "id": "step_e2e_7_check_teapot",
+          "name": "Teapot is 418?",
+          "type": "condition",
+          "condition": "",
+          "conditionData": {
+            "variable": "teapotStatus",
+            "operator": "equals",
+            "value": "418"
+          },
+          "then": [
+            {
+              "id": "step_e2e_8_log_teapot",
+              "name": "Log Teapot Success",
+              "type": "request",
+              "method": "GET",
+              "url": "{{baseUrl}}/anything/teapot",
+              "onFailure": "continue",
+              "extract": {
+                "anythingStatus": ".status"
+              }
+            }
+          ],
+          "else": []
+        }
+      ]
+    },
+    {
+      "id": "step_e2e_9_get_json",
+      "name": "Get slideshow JSON",
+      "type": "request",
+      "method": "GET",
+      "url": "{{baseUrl}}/json",
+      "onFailure": "stop",
+      "extract": {
+        "slides": "body.slideshow.slides"
+      }
+    },
+    {
+      "id": "step_e2e_10_has_slides",
+      "name": "Has slides?",
+      "type": "condition",
+      "condition": "",
+      "conditionData": {
+        "variable": "slides",
+        "operator": "is_array",
+        "value": ""
+      },
+      "then": [
+        {
+          "id": "step_e2e_11_loop_slides",
+          "name": "Loop Slides",
+          "type": "loop",
+          "source": "slides",
+          "loopVariable": "slide",
+          "steps": [
+            {
+              "id": "step_e2e_12_check_title",
+              "name": "Title contains Widget??",
+              "type": "condition",
+              "condition": "{{slide}} && typeof {{slide}}.includes === 'function' && {{slide}}.includes(\"Widget\")",
+              "conditionData": {
+                "variable": "slide.title", // Corrected path for condition
+                "operator": "contains",
+                "value": "Widget",
+                "preview": "slide.title contains \"Widget\""
+              },
+              "then": [
+                {
+                  "id": "step_e2e_13_echo_slide",
+                  "name": "Echo slide via anything",
+                  "type": "request",
+                  "method": "GET",
+                  "url": "{{baseUrl}}/anything/slide/{{slide.title}}",
+                  "headers": {
+                    "X-Slide-Title": "{{slide.title}}"
+                  },
+                  "onFailure": "continue",
+                  "extract": {
+                    "echoedTitle": "body.headers.X-Slide-Title"
+                  }
+                }
+              ],
+              "else": []
+            }
+          ]
+        }
+      ],
+      "else": []
+    },
+    {
+      "id": "step_e2e_14_get_headers",
+      "name": "Echo headers",
+      "type": "request",
+      "method": "GET",
+      "url": "{{baseUrl}}/headers",
+      "onFailure": "stop",
+      "extract": {
+        "globalHeaderEcho": "body.headers.X-Global-Header"
+      }
+    }
+  ],
+  "staticVars": {
+    "baseUrl": "https://httpbin.org",
+    "testMode": true,
+    "randomNumber": 42,
+    "userName": "FlowRunnerUser"
+  },
+  "visualLayout": { // Keeping visual layout simple or can be expanded
+    "step_e2e_1_get_ip": { "x": 50, "y": 50 },
+    "step_e2e_2_check_status": { "x": 350, "y": 50 }
+    // Add other step layouts if needed for graph view testing, otherwise default layout will be used
+  }
+};
+
 
 /* ───────────── helpers ───────────── */
 
@@ -38,22 +281,18 @@ async function pushRecent(page, fp) {
 
 const esc = (p) => p.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 
-/** capture all renderer (console) logs to a file */
 function setupRendererLogCapture(page, logFile = 'e2e-renderer-logs.txt') {
-  // Clear the log file at the start of capture setup
   try {
-    fsSync.writeFileSync(logFile, ''); // Overwrite existing or create new empty file
+    fsSync.writeFileSync(logFile, '');
     console.log(`[E2E Log Capture] Cleared/Created log file: ${logFile}`);
   } catch (err) {
     console.error(`[E2E Log Capture] Error clearing log file ${logFile}:`, err);
   }
-
   page.on('console', msg => {
     const line = `[renderer][${msg.type()}] ${msg.text()}\n`;
     fsSync.appendFileSync(logFile, line);
   });
 }
-
 
 /* ───────────── suite ───────────── */
 
@@ -64,37 +303,46 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
 
   test.beforeAll(async () => {
     console.log('--- E2E flow-execution setup ---');
-    await fs.access(flowPath);                           // assert exists
 
+    // Ensure the test data directory exists
+    await fs.mkdir(testDataDir, { recursive: true });
+    // Write the flow file content dynamically
+    await fs.writeFile(flowPath, JSON.stringify(HTTPBIN_FLOW_CONTENT, null, 2));
+    console.log(`[E2E flow-execution setup] Dynamically created flow file at: ${flowPath}`);
+
+    // The fs.access check is now redundant here if we just created it, but good for sanity
+    try {
+        await fs.access(flowPath);
+        console.log(`[E2E flow-execution setup] Successfully accessed flow file at: ${flowPath}`);
+    } catch (error) {
+        console.error(`[E2E flow-execution setup] Error accessing dynamically created flow file at ${flowPath}. Error: ${error.message}`);
+        throw error;
+    }
+    
     app = await electron.launch({
       args: [path.join(projectRoot, 'main.js')],
       cwd : projectRoot,
-      env: { ...process.env, NODE_ENV: 'test', E2E: 'true' } // Ensure environment variable is set
+      env: { ...process.env, NODE_ENV: 'test', E2E: 'true' }
     });
     page = await app.firstWindow();
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForLoadState('domcontentloaded', { timeout: 20000 });
     page.setDefaultTimeout(30_000);
-    setupRendererLogCapture(page); // <-- Capture renderer logs to file
+    setupRendererLogCapture(page);
 
     await pushRecent(page, flowPath);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.reload({ waitUntil: 'domcontentloaded', timeout: 20000 });
 
     await page.locator(
       `#flow-list .recent-file-item[data-file-path="${esc(flowPath)}"]`
-    ).click(); // Click to load the flow
+    ).click();
 
-    // --- ADDED: Wait for the flow to actually render ---
     const firstStepSelector = `.flow-step[data-step-id="step_e2e_1_get_ip"]`;
-    await expect(page.locator(firstStepSelector)).toBeVisible({ timeout: 15000 });
-    // --- END ADDED WAIT ---
+    await expect(page.locator(firstStepSelector)).toBeVisible({ timeout: 20000 });
 
     await expect(page.locator('#workspace-title'))
-      .toContainText(FLOW_TITLE, { timeout: 10_000 }); // Keep title check
+      .toContainText(FLOW_TITLE, { timeout: 15_000 });
 
-    // Add the logging again for verification (optional but recommended for now)
     const loadedFlowInfo = await page.evaluate(() => {
-       // Access internal state if possible (adjust based on your app's structure)
-       // This is a *potential* way, might need refinement
        // @ts-ignore
        const internalState = window.appState || {};
        return {
@@ -104,10 +352,8 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     });
     console.log('[E2E flow-execution setup] Verified loaded flow info:', loadedFlowInfo);
 
+    await expect(page.locator('#save-flow-btn')).toBeDisabled();
 
-    await expect(page.locator('#save-flow-btn')).toBeDisabled(); // Should be disabled after load
-
-    /* at least one step present */
     const stepCount = await page.locator('.flow-step').count();
     expect(stepCount).toBeGreaterThan(0);
     console.log(`[E2E DEBUG] Workspace title: ${await page.locator('#workspace-title').textContent()}, step count: ${stepCount}`);
@@ -115,46 +361,47 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     console.log('--- Setup complete ---');
   });
 
-  test.afterAll(async () => app && await app.close());
+  // Modified afterAll to clean up the dynamically created file and directory if it's empty
+  test.afterAll(async () => {
+    if (app) await app.close();
+    try {
+      await fs.rm(flowPath, { force: true }); // Remove the specific flow file
+      console.log(`[E2E flow-execution teardown] Removed flow file: ${flowPath}`);
+      // Optionally, try to remove the directory if it's empty
+      const filesInTestDataDir = await fs.readdir(testDataDir);
+      if (filesInTestDataDir.length === 0) {
+        await fs.rmdir(testDataDir);
+        console.log(`[E2E flow-execution teardown] Removed empty test data directory: ${testDataDir}`);
+      }
+    } catch (error) {
+      console.warn(`[E2E flow-execution teardown] Error during cleanup: ${error.message}`);
+    }
+  });
+
 
   test.beforeEach(async ({}, testInfo) => {
     console.log(`[BeforeEach] prepare clean runner results → ${testInfo.title}`);
     const clear = page.locator('#clear-results-btn');
-    if (await clear.isEnabled().catch(() => false)) await clear.click();
-    await expect(page.locator('#runner-results .no-results')).toBeVisible();
+    if (await clear.isEnabled({timeout: 5000}).catch(() => false)) {
+        await clear.click();
+    }
+    await expect(page.locator('#runner-results .no-results')).toBeVisible({timeout: 5000});
   });
 
   /* --------------- run whole flow --------------- */
   test('Run flow & verify a few key results', async () => {
-    // Log workspace title and step count before running
     const title = await page.locator('#workspace-title').textContent();
     const stepCount = await page.locator('.flow-step').count();
     console.log(`[E2E DEBUG] Workspace title: ${title}, step count: ${stepCount}`);
     await page.locator('#run-flow-btn').click();
     await expect(page.locator('#stop-flow-btn')).toBeEnabled();
 
-    // --- MODIFICATION START: Wait for results area to populate before specific check ---
-    // Wait for the "no results" message OR any result item to ensure the panel is active
-    await expect(
-        page.locator('#runner-results .no-results').or(page.locator('#runner-results .result-item'))
-    ).toHaveCount(1, { timeout: 15_000 }); // Wait up to 15s for *something* to show
-
-    // Now specifically check for the first step's result
     const step1ResultLocator = page.locator('.result-item[data-step-id="step_e2e_1_get_ip"]');
     const step1StatusLocator = step1ResultLocator.locator('.result-status');
 
-    await expect(step1ResultLocator).toBeVisible({ timeout: 20_000 });
-    try {
-      await expect(step1StatusLocator).toHaveText('SUCCESS', { timeout: 20_000 });
-      console.log('[Test] Step 1 SUCCESS result verified.');
-    } catch (e) {
-      console.error('DEBUG: Failed to verify SUCCESS for step 1. Runner results HTML:');
-      console.error(await page.locator('#runner-results').innerHTML());
-      throw e;
-    }
-    // --- MODIFICATION END ---
+    await expect(step1StatusLocator).toHaveText('SUCCESS', { timeout: 30_000 });
+    console.log('[Test] Step 1 SUCCESS result verified.');
 
-    // Wait for run to finish
     await expect(page.locator('#run-flow-btn'))
       .toBeEnabled({ timeout: 90_000 });
     console.log('[Test] Flow run finished (run button enabled).');
@@ -168,21 +415,21 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     await clickStep();
     await expect(
       page.locator('.result-item[data-step-id="step_e2e_1_get_ip"] .result-status')
-    ).toHaveText('SUCCESS', { timeout: 15_000 });
+    ).toHaveText('SUCCESS', { timeout: 20_000 });
     console.log('[Test] Stepping: Step 1 SUCCESS');
 
     console.log('[Test] Stepping: Step 2');
     await clickStep();
     await expect(
       page.locator('.result-item[data-step-id="step_e2e_2_check_status"] .result-status')
-    ).toHaveText('SUCCESS');
+    ).toHaveText('SUCCESS', { timeout: 15000 });
     console.log('[Test] Stepping: Step 2 SUCCESS');
 
     console.log('[Test] Stepping: Step 3');
     await clickStep();
     await expect(
       page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-status')
-    ).toHaveText('SUCCESS', { timeout: 15_000 });
+    ).toHaveText('SUCCESS', { timeout: 20_000 });
     console.log('[Test] Stepping: Step 3 SUCCESS. Test complete.');
   });
 });

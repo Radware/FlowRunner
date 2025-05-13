@@ -338,11 +338,12 @@ test.describe('IPC and File I/O Integration Tests', () => {
                  return window.electronAPI.readFile(path);
              }, invalidPath);
 
+             // UPDATED: Match the new error message from main.js
              expect(rendererResult).toEqual({
                  success: false,
-                 error: 'Invalid file path provided',
+                 error: 'Invalid file path provided. Please select a valid file.',
                  path: invalidPath,
-                 code: undefined
+                 // code: undefined // This remains correct as main.js doesn't set 'code' for this error
              });
          });
     });
