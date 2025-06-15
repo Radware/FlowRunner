@@ -265,7 +265,7 @@ export class FlowBuilderComponent {
         const valueId = `fv-val-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
         row.innerHTML = `
             <input type="text" class="flow-var-key" id="${keyId}" value="${escapeHTML(key)}" placeholder="Variable Name">
-            <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value">
+            <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value (JSON supported)">
             <button class="btn-insert-var" data-target-input="${valueId}" title="Insert Variable">{{…}}</button>
             <button class="btn-remove-flow-var" title="Remove Variable">✕</button>
         `;
@@ -306,7 +306,13 @@ export class FlowBuilderComponent {
             const keyInput = row.querySelector('.flow-var-key');
             const valueInput = row.querySelector('.flow-var-value');
             const key = keyInput?.value.trim();
-            const value = valueInput?.value;
+            let value = valueInput?.value;
+            if (typeof value === 'string') {
+                const trimmed = value.trim();
+                if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+                    try { value = JSON.parse(trimmed); } catch (e) { /* keep string */ }
+                }
+            }
 
             if (key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
                  staticVars[key] = value ?? '';

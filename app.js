@@ -437,7 +437,7 @@ function addFlowVarRow(key, value, container) { // `container` is passed from ha
     const valueId = `fv-val-global-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     row.innerHTML = `
         <input type="text" class="flow-var-key" id="${keyId}" value="${escapeHTML(key)}" placeholder="Variable Name (letters, numbers, _)">
-        <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value">
+        <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value (JSON supported)">
         <button class="btn-insert-var" data-target-input="${valueId}" title="Insert Variable">{{…}}</button>
         <button class="btn-remove-flow-var" title="Remove Variable">✕</button>
     `;

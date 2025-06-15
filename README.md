@@ -161,7 +161,7 @@ Click the **"Info ▼"** button in the workspace header to open the Flow Info ov
 *   **Flow Name:** A descriptive name for your flow.
 *   **Description:** Optional details about the flow's purpose.
 *   **Global Headers:** Define HTTP headers (Key-Value pairs) that will be automatically added to *all* 'API Request' steps in this flow. Headers defined within individual steps will override global headers with the same key.
-*   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. These are useful for configuration values or initial setup data. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`).
+*   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. These are useful for configuration values or initial setup data. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`). Values may contain JSON arrays or objects for loops or complex data.
 
 Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info ▲"** button again.
 

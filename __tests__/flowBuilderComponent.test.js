@@ -3,7 +3,8 @@ import { jest, describe, beforeEach, afterEach, test, expect } from '@jest/globa
 import { FlowBuilderComponent } from '../flowBuilderComponent.js';
 import { domRefs, appState } from '../state.js';
 import { initializeDOMReferences } from '../domUtils.js';
-import { createTemplateFlow } from '../flowCore.js';
+import { createTemplateFlow, createNewStep } from '../flowCore.js';
+import { FlowRunner } from '../flowRunner.js';
 
 // Corrected Mocking for ESM: Mock specific functions, don't spread jest.requireActual here.
 // We will dynamically import the actual module if its non-mocked parts are needed.
@@ -269,5 +270,43 @@ describe('FlowBuilderComponent', () => {
         
         expect(varNames).toContain('staticV');
         expect(varNames).toContain('extractedV');
+    });
+
+    test('stores JSON variable values as objects', () => {
+        componentInstance._addFlowVarRow('arr', '[1,2]', false);
+        const vars = componentInstance._getCurrentFlowVarsFromUI();
+        expect(vars).toEqual({ arr: [1, 2] });
+    });
+
+    test('JSON array variable drives loop iterations', async () => {
+        jest.useFakeTimers({ now: Date.now() });
+        componentInstance._addFlowVarRow('arr', '[1,2,3]', false);
+        const flow = createTemplateFlow();
+        flow.staticVars = { arr: [1, 2, 3] };
+        flow.steps = [{
+            ...createNewStep('loop'),
+            id: 'l1',
+            source: 'arr',
+            loopSteps: [{ ...createNewStep('request'), id: 'r1' }]
+        }];
+        const executed = [];
+        const runner = new FlowRunner({
+            evaluatePathFn: (ctx, path) => ctx[path],
+            onStepStart: s => { if (s.id === 'r1') executed.push(s.id); return 0; },
+            onStepComplete: () => {},
+            onContextUpdate: () => {},
+            delay: 0,
+        });
+        await runner.run(flow);
+        const processAsyncOps = async (count = 1) => {
+            for (let i = 0; i < count; i++) {
+                if (jest.getTimerCount() > 0) jest.runAllTimers();
+                await Promise.resolve();
+                await Promise.resolve();
+            }
+        };
+        await processAsyncOps(2 + (3 * 2));
+        expect(executed.length).toBe(3);
+        jest.useRealTimers();
     });
 });
