@@ -37,6 +37,9 @@ export class FlowRunner {
         this.flowModelForNextContinuousRun = null; // NEW: Store next iteration's flow model
         // --- END NEW ---
 
+        // Global headers to be applied to all request steps
+        this.globalHeaders = {};
+
         this.reset();
     }
 
@@ -51,6 +54,9 @@ export class FlowRunner {
                 logger.error("[FlowRunner] Error aborting fetch controller during reset:", e);
             }
         }
+
+        // Clear global headers on reset
+        this.globalHeaders = {};
 
         this.state = {
             isRunning: false,
@@ -142,6 +148,8 @@ export class FlowRunner {
         if (!flowModel || !flowModel.steps) {
             throw new Error("Invalid flow model provided.");
         }
+
+        this.globalHeaders = flowModel.headers || {};
 
         // If this is the first continuous invocation, store the model and activate continuous mode
         if (!this.currentFlowModelForContinuousRun && isContinuousInvocation) {
@@ -565,7 +573,7 @@ export class FlowRunner {
 
         const fetchOptions = {
             method: method || 'GET',
-            headers: headers || {},
+            headers: { ...this.globalHeaders, ...(headers || {}) },
             signal: controller.signal, // Use the controller's signal
         };
 
