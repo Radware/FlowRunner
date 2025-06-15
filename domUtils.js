@@ -31,6 +31,8 @@ export function initializeDOMReferences() {
         closeFlowBtn: document.getElementById('close-flow-btn'),   // <<< Ensure this ID matches your HTML
         toggleInfoBtn: document.getElementById('toggle-info-btn'),
         toggleVariablesBtn: document.getElementById('toggle-variables-btn'),
+        zoomOutBtn: document.getElementById('zoom-out-btn'),
+        zoomInBtn: document.getElementById('zoom-in-btn'),
 
         // Panels relative to Workspace
         variablesPanel: document.querySelector('.variables-panel'),

@@ -53,6 +53,10 @@ export function initializeEventListeners() {
     // Variables Panel Toggle Button (Main Header) - Toggles based on current state
     domRefs.toggleVariablesBtn?.addEventListener('click', () => handleToggleVariablesPanel());
 
+    // Zoom Controls
+    domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
+    domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
+
     // Info Panel Close Button (Inside Panel) - Explicitly closes
     domRefs.actualInfoOverlayCloseBtn?.addEventListener('click', () => handleToggleInfoOverlay(false));
 
@@ -146,6 +150,15 @@ export function initializeEventListeners() {
              if (!domRefs.stopFlowBtn?.disabled) {
                  handleStopFlow();
              }
+        }
+
+        if (ctrlOrCmd && (e.key === '=' || e.key === '+')) {
+            e.preventDefault();
+            domRefs.zoomInBtn?.click();
+        }
+        if (ctrlOrCmd && (e.key === '-' || e.key === '_')) {
+            e.preventDefault();
+            domRefs.zoomOutBtn?.click();
         }
 
         // View/Panel Toggles
