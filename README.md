@@ -288,13 +288,30 @@ FlowRunner configuration happens primarily through the user interface:
 
 ## Development Setup
 
-To set up a local environment for testing or packaging, run:
+FlowRunner requires **Node.js 18 or newer**. Use the setup script (which runs `npm ci`) or run `npm ci` yourself to install dependencies:
 
 ```bash
 ./setup_env.sh
+# or
+npm ci
 ```
 
-This script verifies npm availability, warns if your Node.js version is below 18, installs dependencies (using `npm ci` when possible), and downloads Playwright browsers.
+The script also downloads the Playwright browsers needed for e2e tests.
+
+Launch the app locally with:
+
+```bash
+npm start
+```
+
+Run the unit and end-to-end tests:
+
+```bash
+npm test     # runs with NODE_ENV=test
+npm run e2e  # runs with E2E=true
+```
+
+These npm scripts automatically set the required environment variables.
 
 
 <div align="center" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
