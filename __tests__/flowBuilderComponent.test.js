@@ -274,6 +274,8 @@ describe('FlowBuilderComponent', () => {
 
     test('stores JSON variable values as objects', () => {
         componentInstance._addFlowVarRow('arr', '[1,2]', false);
+        const row = domRefs.infoOverlayFlowVarsList.lastElementChild;
+        row.querySelector('.flow-var-type').value = 'json';
         const vars = componentInstance._getCurrentFlowVarsFromUI();
         expect(vars).toEqual({ arr: [1, 2] });
     });
@@ -281,6 +283,7 @@ describe('FlowBuilderComponent', () => {
     test('JSON array variable drives loop iterations', async () => {
         jest.useFakeTimers({ now: Date.now() });
         componentInstance._addFlowVarRow('arr', '[1,2,3]', false);
+        domRefs.infoOverlayFlowVarsList.lastElementChild.querySelector('.flow-var-type').value = 'json';
         const flow = createTemplateFlow();
         flow.staticVars = { arr: [1, 2, 3] };
         flow.steps = [{

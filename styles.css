@@ -1104,7 +1104,7 @@ button:disabled {
 .headers-list, .extracts-list, .global-headers-list, .flow-vars-list {
     margin-bottom: 10px;
 }
-.header-row, .extract-row, .global-header-row, .flow-var-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(150px, 2fr) auto auto; gap: 10px; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color-light); }
+.header-row, .extract-row, .global-header-row, .flow-var-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(150px, 2fr) minmax(90px, 1fr) auto auto; gap: 10px; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color-light); }
 .header-row:last-child, .extract-row:last-child, .global-header-row:last-child, .flow-var-row:last-child { border-bottom: none; margin-bottom: 0; }
 .header-row input, .extract-row input, .global-header-row input, .flow-var-row input { min-width: 0; width: 100%; }
 .header-row .btn-insert-var, .extract-row .btn-insert-var, .global-header-row .btn-insert-var, .flow-var-row .btn-insert-var { padding: 0; width: 24px; height: 24px; font-size: 12px; border: 1px solid var(--border-color-medium); background: var(--light-bg-color); border-radius: 3px; color: var(--primary-color); line-height: 22px; text-align: center; align-self: center; justify-self: center; }
@@ -1405,7 +1405,7 @@ body.flow-step-dragging { cursor: grabbing !important; }
           linear-gradient(transparent 45%,#bdbdbd 45%,#bdbdbd 55%,transparent 55%);
         background-size:100% 4px;
       }
-    .header-row, .extract-row, .global-header-row, .flow-var-row { grid-template-columns: 1fr auto auto; }
+    .header-row, .extract-row, .global-header-row, .flow-var-row { grid-template-columns: 1fr auto auto auto; }
     .header-row input, .extract-row input, .global-header-row input, .flow-var-row input { grid-column: 1 / 2; }
     .header-row input:nth-of-type(2), .extract-row input:nth-of-type(2), .global-header-row input:nth-of-type(2), .flow-var-row input:nth-of-type(2) { margin-top: 5px; }
     .header-row .btn-insert-var, .extract-row .btn-insert-var, .global-header-row .btn-insert-var, .flow-var-row .btn-insert-var { grid-column: 2 / 3; grid-row: 1 / 3; align-self: center; }

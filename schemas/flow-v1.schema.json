@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlowRunner Flow v1.0",
+  "type": "object",
+  "required": ["id", "name", "steps"],
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "description": {"type": "string"},
+    "headers": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    },
+    "staticVars": {
+      "type": "object",
+      "additionalProperties": {}
+    },
+    "steps": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/step"}
+    },
+    "visualLayout": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["x", "y"],
+        "properties": {
+          "x": {"type": "number"},
+          "y": {"type": "number"}
+        }
+      }
+    }
+  },
+  "definitions": {
+    "step": {
+      "type": "object",
+      "required": ["id", "name", "type"],
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "type": {"enum": ["request", "condition", "loop"]},
+        "onFailure": {"enum": ["stop", "continue"]},
+        "headers": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
+        "url": {"type": "string"},
+        "method": {"type": "string"},
+        "body": {},
+        "extract": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        },
+        "thenSteps": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/step"}
+        },
+        "elseSteps": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/step"}
+        },
+        "condition": {"type": "string"},
+        "conditionData": {
+          "type": "object",
+          "properties": {
+            "variable": {"type": "string"},
+            "operator": {"type": "string"},
+            "value": {}
+          }
+        },
+        "source": {"type": "string"},
+        "loopVariable": {"type": "string"},
+        "loopSteps": {
+          "type": "array",
+          "items": {"$ref": "#/definitions/step"}
+        }
+      }
+    }
+  }
+}
