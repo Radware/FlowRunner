@@ -67,6 +67,11 @@ export class FlowVisualizer {
         this.scrollLeftStart = 0;
         this.scrollTopStart = 0;
 
+        // Zoom state
+        this.zoomLevel = 1;
+        this.minZoom = 0.5;
+        this.maxZoom = 2;
+
         // Debounce resize handler
         this.resizeObserver = null;
         this.debounceTimer = null;
@@ -75,6 +80,7 @@ export class FlowVisualizer {
 
         this._createBaseStructure();
         this._bindBaseListeners();
+        this._applyZoom();
     }
 
     /** Creates the initial SVG and Canvas elements within the mount point. */
@@ -93,6 +99,7 @@ export class FlowVisualizer {
         this.svgConnectors.style.height = '100%';
         this.svgConnectors.style.pointerEvents = 'none'; // Allow interaction with nodes beneath
         this.svgConnectors.style.overflow = 'visible'; // Allow connectors to extend beyond initial viewbox if needed
+        this.svgConnectors.style.transformOrigin = '0 0';
 
         // Add <defs> for arrowheads
         this.defs = document.createElementNS(SVG_NS, 'defs');
@@ -110,6 +117,7 @@ export class FlowVisualizer {
     /** Binds essential event listeners for panning and potential resizing. */
     _bindBaseListeners() {
         this.mountPoint.addEventListener('mousedown', this._handleMouseDown);
+        this.mountPoint.addEventListener('wheel', this._handleWheel, { passive: false });
         // Mouse move/up listeners are added to document dynamically during drag/pan
 
         // Observe mount point resizing to potentially trigger re-layout/re-render
@@ -449,6 +457,25 @@ export class FlowVisualizer {
                 this.svgConnectors.style.height = `${height}px`;
             }
         }
+    }
+
+    setZoom(level) {
+        this.zoomLevel = Math.min(this.maxZoom, Math.max(this.minZoom, level));
+        this._applyZoom();
+    }
+
+    zoomIn() {
+        this.setZoom(this.zoomLevel + 0.1);
+    }
+
+    zoomOut() {
+        this.setZoom(this.zoomLevel - 0.1);
+    }
+
+    _applyZoom() {
+        const scale = `scale(${this.zoomLevel})`;
+        if (this.canvas) this.canvas.style.transform = scale;
+        if (this.svgConnectors) this.svgConnectors.style.transform = scale;
     }
 
     // --- Node Element Creation ---
@@ -793,6 +820,17 @@ export class FlowVisualizer {
             this._handlePanStart(e);
         }
     }
+
+    _handleWheel = (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const delta = e.deltaY;
+        if (delta < 0) {
+            this.zoomIn();
+        } else if (delta > 0) {
+            this.zoomOut();
+        }
+    }
     // --- End Bound Handlers ---
 
     _handlePanStart(e) {
@@ -822,6 +860,7 @@ export class FlowVisualizer {
         this.mountPoint.style.userSelect = ''; // Re-enable text selection
         document.removeEventListener('mousemove', this._handleMouseMove);
         document.removeEventListener('mouseup', this._handleMouseUp);
+        this.mountPoint?.removeEventListener('wheel', this._handleWheel);
     }
 
     _handleNodeMouseDown = (e) => { // Arrow function binds 'this'

@@ -628,9 +628,13 @@ export function _updateVariablesPanelUI() { // Keep as internal helper
 export function updateViewToggle() {
     if (!appState.currentFlowModel || !domRefs.toggleViewBtn) {
         if(domRefs.toggleViewBtn) domRefs.toggleViewBtn.style.display = 'none';
+        if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = 'none';
+        if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = 'none';
         return;
     }
     domRefs.toggleViewBtn.style.display = ''; // Ensure button is visible if flow loaded
+    if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if (appState.currentView === 'list-editor') {
         domRefs.toggleViewBtn.textContent = 'Visual View';
         domRefs.toggleViewBtn.title = 'Switch to Node-Graph View (Ctrl+3)';
