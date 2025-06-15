@@ -31,6 +31,11 @@ if (process.env.E2E || process.env.NODE_ENV === 'test') {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Allow running Electron as root in headless environments
+if (process.platform === 'linux' && process.getuid && process.getuid() === 0) {
+    app.commandLine.appendSwitch('no-sandbox');
+}
+
 let mainWindow; // Global reference
 let helpWindow = null; // Keep track of the help window
 let forceQuit = false; // Flag to bypass prompts if user confirmed quit

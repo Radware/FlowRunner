@@ -24,4 +24,10 @@ fi
 # Install Playwright browsers
 npx playwright install --with-deps
 
+# Start a virtual display if none is available (for Electron)
+if [ -z "$DISPLAY" ] && command -v Xvfb >/dev/null 2>&1; then
+    Xvfb :99 -screen 0 1280x720x24 >/tmp/xvfb.log 2>&1 &
+    export DISPLAY=:99
+fi
+
 echo "Environment setup complete."
