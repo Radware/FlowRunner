@@ -10,7 +10,7 @@
     "make": "electron-forge make",
     "lint": "echo \"Error: no lint script specified\" && exit 0",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
-    "e2e": "NODE_ENV=test playwright test"
+    "e2e": "NODE_ENV=test xvfb-run -a -s \"-screen 0 1280x720x24\" playwright test"
   },
   "repository": {
     "type": "git",
