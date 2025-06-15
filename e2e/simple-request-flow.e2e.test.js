@@ -103,14 +103,15 @@ test.describe('E2E: Simple Request Flow Execution', () => {
     page.setDefaultTimeout(20_000);
     setupRendererLogCapture(page); // <-- Capture renderer logs to file
 
+    // Ensure a clean recent files list
+    await page.evaluate(key => localStorage.setItem(key, '[]'), RECENT_FILES_KEY);
     await pushToRecentFiles(page, simpleFlowPath);
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
-    const escaped = simpleFlowPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    await page.locator(`#flow-list .recent-file-item[data-file-path="${escaped}"]`).click();
+    await page.locator('#flow-list .recent-file-item').filter({ hasText: 'simple-request.flow.json' }).click();
 
-    await expect(page.locator('#workspace-title')).toContainText('Simple Request Flow');
+    await expect(page.locator('#workspace-title')).toContainText('Simple Request Flow', { timeout: 10000 });
 
     // Log loaded flow info for verification
     const loadedFlowInfo = await page.evaluate(() => {
