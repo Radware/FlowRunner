@@ -15,8 +15,8 @@ const simpleFlowPath  = path.join(testDataRoot, 'simple-request.flow.json');
 
 const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
 const MAX_RECENT_FILES = 10;
-let httpServer;
-let httpbinUrl;
+let mockServer;
+let mockUrl;
 
 async function pushToRecentFiles(page, filePath) {
   return page.evaluate(
@@ -62,7 +62,7 @@ test.describe('E2E: Simple Request Flow Execution', () => {
   test.beforeAll(async () => {
     console.log('--- E2E Setup (simple-request) ---');
     await fs.mkdir(testDataRoot, { recursive: true });
-    ({ server: httpServer, baseUrl: httpbinUrl } = await startHttpbinServer());
+    ({ server: mockServer, baseUrl: mockUrl } = await startHttpbinServer());
 
     const flow = {
       name : 'Simple Request Flow',
@@ -72,7 +72,7 @@ test.describe('E2E: Simple Request Flow Execution', () => {
           name : 'Get IP',
           type : 'request',
           method: 'GET',
-          url  : `${httpbinUrl}/get`,
+          url  : `${mockUrl}/get`,
           headers: { Accept: 'application/json' },
           body : '',
           extract: { clientIp: 'body.origin' },
@@ -83,7 +83,7 @@ test.describe('E2E: Simple Request Flow Execution', () => {
           name : 'Get UUID',
           type : 'request',
           method: 'GET',
-          url  : `${httpbinUrl}/uuid`,
+          url  : `${mockUrl}/uuid`,
           headers: { Accept: 'application/json' },
           body : '',
           extract: { uuid: 'body.uuid' },
@@ -128,7 +128,7 @@ test.describe('E2E: Simple Request Flow Execution', () => {
 
   test.afterAll(async () => {
     if (electronApp) await electronApp.close();
-    if (httpServer) await stopHttpbinServer(httpServer);
+    if (mockServer) await stopHttpbinServer(mockServer);
     try { await fs.rm(simpleFlowPath, { force: true }); } catch {}
   });
 
