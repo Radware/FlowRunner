@@ -3,7 +3,7 @@
     – fixes invalid matcher, aligns with real title.
     – UPDATED: flowPath to look in e2e-test-data
     – UPDATED: "Run flow" test to wait more robustly for results
-    – UPDATED: Dynamically create httpbin-flow.flow.json in test.beforeAll
+    – UPDATED: Dynamically create mock-flow.flow.json in test.beforeAll
 */
 
 import { test, expect, _electron as electron } from '@playwright/test';
@@ -19,19 +19,19 @@ const __filename      = fileURLToPath(import.meta.url);
 const __dirname       = path.dirname(__filename);
 const projectRoot     = path.resolve(__dirname, '..'); // Renamed for clarity
 const testDataDir     = path.resolve(__dirname, 'e2e-test-data'); // Define test data directory
-const flowPath        = path.resolve(testDataDir, 'httpbin-flow.flow.json'); // Path for the flow file
+const flowPath        = path.resolve(testDataDir, 'mock-flow.flow.json'); // Path for the flow file
 
 const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
 const MAX_RECENT_FILES = 10;
-const FLOW_TITLE       = 'E2E All‑Features HTTPBin Flow';
-let httpServer;
-let httpbinUrl;
+const FLOW_TITLE       = 'E2E All‑Features Mock Flow';
+let mockServer;
+let mockUrl;
 
-// Content for the httpbin-flow.flow.json
-const HTTPBIN_FLOW_CONTENT = {
-  "id": "flow_e2e_httpbin_all_features",
-  "name": "E2E All‑Features HTTPBin Flow",
-  "description": "Comprehensive flow that touches every FlowRunner v1.0.0 feature against https://httpbin.org.",
+// Content for the local mock httpbin flow
+const MOCK_FLOW_CONTENT = {
+  "id": "flow_e2e_mock_all_features",
+  "name": "E2E All‑Features Mock Flow",
+  "description": "Comprehensive flow that touches every FlowRunner v1.0.0 feature using a local mock server.",
   "headers": {
     "X-Global-Header": "FlowRunner E2E",
     "Accept": "application/json"
@@ -307,13 +307,13 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
   test.beforeAll(async () => {
     console.log('--- E2E flow-execution setup ---');
 
-    ({ server: httpServer, baseUrl: httpbinUrl } = await startHttpbinServer());
-    HTTPBIN_FLOW_CONTENT.staticVars.baseUrl = httpbinUrl;
+    ({ server: mockServer, baseUrl: mockUrl } = await startHttpbinServer());
+    MOCK_FLOW_CONTENT.staticVars.baseUrl = mockUrl;
 
     // Ensure the test data directory exists
     await fs.mkdir(testDataDir, { recursive: true });
     // Write the flow file content dynamically
-    await fs.writeFile(flowPath, JSON.stringify(HTTPBIN_FLOW_CONTENT, null, 2));
+    await fs.writeFile(flowPath, JSON.stringify(MOCK_FLOW_CONTENT, null, 2));
     console.log(`[E2E flow-execution setup] Dynamically created flow file at: ${flowPath}`);
 
     // The fs.access check is now redundant here if we just created it, but good for sanity
@@ -370,7 +370,7 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
   // Modified afterAll to clean up the dynamically created file and directory if it's empty
   test.afterAll(async () => {
     if (app) await app.close();
-    if (httpServer) await stopHttpbinServer(httpServer);
+    if (mockServer) await stopHttpbinServer(mockServer);
     try {
       await fs.rm(flowPath, { force: true }); // Remove the specific flow file
       console.log(`[E2E flow-execution teardown] Removed flow file: ${flowPath}`);
