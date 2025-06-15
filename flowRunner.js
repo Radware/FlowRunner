@@ -24,6 +24,7 @@ export class FlowRunner {
         this.onContextUpdate = options.onContextUpdate || (() => {}); // (context) => {}
         this.onIterationStart = options.onIterationStart || (() => {}); // NEW: Called at the start of each continuous run iteration
         this.updateRunnerUICallback = options.updateRunnerUICallback || (() => {}); // Callback to request UI update
+        this.encodeUrlVars = options.encodeUrlVars ?? false; // Whether to URL-encode substituted variables in URLs
 
         // Core logic functions provided by the main app
         this.substituteVariablesFn = options.substituteVariablesFn || ((step, context) => ({ processedStep: step, unquotedPlaceholders: {} })); // Default pass-through, MUST now return { processedStep, unquotedPlaceholders }

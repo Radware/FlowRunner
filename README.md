@@ -205,6 +205,7 @@ Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info
 
 *   **Definition:** Variables are defined statically in the Flow Info overlay or dynamically via the 'Extract' tab in Request steps. Loop steps also introduce an item variable.
 *   **Substitution:** Use `{{variableName}}` syntax in fields that support it (URL, Header values, Request Body, Condition Value, Loop Source). The runner replaces this with the variable's current value during execution.
+*   **URL Encoding:** When using the `FlowRunner` class programmatically, pass `{ encodeUrlVars: true }` to automatically URL-encode variable values inserted into URLs.
 *   **Extraction Paths:** Use dot notation (`object.property`) and array indexing (`array[index]`) to access values within JSON response bodies. Special paths include `.status`, `headers.Header-Name`, and `body`.
 *   **Insertion Helper:** Click the **`{{…}}`** button next to an input field to open a searchable dropdown of currently defined variables. Clicking a variable name inserts `{{variableName}}` into the input field.
 *   **Variables Panel:** View all variables defined by the flow structure (Static, Extract, Loop). Click **"Show/Hide Variables"** in the workspace header to toggle this panel. *Note: This panel shows where variables are defined, not their live values during execution.*
