@@ -66,17 +66,30 @@ test.describe('E2E: Simple Request Flow Execution', () => {
 
     const flow = {
       name : 'Simple Request Flow',
-      steps: [{
-        id   : 'step_simple_1',
-        name : 'Get IP',
-        type : 'request',
-        method: 'GET',
-        url  : `${httpbinUrl}/get`,
-        headers: { Accept: 'application/json' },
-        body : '',
-        extract: { clientIp: 'body.origin' },
-        onFailure: 'stop',
-      }],
+      steps: [
+        {
+          id   : 'step_simple_1',
+          name : 'Get IP',
+          type : 'request',
+          method: 'GET',
+          url  : `${httpbinUrl}/get`,
+          headers: { Accept: 'application/json' },
+          body : '',
+          extract: { clientIp: 'body.origin' },
+          onFailure: 'stop',
+        },
+        {
+          id   : 'step_simple_2',
+          name : 'Get UUID',
+          type : 'request',
+          method: 'GET',
+          url  : `${httpbinUrl}/uuid`,
+          headers: { Accept: 'application/json' },
+          body : '',
+          extract: { uuid: 'body.uuid' },
+          onFailure: 'stop',
+        }
+      ],
     };
     await fs.writeFile(simpleFlowPath, JSON.stringify(flow, null, 2));
 
@@ -131,10 +144,15 @@ test.describe('E2E: Simple Request Flow Execution', () => {
 
     // instead of racing the stop‑button, just wait for SUCCESS
     console.log('[Test] Waiting for SUCCESS result...');
-    const result = page.locator('#runner-results .result-item[data-step-id="step_simple_1"]');
-    await expect(result.locator('.result-status')).toHaveText('SUCCESS', { timeout: 15_000 });
-    await expect(result.locator('.result-body pre')).toContainText('"origin"');
-    console.log('[Test] SUCCESS result found.');
+    const step1 = page.locator('#runner-results .result-item[data-step-id="step_simple_1"]');
+    await expect(step1.locator('.result-status')).toHaveText('SUCCESS', { timeout: 15_000 });
+    await expect(step1.locator('.result-body pre')).toContainText('"origin"');
+    console.log('[Test] Step 1 SUCCESS result found.');
+
+    const step2 = page.locator('#runner-results .result-item[data-step-id="step_simple_2"]');
+    await expect(step2.locator('.result-status')).toHaveText('SUCCESS', { timeout: 15_000 });
+    await expect(step2.locator('.result-body pre')).toContainText('"uuid"');
+    console.log('[Test] Step 2 SUCCESS result found.');
 
     // final UI state
     await expect(page.locator('#run-flow-btn')).toBeEnabled();
