@@ -780,4 +780,42 @@ describe('FlowRunner', () => {
             expect(resultArg.output.body).toBeNull();
         });
     });
+
+    describe('Global headers', () => {
+        beforeEach(() => {
+            mockOnStepStart.mockImplementation(step => {
+                runner.state.results.push({ stepId: step.id, status: 'pending_start' });
+                return runner.state.results.length - 1;
+            });
+        });
+
+        it('merges global and step headers for requests', async () => {
+            const flow = createTemplateFlow();
+            flow.headers = { G: '1', Shared: 'global' };
+            flow.steps = [
+                { ...createNewStep('request'), id: 'r1', name: 'Req1' },
+                { ...createNewStep('request'), id: 'r2', name: 'Req2', headers: { Shared: 'step', Step: '2' } }
+            ];
+
+            const seen = [];
+            global.fetch.mockImplementation(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({}),
+                text: async () => "",
+                headers: {
+                    get: jest.fn(h => h.toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null),
+                    forEach: jest.fn(cb => cb('application/json; charset=utf-8', 'content-type')),
+                    [Symbol.iterator]: function* () { yield ['content-type', 'application/json; charset=utf-8']; }
+                }
+            }));
+            await runner.run(flow);
+            await processAsyncOps(flow.steps.length + 2);
+            for (const call of global.fetch.mock.calls) {
+                seen.push(call[1].headers);
+            }
+            expect(seen[0]).toEqual({ G: '1', Shared: 'global' });
+            expect(seen[1]).toEqual({ G: '1', Shared: 'step', Step: '2' });
+        });
+    });
 });
