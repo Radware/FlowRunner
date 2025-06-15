@@ -5,7 +5,8 @@ prd.txt
 roadmap.txt
 development_tasks.md
 *.pem
-
+collect.sh
+output.text
 # Logs
 logs
 *.log
