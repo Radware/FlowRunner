@@ -754,5 +754,30 @@ describe('FlowRunner', () => {
             expect(missingFailure.path).toBe('nonexistent');
             expect(resultArg.extractionFailures.length).toBe(1);
         });
+
+        it('should handle 204 No Content responses without warning', async () => {
+            const flow = createTemplateFlow();
+            flow.steps = [{
+                ...createNewStep('request'),
+                id: 'r1',
+                name: 'Req1'
+            }];
+            global.fetch.mockResolvedValueOnce(Promise.resolve({
+                ok: true,
+                status: 204,
+                headers: {
+                    get: () => null,
+                    forEach: () => {},
+                    [Symbol.iterator]: function* () {}
+                },
+                text: async () => ''
+            }));
+            await runner.run(flow);
+            await processAsyncOps(2);
+            expect(mockOnMessage).not.toHaveBeenCalledWith(expect.stringContaining('Response body parsing failed'), 'warning');
+            const resultArg = mockOnStepComplete.mock.calls[0][2];
+            expect(resultArg.status).toBe('success');
+            expect(resultArg.output.body).toBeNull();
+        });
     });
 });

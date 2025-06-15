@@ -669,12 +669,24 @@ export class FlowRunner {
             const responseHeaders = {};
             response.headers.forEach((value, key) => { responseHeaders[key] = value; });
             let responseBody = null;
-            const respContentType = response.headers.get('content-type');
-            try {
-                if (respContentType && respContentType.includes('application/json')) { responseBody = await response.json(); }
-                else { responseBody = await response.text(); }
-            } catch (parseError) {
-                try { responseBody = await response.text(); } catch (textError) { responseBody = "[Failed to retrieve response body]"; this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error'); } this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
+
+            if (responseStatus !== 204) {
+                const respContentType = response.headers.get('content-type');
+                try {
+                    if (respContentType && respContentType.includes('application/json')) {
+                        responseBody = await response.json();
+                    } else {
+                        responseBody = await response.text();
+                    }
+                } catch (parseError) {
+                    try {
+                        responseBody = await response.text();
+                    } catch (textError) {
+                        responseBody = "[Failed to retrieve response body]";
+                        this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error');
+                    }
+                    this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
+                }
             }
 
             // --- MODIFICATION START: Implement onFailure logic for HTTP status (remains the same logic) ---
