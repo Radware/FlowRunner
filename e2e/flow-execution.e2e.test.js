@@ -11,6 +11,7 @@ import path   from 'node:path';
 import fs     from 'node:fs/promises'; // fs/promises for async operations
 import { fileURLToPath } from 'url';
 import fsSync from 'node:fs';
+import { startHttpbinServer, stopHttpbinServer } from './httpbin-server.js';
 
 /* ───────────── paths & constants ───────────── */
 
@@ -23,6 +24,8 @@ const flowPath        = path.resolve(testDataDir, 'httpbin-flow.flow.json'); // 
 const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
 const MAX_RECENT_FILES = 10;
 const FLOW_TITLE       = 'E2E All‑Features HTTPBin Flow';
+let httpServer;
+let httpbinUrl;
 
 // Content for the httpbin-flow.flow.json
 const HTTPBIN_FLOW_CONTENT = {
@@ -250,7 +253,7 @@ const HTTPBIN_FLOW_CONTENT = {
     }
   ],
   "staticVars": {
-    "baseUrl": "https://httpbin.org",
+    "baseUrl": "http://localhost",
     "testMode": true,
     "randomNumber": 42,
     "userName": "FlowRunnerUser"
@@ -303,6 +306,9 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
 
   test.beforeAll(async () => {
     console.log('--- E2E flow-execution setup ---');
+
+    ({ server: httpServer, baseUrl: httpbinUrl } = await startHttpbinServer());
+    HTTPBIN_FLOW_CONTENT.staticVars.baseUrl = httpbinUrl;
 
     // Ensure the test data directory exists
     await fs.mkdir(testDataDir, { recursive: true });
@@ -364,6 +370,7 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
   // Modified afterAll to clean up the dynamically created file and directory if it's empty
   test.afterAll(async () => {
     if (app) await app.close();
+    if (httpServer) await stopHttpbinServer(httpServer);
     try {
       await fs.rm(flowPath, { force: true }); // Remove the specific flow file
       console.log(`[E2E flow-execution teardown] Removed flow file: ${flowPath}`);
