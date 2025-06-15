@@ -286,6 +286,16 @@ FlowRunner configuration happens primarily through the user interface:
     *   Try restarting the packaged application.
     *   For more advanced debugging, you can open the **Developer Tools** from the **View** menu (`View > Toggle Developer Tools`). Check the **Console** tab within the Developer Tools for any error messages logged by the application.
 
+## Development Setup
+
+To set up a local environment for testing or packaging, run:
+
+```bash
+./setup_env.sh
+```
+
+This script verifies npm availability, warns if your Node.js version is below 18, installs dependencies (using `npm ci` when possible), and downloads Playwright browsers.
+
 
 <div align="center" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
   <img src="assets/Radware_logo.svg" alt="Radware Logo" height="40">
