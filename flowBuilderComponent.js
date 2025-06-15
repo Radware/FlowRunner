@@ -263,12 +263,29 @@ export class FlowBuilderComponent {
         row.className = 'flow-var-row';
         const keyId = `fv-key-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
         const valueId = `fv-val-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
+        const typeId = `fv-type-builder-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
+
+        let detectedType = 'string';
+        if (typeof value === 'number') detectedType = 'number';
+        else if (typeof value === 'boolean') detectedType = 'boolean';
+        else if (typeof value === 'object' && value !== null) {
+            detectedType = 'json';
+            try { value = JSON.stringify(value); } catch (e) { value = String(value); }
+        }
+
         row.innerHTML = `
             <input type="text" class="flow-var-key" id="${keyId}" value="${escapeHTML(key)}" placeholder="Variable Name">
-            <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value (JSON supported)">
+            <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value">
+            <select class="flow-var-type" id="${typeId}">
+                <option value="string">String</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="json">JSON</option>
+            </select>
             <button class="btn-insert-var" data-target-input="${valueId}" title="Insert Variable">{{…}}</button>
             <button class="btn-remove-flow-var" title="Remove Variable">✕</button>
         `;
+        row.querySelector('.flow-var-type').value = detectedType;
         container.appendChild(row);
 
         const keyInput = row.querySelector('.flow-var-key');
@@ -305,13 +322,24 @@ export class FlowBuilderComponent {
         domRefs.infoOverlayFlowVarsList?.querySelectorAll('.flow-var-row').forEach(row => {
             const keyInput = row.querySelector('.flow-var-key');
             const valueInput = row.querySelector('.flow-var-value');
+            const typeSelect = row.querySelector('.flow-var-type');
             const key = keyInput?.value.trim();
-            let value = valueInput?.value;
-            if (typeof value === 'string') {
-                const trimmed = value.trim();
-                if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-                    try { value = JSON.parse(trimmed); } catch (e) { /* keep string */ }
-                }
+            const rawValue = valueInput?.value;
+
+            let value;
+            switch (typeSelect?.value) {
+                case 'number':
+                    value = Number(rawValue);
+                    if (Number.isNaN(value)) value = rawValue;
+                    break;
+                case 'boolean':
+                    value = String(rawValue).toLowerCase() === 'true';
+                    break;
+                case 'json':
+                    try { value = JSON.parse(rawValue); } catch (e) { value = rawValue; }
+                    break;
+                default:
+                    value = rawValue;
             }
 
             if (key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
