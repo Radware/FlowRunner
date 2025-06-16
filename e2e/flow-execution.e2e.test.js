@@ -417,6 +417,47 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     console.log('[Test] Flow run finished (run button enabled).');
   });
 
+  /* --------------- results search & filter --------------- */
+  test('Search and filter runner results', async () => {
+    await page.locator('#run-flow-btn').click();
+    await expect(page.locator('#run-flow-btn'))
+      .toBeEnabled({ timeout: 90_000 });
+
+    await page.evaluate(() => {
+      const list = document.getElementById('runner-results');
+      if (!list) return;
+      const entries = [
+        { text: 'zxqsuccess', status: 'success' },
+        { text: 'zxqerrorOne', status: 'error' },
+        { text: 'zxqskip', status: 'skipped' },
+        { text: 'zxqerrorTwo', status: 'error' },
+      ];
+      entries.forEach(({ text, status }) => {
+        const li = document.createElement('li');
+        li.className = 'result-item';
+        li.dataset.status = status;
+        li.dataset.searchText = text;
+        li.textContent = `${status} - ${text}`;
+        list.appendChild(li);
+      });
+    });
+
+    const total = await page.locator('li.result-item').count();
+
+    await page.fill('#results-search', 'zxqerr');
+    await page.waitForTimeout(200);
+    await expect(page.locator('li.result-item:visible')).toHaveCount(2);
+
+    await page.selectOption('#results-status-filter', 'error');
+    await page.waitForTimeout(200);
+    await expect(page.locator('li.result-item:visible')).toHaveCount(2);
+
+    await page.fill('#results-search', '');
+    await page.selectOption('#results-status-filter', '');
+    await page.waitForTimeout(200);
+    await expect(page.locator('li.result-item:visible')).toHaveCount(total);
+  });
+
   /* --------------- step through first 3 --------------- */
   test('Step through first three steps & assert SUCCESS', async () => {
     const clickStep = () => page.locator('#step-flow-btn').click();
