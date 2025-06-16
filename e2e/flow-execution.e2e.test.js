@@ -505,4 +505,41 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     ).toHaveText('SUCCESS', { timeout: 20_000 });
     console.log('[Test] Stepping: Step 3 SUCCESS. Test complete.');
   });
+
+  /* --------------- graph view connector highlights --------------- */
+  test('Graph view connectors reflect step status', async () => {
+    const currentView = await page.evaluate(() => window.appState?.currentView || 'list-editor');
+    if (currentView === 'list-editor') {
+        await page.locator('#toggle-view-btn').click();
+        await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/);
+    }
+
+    await page.fill('#request-delay', '1000');
+
+    const connToStep2 = page.locator(
+        '.connector-path[data-to="step_e2e_2_check_status"]'
+    );
+    const connToStep3 = page.locator(
+        '.connector-path[data-to="step_e2e_3_post_data"]'
+    );
+
+    await page.locator('#run-flow-btn').click();
+
+    await expect(
+        page.locator('.result-item[data-step-id="step_e2e_1_get_ip"] .result-status')
+    ).toHaveText('SUCCESS', { timeout: 30_000 });
+
+    await expect(
+        page.locator('.result-item[data-step-id="step_e2e_2_check_status"] .result-status')
+    ).toHaveText('SUCCESS', { timeout: 30_000 });
+    await expect(connToStep2).toHaveClass(/status-success/);
+
+    await expect(
+        page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-status')
+    ).toHaveText('SUCCESS', { timeout: 30_000 });
+    await expect(connToStep3).toHaveClass(/status-success/);
+    await expect(connToStep2).not.toHaveClass(/status-success/);
+
+    await expect(page.locator('#run-flow-btn')).toBeEnabled({ timeout: 90_000 });
+  });
 });
