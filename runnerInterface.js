@@ -219,7 +219,7 @@ export function handleRunnerStepStart(step, executionPath) {
 export function handleRunnerStepComplete(resultIndex, step, result, context, executionPath) {
     logger.debug(`[RUNNER CALLBACK] handleRunnerStepComplete: stepId=${step.id}, status=${result.status}, error=${result.error}, failures=${result.extractionFailures?.length}`);
     // Update the result entry with final status and details
-    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || []);
+    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || [], result.extractedValues || {});
     // Update the defined variables list based on the latest context
     updateDefinedVariables(context);
 
@@ -305,7 +305,7 @@ export function handleRunnerFlowComplete(finalContext, results) {
 
     if (resultIndex !== null && resultIndex >= 0 && resultIndex < appState.executionResults.length) {
         // Update existing entry if index provided
-        updateResultEntry(resultIndex, 'error', null, errorMessage);
+        updateResultEntry(resultIndex, 'error', null, errorMessage, [] , {});
         if (step) {
              if (appState.currentView === 'node-graph' && appState.visualizerComponent) {
                  appState.visualizerComponent.highlightNode(step.id, 'error');
@@ -320,7 +320,9 @@ export function handleRunnerFlowComplete(finalContext, results) {
             'error',
             executionPath || [],
             null,
-            errorMessage
+            errorMessage,
+            [],
+            {}
         );
          // Also highlight the step if provided
         if (step) {
@@ -345,7 +347,7 @@ export function handleRunnerContextUpdate(newContext) {
 
 // --- Runner Result Rendering ---
 
-export function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = []) {
+export function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = [], extractedValues = {}) {
     if (!domRefs.runnerResultsList) return -1;
 
     const noResultsLi = domRefs.runnerResultsList.querySelector('.no-results');
@@ -368,6 +370,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
         error: error,
         executionPath: executionPath || [],
         extractionFailures: extractionFailures || [],
+        extractedValues: extractedValues || {},
         searchText: searchText,
     };
     appState.executionResults.push(resultData);
@@ -387,7 +390,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
     return resultIndex;
 }
 
-export function updateResultEntry(index, status, output, error, extractionFailures = []) {
+export function updateResultEntry(index, status, output, error, extractionFailures = [], extractedValues = {}) {
     if (index < 0 || index >= appState.executionResults.length || !domRefs.runnerResultsList) return;
 
     const resultData = appState.executionResults[index];
@@ -395,6 +398,7 @@ export function updateResultEntry(index, status, output, error, extractionFailur
     resultData.output = output;
     resultData.error = error;
     resultData.extractionFailures = extractionFailures || [];
+    resultData.extractedValues = extractedValues || {};
     resultData.searchText = computeSearchText(resultData.stepName, output, error);
 
     const li = domRefs.runnerResultsList.querySelector(`li.result-item[data-result-index="${index}"]`);
@@ -417,7 +421,7 @@ export function updateResultEntry(index, status, output, error, extractionFailur
 }
 
 export function renderResultItemContent(listItem, resultData) {
-    const { stepName, stepId, status, output, error, extractionFailures } = resultData;
+    const { stepName, stepId, status, output, error, extractionFailures, extractedValues } = resultData;
     const stepType = findStepById(appState.currentFlowModel?.steps, stepId)?.type || 'System'; // Default to System if step not found
 
     const statusClass = status === 'success' ? 'success'
@@ -455,6 +459,25 @@ export function renderResultItemContent(listItem, resultData) {
         `;
     }
 
+    let extractedValuesHtml = '';
+    if (extractedValues && Object.keys(extractedValues).length > 0) {
+        const valueItems = Object.entries(extractedValues).map(([name, val]) => {
+            let valString;
+            try {
+                valString = typeof val === 'string' ? val : JSON.stringify(val);
+            } catch (e) {
+                valString = String(val);
+            }
+            return `<li><code>${escapeHTML(name)}</code>: ${escapeHTML(valString)}</li>`;
+        }).join('');
+        extractedValuesHtml = `
+            <div class="result-extracted-values">
+                <strong>Extracted Values:</strong>
+                <ul>${valueItems}</ul>
+            </div>
+        `;
+    }
+
     listItem.className = `result-item ${statusClass}`; // Set class based on status
 
     listItem.innerHTML = `
@@ -464,6 +487,7 @@ export function renderResultItemContent(listItem, resultData) {
         </div>
         ${errorHtml}
         ${extractionFailuresHtml}
+        ${extractedValuesHtml}
         ${outputHtml}
     `;
 }

@@ -428,8 +428,9 @@ export class FlowRunner {
                 case 'request':
                     result = await this._executeRequestStep(processedStep, unquotedPlaceholders);
                     if (result.status === 'success' && processedStep.extract) {
-                        const failures = this._updateContextFromExtraction(processedStep.extract, result.output, stepContext);
+                        const { failures, extractedValues } = this._updateContextFromExtraction(processedStep.extract, result.output, stepContext);
                         result.extractionFailures = failures;
+                        result.extractedValues = extractedValues;
                     }
                     break;
                 case 'condition':
@@ -950,18 +951,17 @@ export class FlowRunner {
      * @param {Object} context - The context object to modify directly.
      * @returns {Array<Object>} An array of objects detailing failed extractions, e.g., [{ varName: 'user', path: 'body.data.user.id', reason: '...' }]
      */
-    _updateContextFromExtraction(extractConfig, responseOutput, context) { // <-- Modified return type comment
-        const failures = []; // <-- Initialize failures array
-        if (!extractConfig || !responseOutput) return failures; // <-- Return empty failures if no config/output
+    _updateContextFromExtraction(extractConfig, responseOutput, context) {
+        const failures = [];
+        const extractedValues = {};
+        if (!extractConfig || !responseOutput) return { failures, extractedValues };
 
         const evaluatePath = this.evaluatePathFn;
         if (typeof evaluatePath !== 'function') {
             // --- MODIFICATION: No global message, log error ---
             // this.onMessage(`Extraction failed: evaluatePath function is not available.`, 'error');
             logger.error("FlowRunner: this.evaluatePathFn is missing or not a function during extraction.");
-            // Return a general failure indication? Or just empty? Let's return empty for now.
-            // failures.push({ varName: 'ALL', path: 'N/A', reason: 'evaluatePathFn missing' });
-            return failures;
+            return { failures, extractedValues };
         }
 
         logger.info("[Extraction] Attempting extractions. Config:", extractConfig, "Response Output:", responseOutput);
@@ -1089,13 +1089,14 @@ export class FlowRunner {
                 }
                 // --- END MODIFICATION ---
             }
+            extractedValues[varName] = extractedValue;
         }
         // Notify context update *once* after all extractions for the step are done, only if changed
         if (contextChanged) {
             this.onContextUpdate(context);
         }
 
-        return failures; // <-- Return the array of failed extractions
+        return { failures, extractedValues };
     }
 
 
