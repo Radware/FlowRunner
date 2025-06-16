@@ -74,8 +74,8 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
       ],
       visualLayout: {
         a: { x: 50,  y: 50 },
-        b: { x: 300, y: 50 },
-        c: { x: 550, y: 50 },
+        b: { x: 50,  y: 600 },
+        c: { x: 50,  y: 1150 },
       },
     };
     await fs.writeFile(flowPath, JSON.stringify(flow, null, 2));
@@ -196,4 +196,44 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     expect(sy).toBeGreaterThan(start.y + 50);
   });
   */
+
+  test('Graph View Zoom Controls and Minimap Pan', async () => {
+    await page.locator('#toggle-view-btn').click();
+    await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/);
+
+    await page.waitForFunction(() => !!document.querySelector('#flow-visualizer-mount .visualizer-canvas'), { timeout: 5000 });
+    const canvas = page.locator('#flow-visualizer-mount .visualizer-canvas').first();
+    const zoomInBtn = page.locator('#zoom-in-btn');
+    const zoomOutBtn = page.locator('#zoom-out-btn');
+
+    const parseScale = (t) => {
+      const m = t.match(/scale\(([^)]+)\)/);
+      return m ? parseFloat(m[1]) : 1;
+    };
+
+    const initialScale = await canvas.evaluate(el => el.style.transform);
+    await zoomInBtn.click();
+    await page.waitForTimeout(100);
+    const zoomedIn = await canvas.evaluate(el => el.style.transform);
+    const scaleIn = parseScale(zoomedIn);
+    expect(scaleIn).toBeGreaterThan(parseScale(initialScale));
+    expect(scaleIn).toBeLessThanOrEqual(2);
+
+    await zoomOutBtn.click();
+    await page.waitForTimeout(100);
+    const zoomedOut = await canvas.evaluate(el => el.style.transform);
+    const scaleOut = parseScale(zoomedOut);
+    expect(scaleOut).toBeLessThanOrEqual(scaleIn);
+    expect(scaleOut).toBeGreaterThanOrEqual(0.5);
+
+    const mount = page.locator('#flow-visualizer-mount');
+    const before = await mount.evaluate(el => ({ left: el.scrollLeft, top: el.scrollTop }));
+    const minimap = page.locator('.visualizer-minimap');
+    const box = await minimap.boundingBox();
+    await minimap.click({ position: { x: box.width - 5, y: box.height - 5 } });
+    await page.waitForTimeout(200);
+    const after = await mount.evaluate(el => ({ left: el.scrollLeft, top: el.scrollTop }));
+    expect(after.left).not.toBe(before.left);
+    expect(after.top).not.toBe(before.top);
+  });
 });
