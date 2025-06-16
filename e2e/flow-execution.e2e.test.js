@@ -412,6 +412,15 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     await expect(step1StatusLocator).toHaveText('SUCCESS', { timeout: 30_000 });
     console.log('[Test] Step 1 SUCCESS result verified.');
 
+    const extractedValues = step1ResultLocator.locator('.result-extracted-values');
+    await expect(extractedValues).toBeVisible();
+    await expect(extractedValues).toContainText('ip');
+    await expect(extractedValues).toContainText('userAgent');
+
+    const step3Failures = page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-extraction-failures');
+    await expect(step3Failures).toBeVisible();
+    await expect(step3Failures).toContainText('contentTypeHeader');
+
     await expect(page.locator('#run-flow-btn'))
       .toBeEnabled({ timeout: 90_000 });
     console.log('[Test] Flow run finished (run button enabled).');
