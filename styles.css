@@ -569,6 +569,18 @@ button:disabled {
     min-height: 100%;
 }
 
+.visualizer-minimap {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid var(--border-color-medium);
+    box-shadow: var(--box-shadow-light);
+    z-index: 1000;
+}
+
+.minimap-viewport {
+    box-sizing: border-box;
+    background: rgba(59,130,246,0.2);
+}
+
 /* --- Runner Panel --- */
 .runner-panel {
     width: 350px;

@@ -56,6 +56,7 @@ export function initializeEventListeners() {
     // Zoom Controls
     domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
     domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
+    domRefs.zoomResetBtn?.addEventListener('click', () => appState.visualizerComponent?.resetZoom());
 
     // Info Panel Close Button (Inside Panel) - Explicitly closes
     domRefs.actualInfoOverlayCloseBtn?.addEventListener('click', () => handleToggleInfoOverlay(false));
@@ -159,6 +160,10 @@ export function initializeEventListeners() {
         if (ctrlOrCmd && (e.key === '-' || e.key === '_')) {
             e.preventDefault();
             domRefs.zoomOutBtn?.click();
+        }
+        if (ctrlOrCmd && e.key === '0') {
+            e.preventDefault();
+            domRefs.zoomResetBtn?.click();
         }
 
         // View/Panel Toggles

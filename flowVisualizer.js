@@ -71,6 +71,15 @@ export class FlowVisualizer {
         this.zoomLevel = 1;
         this.minZoom = 0.5;
         this.maxZoom = 2;
+        this.pinchStartDistance = null;
+
+        // Minimap
+        this.minimapContainer = null;
+        this.minimapContent = null;
+        this.minimapViewport = null;
+        this.minimapScale = 0.15;
+        this.isMinimapDragging = false;
+        this._handleScroll = () => this._updateMinimapViewport();
 
         // Debounce resize handler
         this.resizeObserver = null;
@@ -112,12 +121,42 @@ export class FlowVisualizer {
 
         this.mountPoint.appendChild(this.svgConnectors);
         this.mountPoint.appendChild(this.canvas);
+
+        this.minimapContainer = document.createElement('div');
+        this.minimapContainer.className = 'visualizer-minimap';
+        this.minimapContainer.style.position = 'absolute';
+        this.minimapContainer.style.right = '10px';
+        this.minimapContainer.style.bottom = '10px';
+        this.minimapContainer.style.width = '180px';
+        this.minimapContainer.style.height = '140px';
+        this.minimapContainer.style.overflow = 'hidden';
+        this.minimapContainer.style.cursor = 'pointer';
+
+        this.minimapContent = document.createElement('div');
+        this.minimapContent.className = 'minimap-content';
+        this.minimapContent.style.transformOrigin = '0 0';
+        this.minimapContent.style.pointerEvents = 'none';
+        this.minimapContainer.appendChild(this.minimapContent);
+
+        this.minimapViewport = document.createElement('div');
+        this.minimapViewport.className = 'minimap-viewport';
+        this.minimapViewport.style.position = 'absolute';
+        this.minimapViewport.style.border = '1px solid red';
+        this.minimapViewport.style.pointerEvents = 'none';
+        this.minimapContainer.appendChild(this.minimapViewport);
+
+        this.mountPoint.appendChild(this.minimapContainer);
     }
 
     /** Binds essential event listeners for panning and potential resizing. */
     _bindBaseListeners() {
         this.mountPoint.addEventListener('mousedown', this._handleMouseDown);
         this.mountPoint.addEventListener('wheel', this._handleWheel, { passive: false });
+        this.mountPoint.addEventListener('touchstart', this._handleTouchStart, { passive: false });
+        this.mountPoint.addEventListener('touchmove', this._handleTouchMove, { passive: false });
+        this.mountPoint.addEventListener('touchend', this._handleTouchEnd);
+        this.mountPoint.addEventListener('scroll', this._handleScroll);
+        this.minimapContainer.addEventListener('mousedown', this._handleMinimapMouseDown);
         // Mouse move/up listeners are added to document dynamically during drag/pan
 
         // Observe mount point resizing to potentially trigger re-layout/re-render
@@ -309,6 +348,7 @@ export class FlowVisualizer {
         this._updateCanvasAndSvgSize(effectiveWidth, effectiveHeight);
 
         this._renderAllConnectors(); // Render connectors based on FINAL node positions
+        this._updateMinimap();
 
         // Apply selection highlight
         if (this.selectedNodeId) {
@@ -444,6 +484,7 @@ export class FlowVisualizer {
         }
 
         this._updateSvgViewBox();
+        this._updateMinimap();
     }
 
     /** Updates the SVG viewbox to match the current canvas size. */
@@ -462,6 +503,7 @@ export class FlowVisualizer {
     setZoom(level) {
         this.zoomLevel = Math.min(this.maxZoom, Math.max(this.minZoom, level));
         this._applyZoom();
+        this._updateMinimapViewport();
     }
 
     zoomIn() {
@@ -470,6 +512,10 @@ export class FlowVisualizer {
 
     zoomOut() {
         this.setZoom(this.zoomLevel - 0.1);
+    }
+
+    resetZoom() {
+        this.setZoom(1);
     }
 
     _applyZoom() {
@@ -825,11 +871,7 @@ export class FlowVisualizer {
         if (!e.ctrlKey) return;
         e.preventDefault();
         const delta = e.deltaY;
-        if (delta < 0) {
-            this.zoomIn();
-        } else if (delta > 0) {
-            this.zoomOut();
-        }
+        this.setZoom(this.zoomLevel - delta / 500);
     }
     // --- End Bound Handlers ---
 
@@ -1273,6 +1315,12 @@ export class FlowVisualizer {
 
         // Remove listeners attached to the mount point itself
         this.mountPoint?.removeEventListener('mousedown', this._handleMouseDown);
+        this.mountPoint?.removeEventListener('wheel', this._handleWheel);
+        this.mountPoint?.removeEventListener('touchstart', this._handleTouchStart);
+        this.mountPoint?.removeEventListener('touchmove', this._handleTouchMove);
+        this.mountPoint?.removeEventListener('touchend', this._handleTouchEnd);
+        this.mountPoint?.removeEventListener('scroll', this._handleScroll);
+        this.minimapContainer?.removeEventListener('mousedown', this._handleMinimapMouseDown);
         // Remove listeners attached to nodes (more complex, requires iterating nodes if needed)
         this.nodes?.forEach(nodeData => { // Add safe navigation
             if (nodeData.element) {
@@ -1378,5 +1426,99 @@ export class FlowVisualizer {
         // No collection needed for 'request' or other simple types
 
         return acc; // Return the accumulated set
+    }
+
+    // --- Minimap Methods ---
+    _updateMinimap() {
+        if (!this.minimapContent) return;
+        this.minimapContent.innerHTML = '';
+        const cloneSvg = this.svgConnectors?.cloneNode(true);
+        const cloneCanvas = this.canvas?.cloneNode(true);
+        if (cloneSvg) {
+            cloneSvg.style.transformOrigin = '0 0';
+            cloneSvg.querySelectorAll('.connector-path').forEach(p => p.classList.remove('connector-path'));
+            this.minimapContent.appendChild(cloneSvg);
+        }
+        if (cloneCanvas) {
+            cloneCanvas.querySelectorAll('.node-actions').forEach(el => el.remove());
+            cloneCanvas.querySelectorAll('.flow-node').forEach(n => n.classList.remove('flow-node'));
+            cloneCanvas.style.transformOrigin = '0 0';
+            this.minimapContent.appendChild(cloneCanvas);
+        }
+        const scale = this.minimapScale;
+        this.minimapContent.style.transform = `scale(${scale})`;
+        this._updateMinimapViewport();
+    }
+
+    _updateMinimapViewport() {
+        if (!this.minimapViewport || !this.canvas) return;
+        const scale = this.minimapScale / this.zoomLevel;
+        const vw = this.mountPoint.clientWidth * scale;
+        const vh = this.mountPoint.clientHeight * scale;
+        const left = this.mountPoint.scrollLeft * this.minimapScale;
+        const top = this.mountPoint.scrollTop * this.minimapScale;
+        this.minimapViewport.style.width = `${vw}px`;
+        this.minimapViewport.style.height = `${vh}px`;
+        this.minimapViewport.style.left = `${left}px`;
+        this.minimapViewport.style.top = `${top}px`;
+    }
+
+    _handleMinimapMouseDown = (e) => {
+        this.isMinimapDragging = true;
+        document.addEventListener('mousemove', this._handleMinimapMouseMove);
+        document.addEventListener('mouseup', this._handleMinimapMouseUp);
+        this._panToMinimapPoint(e);
+    }
+
+    _handleMinimapMouseMove = (e) => {
+        if (!this.isMinimapDragging) return;
+        this._panToMinimapPoint(e);
+    }
+
+    _handleMinimapMouseUp = () => {
+        this.isMinimapDragging = false;
+        document.removeEventListener('mousemove', this._handleMinimapMouseMove);
+        document.removeEventListener('mouseup', this._handleMinimapMouseUp);
+    }
+
+    _panToMinimapPoint(e) {
+        const rect = this.minimapContainer.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / this.minimapScale;
+        const y = (e.clientY - rect.top) / this.minimapScale;
+        this.mountPoint.scrollLeft = x - this.mountPoint.clientWidth / 2;
+        this.mountPoint.scrollTop = y - this.mountPoint.clientHeight / 2;
+        this._updateMinimapViewport();
+    }
+
+    // --- Touch Zoom ---
+    _handleTouchStart = (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            this.pinchStartDistance = this._getTouchDistance(e.touches);
+        }
+    }
+
+    _handleTouchMove = (e) => {
+        if (this.pinchStartDistance && e.touches.length === 2) {
+            e.preventDefault();
+            const newDist = this._getTouchDistance(e.touches);
+            const delta = newDist - this.pinchStartDistance;
+            if (Math.abs(delta) > 2) {
+                this.setZoom(this.zoomLevel + delta / 200);
+                this.pinchStartDistance = newDist;
+            }
+        }
+    }
+
+    _handleTouchEnd = (e) => {
+        if (e.touches.length < 2) {
+            this.pinchStartDistance = null;
+        }
+    }
+
+    _getTouchDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 }
