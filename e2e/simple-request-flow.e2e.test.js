@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { fileURLToPath } from 'url';
 import { startHttpbinServer, stopHttpbinServer } from './httpbin-server.js';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -101,6 +102,7 @@ test.describe('E2E: Simple Request Flow Execution', () => {
     page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');
     page.setDefaultTimeout(20_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page); // <-- Capture renderer logs to file
 
     // Ensure a clean recent files list
@@ -128,6 +130,7 @@ test.describe('E2E: Simple Request Flow Execution', () => {
   });
 
   test.afterAll(async () => {
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     if (electronApp) await electronApp.close();
     if (mockServer) await stopHttpbinServer(mockServer);
     try { await fs.rm(simpleFlowPath, { force: true }); } catch {}

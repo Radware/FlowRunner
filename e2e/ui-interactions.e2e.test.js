@@ -8,6 +8,7 @@ import path   from 'node:path';
 import fs     from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { fileURLToPath } from 'url';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 /* ───────────── paths / constants ───────────── */
 
@@ -87,6 +88,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     page = await app.firstWindow();
     await page.waitForLoadState('domcontentloaded');
     page.setDefaultTimeout(30_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page); // <-- Capture renderer logs to file
 
     await pushRecent(page, flowPath);
@@ -103,6 +105,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
   });
 
   test.afterAll(async () => {
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     app && await app.close();
     await fs.rm(dataRoot, { recursive: true, force: true }).catch(() => {});
   });
