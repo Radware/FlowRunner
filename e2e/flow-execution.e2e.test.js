@@ -417,6 +417,19 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     await expect(extractedValues).toContainText('ip');
     await expect(extractedValues).toContainText('userAgent');
 
+    await page.evaluate(() => {
+        navigator.clipboard.writeText = text => {
+            window.__copied = text;
+        };
+    });
+
+    const expectedRaw = await step1ResultLocator.locator('.result-body pre').textContent();
+
+    await step1ResultLocator.locator('.copy-btn').click();
+
+    const copied = await page.evaluate(() => window.__copied);
+    expect(copied).toBe(expectedRaw);
+
     const step3Failures = page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-extraction-failures');
     await expect(step3Failures).toBeVisible();
     await expect(step3Failures).toContainText('contentTypeHeader');
