@@ -69,6 +69,8 @@ export function initializeDOMReferences() {
         stopFlowBtn: document.getElementById('stop-flow-btn'),
         clearResultsBtn: document.getElementById('clear-results-btn'),
         requestDelayInput: document.getElementById('request-delay'),
+        resultsSearchInput: document.getElementById('results-search'),
+        resultsStatusFilter: document.getElementById('results-status-filter'),
         runnerResultsList: document.getElementById('runner-results'),
         runnerResultsContainer: document.querySelector('.runner-results-container'),
         runnerStatusMessages: document.getElementById('runner-status-messages'), // <<< --- ADDED THIS LINE ---
@@ -101,5 +103,7 @@ export function initializeDOMReferences() {
 
     // Check for runner status message container <<< --- ADDED THIS CHECK ---
     if (!domRefs.runnerStatusMessages) logger.warn("Required element #runner-status-messages not found in HTML.");
+    if (!domRefs.resultsSearchInput) logger.warn("Required input #results-search not found in HTML.");
+    if (!domRefs.resultsStatusFilter) logger.warn("Required select #results-status-filter not found in HTML.");
 
 }

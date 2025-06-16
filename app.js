@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeRunner();
     initializeEventListeners(); // <-- Call the consolidated listener setup from eventHandlers.js
     setupGlobalOverlayListeners(); // For the global Info Overlay *content* listeners (inputs, adds)
+    initializeResultFilters();
 
     updateRunnerUI();
     updateViewToggle();
@@ -560,6 +561,25 @@ export function adjustCollapsibleHeight(toggleBtn, contentEl) {
             contentEl.style.maxHeight = currentScrollHeight + "px";
          });
      }
+}
+
+function initializeResultFilters() {
+    domRefs.resultsSearchInput?.addEventListener('input', filterRunnerResults);
+    domRefs.resultsStatusFilter?.addEventListener('change', filterRunnerResults);
+}
+
+function filterRunnerResults() {
+    const query = domRefs.resultsSearchInput?.value.toLowerCase() || '';
+    const status = domRefs.resultsStatusFilter?.value || '';
+    const list = domRefs.runnerResultsList;
+    if (!list) return;
+    const items = list.querySelectorAll('li.result-item');
+    items.forEach(li => {
+        const text = li.dataset.searchText || '';
+        const matchesText = text.includes(query);
+        const matchesStatus = !status || li.dataset.status === status;
+        li.style.display = matchesText && matchesStatus ? '' : 'none';
+    });
 }
 
 // --- REMOVED setupPanelListeners and its helpers ---
