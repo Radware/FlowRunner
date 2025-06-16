@@ -192,6 +192,17 @@
 
                 <div class="runner-results-container">
                     <h3>Execution Results</h3>
+                    <div class="results-filter">
+                        <input type="text" id="results-search" placeholder="Search results...">
+                        <select id="results-status-filter">
+                            <option value="">All Statuses</option>
+                            <option value="success">Success</option>
+                            <option value="error">Error</option>
+                            <option value="running">Running</option>
+                            <option value="skipped">Skipped</option>
+                            <option value="stopped">Stopped</option>
+                        </select>
+                    </div>
                     <ul id="runner-results" class="runner-results-list">
                         <li class="no-results">Run a flow to see results here.</li>
                     </ul>

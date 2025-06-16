@@ -6,6 +6,19 @@ import { showMessage, clearListViewHighlights, highlightStepInList, updateDefine
 import { findStepById, escapeHTML } from './flowCore.js'; // findStepById needed for result rendering
 import { logger } from './logger.js';
 
+function computeSearchText(stepName, output, error) {
+    const parts = [stepName];
+    if (output !== null && output !== undefined) {
+        try {
+            parts.push(typeof output === 'string' ? output : JSON.stringify(output));
+        } catch (_) {}
+    }
+    if (error) {
+        parts.push(typeof error === 'string' ? error : error.message || '');
+    }
+    return parts.join(' ').toLowerCase();
+}
+
 // --- Runner Panel Logic & Callbacks ---
 
 export function getRequestDelay() {
@@ -346,6 +359,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
     li.dataset.resultIndex = resultIndex;
 
     logger.debug(`[DOM UPDATE] addResultEntry: Adding li for stepId=${stepId}, status=${status}, index=${resultIndex}`);
+    const searchText = computeSearchText(step.name || 'Unnamed Step', output, error);
     const resultData = {
         stepId: stepId,
         stepName: step.name || 'Unnamed Step',
@@ -354,8 +368,12 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
         error: error,
         executionPath: executionPath || [],
         extractionFailures: extractionFailures || [],
+        searchText: searchText,
     };
     appState.executionResults.push(resultData);
+
+    li.dataset.status = status;
+    li.dataset.searchText = searchText;
 
     renderResultItemContent(li, resultData);
 
@@ -377,12 +395,16 @@ export function updateResultEntry(index, status, output, error, extractionFailur
     resultData.output = output;
     resultData.error = error;
     resultData.extractionFailures = extractionFailures || [];
+    resultData.searchText = computeSearchText(resultData.stepName, output, error);
 
     const li = domRefs.runnerResultsList.querySelector(`li.result-item[data-result-index="${index}"]`);
     if (!li) {
          logger.warn(`[DOM UPDATE] updateResultEntry: li element not found for index ${index}`);
          return;
     }
+
+    li.dataset.status = status;
+    li.dataset.searchText = resultData.searchText;
 
     logger.debug(`[DOM UPDATE] updateResultEntry: Updating li index=${index} (stepId=${resultData.stepId}) to status=${status}`);
     renderResultItemContent(li, resultData);
