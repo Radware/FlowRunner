@@ -12,6 +12,7 @@ import path   from 'node:path';
 import fs     from 'node:fs/promises';
 import { fileURLToPath } from 'url';
 import fsSync from 'node:fs';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 /* ───────────── paths / constants ───────────── */
 
@@ -124,6 +125,7 @@ test.describe('E2E: File Operations', () => {
     page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');
     page.setDefaultTimeout(30_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page); // <-- Capture renderer logs to file
     console.log('--- Setup complete ---');
   });
@@ -132,6 +134,7 @@ test.describe('E2E: File Operations', () => {
     console.log('--- E2E Teardown (file-operations) ---');
     // --- MODIFICATION: Commented out restoreSaveDialog as it causes errors and is not needed now ---
     // await restoreSaveDialog(electronApp).catch(() => {});
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     if (electronApp) await electronApp.close();
     await fs.rm(testDataRoot, { recursive: true, force: true }).catch(() => {});
   });

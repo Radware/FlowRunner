@@ -12,6 +12,7 @@ import fs     from 'node:fs/promises'; // fs/promises for async operations
 import { fileURLToPath } from 'url';
 import fsSync from 'node:fs';
 import { startHttpbinServer, stopHttpbinServer } from './httpbin-server.js';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 /* ───────────── paths & constants ───────────── */
 
@@ -333,6 +334,7 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     page = await app.firstWindow();
     await page.waitForLoadState('domcontentloaded', { timeout: 20000 });
     page.setDefaultTimeout(30_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page);
 
     await pushRecent(page, flowPath);
@@ -369,6 +371,7 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
 
   // Modified afterAll to clean up the dynamically created file and directory if it's empty
   test.afterAll(async () => {
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     if (app) await app.close();
     if (mockServer) await stopHttpbinServer(mockServer);
     try {
