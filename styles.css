@@ -114,6 +114,11 @@ code {
     font-size: 0.875em;
 }
 
+.copy-btn {
+    margin-top: 5px;
+    float: right;
+}
+
 button:disabled {
     opacity: 0.6;
     cursor: not-allowed;

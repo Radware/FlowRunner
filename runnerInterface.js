@@ -436,7 +436,7 @@ export function renderResultItemContent(listItem, resultData) {
             const outputString = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
             outputHtml = `<div class="result-body"><pre>${escapeHTML(outputString)}</pre></div>`;
         } catch (e) {
-             outputHtml = `<div class="result-body"><pre>[Error formatting output: ${escapeHTML(e.message)}]</pre></div>`;
+            outputHtml = `<div class="result-body"><pre>[Error formatting output: ${escapeHTML(e.message)}]</pre></div>`;
         }
     }
 
@@ -490,4 +490,24 @@ export function renderResultItemContent(listItem, resultData) {
         ${extractedValuesHtml}
         ${outputHtml}
     `;
+
+    if (outputHtml) {
+        const resultBody = listItem.querySelector('.result-body');
+        if (resultBody) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn btn btn-sm';
+            copyBtn.textContent = 'Copy';
+            copyBtn.title = 'Copy raw output';
+            copyBtn.setAttribute('aria-label', 'Copy raw output');
+            copyBtn.addEventListener('click', () => {
+                try {
+                    const raw = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+                    navigator.clipboard.writeText(raw);
+                } catch (err) {
+                    logger.error('Failed to copy output:', err);
+                }
+            });
+            resultBody.appendChild(copyBtn);
+        }
+    }
 }

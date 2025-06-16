@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from '@jest/globals';
+import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 import { renderResultItemContent } from '../runnerInterface.js';
 import { appState } from '../state.js';
 
@@ -25,5 +25,25 @@ describe('renderResultItemContent', () => {
         expect(html).toContain('abc');
         expect(html).toContain('id');
         expect(html).toContain('123');
+    });
+
+    test('copy button writes output to clipboard', () => {
+        const writeMock = jest.fn();
+        Object.assign(navigator, { clipboard: { writeText: writeMock } });
+        const li = document.createElement('li');
+        const data = {
+            stepName: 'Req1',
+            stepId: 'r1',
+            status: 'success',
+            output: 'hello',
+            error: null,
+            extractionFailures: [],
+            extractedValues: {}
+        };
+        renderResultItemContent(li, data);
+        const btn = li.querySelector('.copy-btn');
+        expect(btn).not.toBeNull();
+        btn.dispatchEvent(new Event('click'));
+        expect(writeMock).toHaveBeenCalledWith('hello');
     });
 });
