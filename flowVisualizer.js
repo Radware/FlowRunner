@@ -1450,6 +1450,13 @@ export class FlowVisualizer {
             cloneCanvas.style.transformOrigin = '0 0';
             this.minimapContent.appendChild(cloneCanvas);
         }
+        const canvasWidth = parseFloat(this.canvas?.style.width || this.canvas?.offsetWidth || 0);
+        const canvasHeight = parseFloat(this.canvas?.style.height || this.canvas?.offsetHeight || 0);
+        const containerW = this.minimapContainer.clientWidth;
+        const containerH = this.minimapContainer.clientHeight;
+        if (canvasWidth > 0 && canvasHeight > 0) {
+            this.minimapScale = Math.min(containerW / canvasWidth, containerH / canvasHeight);
+        }
         const scale = this.minimapScale;
         this.minimapContent.style.transform = `scale(${scale})`;
         this._updateMinimapViewport();
