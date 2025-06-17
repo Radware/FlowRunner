@@ -57,6 +57,7 @@ export function initializeEventListeners() {
     domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
     domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
     domRefs.zoomResetBtn?.addEventListener('click', () => appState.visualizerComponent?.resetZoom());
+    domRefs.toggleMinimapBtn?.addEventListener('click', () => handleToggleMinimap());
 
     // Info Panel Close Button (Inside Panel) - Explicitly closes
     domRefs.actualInfoOverlayCloseBtn?.addEventListener('click', () => handleToggleInfoOverlay(false));
@@ -237,6 +238,17 @@ export function handleToggleVariablesPanel(forceState = null) {
 
     // No need to update button state here - syncPanelVisibility does it
     syncPanelVisibility(); // Sync button states and potentially other UI elements
+}
+
+export function handleToggleMinimap(forceState = null) {
+    if (!appState.visualizerComponent) return;
+    const willBeVisible = forceState ?? !appState.visualizerComponent.isMinimapVisible();
+    if (willBeVisible) {
+        appState.visualizerComponent.showMinimap();
+    } else {
+        appState.visualizerComponent.hideMinimap();
+    }
+    syncPanelVisibility();
 }
 
 
