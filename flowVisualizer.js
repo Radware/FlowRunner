@@ -891,6 +891,7 @@ export class FlowVisualizer {
         const dy = e.clientY - this.panStartY;
         this.mountPoint.scrollLeft = this.scrollLeftStart - dx;
         this.mountPoint.scrollTop = this.scrollTopStart - dy;
+        this._updateMinimapViewport();
     }
 
     _handlePanEnd(e) {
