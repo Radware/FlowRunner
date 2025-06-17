@@ -9,6 +9,7 @@ import fs     from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { fileURLToPath } from 'url';
 import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
+import { pushRecent, esc, setupRendererLogCapture } from './testUtils.js';
 
 /* ───────────── paths / constants ───────────── */
 
@@ -17,43 +18,6 @@ const __dirname   = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const dataRoot    = path.resolve(__dirname, 'e2e-test-data');
 const flowPath    = path.join(dataRoot, 'ui-interactions.flow.json');
-
-const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
-const MAX_RECENT_FILES = 10;
-
-/* ───────────── helpers ───────────── */
-
-async function pushRecent(page, fp) {
-  await page.evaluate(
-    ({ k, fp, m }) => {
-      let a; try { a = JSON.parse(localStorage.getItem(k) || '[]'); }
-      catch { a = []; }
-      if (!Array.isArray(a)) a = [];
-      a = a.filter(p => p !== fp); a.unshift(fp);
-      if (a.length > m) a = a.slice(0, m);
-      localStorage.setItem(k, JSON.stringify(a));
-    },
-    { k: RECENT_FILES_KEY, fp, m: MAX_RECENT_FILES }
-  );
-}
-
-const esc = (p) => p.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-function setupRendererLogCapture(page, logFile = 'e2e-renderer-logs.txt') {
-  // Clear the log file at the start of capture setup
-  try {
-    fsSync.writeFileSync(logFile, ''); // Overwrite existing or create new empty file
-    console.log(`[E2E Log Capture] Cleared/Created log file: ${logFile}`);
-  } catch (err) {
-    console.error(`[E2E Log Capture] Error clearing log file ${logFile}:`, err);
-  }
-
-  page.on('console', msg => {
-    const line = `[renderer][${msg.type()}] ${msg.text()}\n`;
-    fsSync.appendFileSync(logFile, line);
-  });
-}
-
 
 /* ───────────── suite ───────────── */
 
