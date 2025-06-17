@@ -7,5 +7,5 @@ export const DEFAULT_REQUEST_DELAY = 500; // Keep this
 export const LOG_LEVEL = 'info'; // Possible values: 'debug', 'info', 'warn', 'error'
 
 // --- Update Notification Config ---
-export const CURRENT_VERSION = '1.1.0'; // Update as needed for your release
+export const CURRENT_VERSION = '1.1.1'; // Update as needed for your release
 export const GITHUB_RELEASES_API = 'https://api.github.com/repos/Radware/FlowRunner/releases/latest';
