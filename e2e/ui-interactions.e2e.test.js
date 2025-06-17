@@ -236,4 +236,63 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     expect(after.left).not.toBe(before.left);
     expect(after.top).not.toBe(before.top);
   });
+
+    test('Minimap stays fixed during pan', async () => {
+        const mount = page.locator('#flow-visualizer-mount');
+        const canvas = mount.locator('.visualizer-canvas').first();
+        await page.waitForFunction(
+            () => !!document.querySelector('#flow-visualizer-mount .visualizer-canvas'),
+            { timeout: 5000 }
+        );
+
+        const minimap = page.locator('.visualizer-minimap');
+        const mmBoxBefore = await minimap.boundingBox();
+        const canvasBox = await canvas.boundingBox();
+
+        await canvas.hover();
+        await page.mouse.down();
+        await page.mouse.move(
+            canvasBox.x + canvasBox.width / 2 - 100,
+            canvasBox.y + canvasBox.height / 2 - 50,
+            { steps: 10 }
+        );
+        await page.mouse.up();
+
+        const mmBoxAfter = await minimap.boundingBox();
+        expect(mmBoxAfter.x).toBeCloseTo(mmBoxBefore.x, 1);
+        expect(mmBoxAfter.y).toBeCloseTo(mmBoxBefore.y, 1);
+    });
+
+    test('Viewport updates while panning', async () => {
+        const mount = page.locator('#flow-visualizer-mount');
+        const canvas = mount.locator('.visualizer-canvas').first();
+        await page.waitForFunction(
+            () => !!document.querySelector('#flow-visualizer-mount .visualizer-canvas'),
+            { timeout: 5000 }
+        );
+
+        const viewport = page.locator('.minimap-viewport');
+        const before = await viewport.evaluate(el => ({
+            left: el.style.left,
+            top: el.style.top
+        }));
+
+        const canvasBox = await canvas.boundingBox();
+        await canvas.hover();
+        await page.mouse.down();
+        await page.mouse.move(
+            canvasBox.x + canvasBox.width / 2 + 120,
+            canvasBox.y + canvasBox.height / 2 + 60,
+            { steps: 10 }
+        );
+        await page.mouse.up();
+        await page.waitForTimeout(100);
+
+        const after = await viewport.evaluate(el => ({
+            left: el.style.left,
+            top: el.style.top
+        }));
+        expect(after.left).not.toBe(before.left);
+        expect(after.top).not.toBe(before.top);
+    });
 });
