@@ -1482,6 +1482,7 @@ export class FlowVisualizer {
         const top = this.mountPoint.scrollTop * scale;
         const boundedLeft = Math.max(0, Math.min(this.minimapContainer.clientWidth - vw, left));
         const boundedTop = Math.max(0, Math.min(this.minimapContainer.clientHeight - vh, top));
+
         this.minimapViewport.style.width = `${vw}px`;
         this.minimapViewport.style.height = `${vh}px`;
         this.minimapViewport.style.left = `${boundedLeft}px`;

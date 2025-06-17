@@ -134,7 +134,7 @@ button:disabled {
     color: white;
     animation: pulse-border-amber 1.8s infinite ease-in-out;
 
-
+}
 /* --- Main Application Layout --- */
 .app-container {
     display: flex;
