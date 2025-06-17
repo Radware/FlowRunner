@@ -25,21 +25,35 @@ const path = {
 // --- Recent Files Helpers ---
 
 // --- NEW HELPER FUNCTION ---
-/** Adds a file path to the recent files list in localStorage. */
-export function addRecentFile(filePath) {
+/**
+ * Adds a file path to the recent files list in localStorage.
+ * @param {string} filePath
+ * @param {boolean} [moveToTop=true] - If true the file is moved to the top of the list.
+ */
+export function addRecentFile(filePath, moveToTop = true) {
     if (!filePath) return;
     try {
         let recentFiles = getRecentFiles();
-        // Remove existing entry if present, to move it to the top
-        recentFiles = recentFiles.filter(p => p !== filePath);
-        // Add to the beginning
-        recentFiles.unshift(filePath);
-        // Limit the list size
-        if (recentFiles.length > MAX_RECENT_FILES) {
-            recentFiles.pop();
+        const existingIndex = recentFiles.indexOf(filePath);
+
+        if (existingIndex !== -1) {
+            if (moveToTop) {
+                recentFiles.splice(existingIndex, 1);
+                recentFiles.unshift(filePath);
+            }
+        } else {
+            if (moveToTop) {
+                recentFiles.unshift(filePath);
+            } else {
+                recentFiles.push(filePath);
+            }
         }
+
+        if (recentFiles.length > MAX_RECENT_FILES) {
+            recentFiles = recentFiles.slice(0, MAX_RECENT_FILES);
+        }
+
         localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recentFiles));
-        // Refresh the sidebar list
         renderFlowList(recentFiles);
     } catch (error) {
         logger.error("Error updating recent files in localStorage:", error);
@@ -88,6 +102,19 @@ export function getRecentFiles() {
         // Do NOT remove the key here, as it might be a temporary issue.
         return [];
     }
+}
+
+function getAfterElement(container, y) {
+    const items = [...container.querySelectorAll('.recent-file-item:not(.dragging)')];
+    let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+    items.forEach(item => {
+        const box = item.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        if (offset < 0 && offset > closest.offset) {
+            closest = { offset, element: item };
+        }
+    });
+    return closest.element;
 }
 
 // --- Sidebar Logic (Recent Files) ---
@@ -155,8 +182,32 @@ export function renderFlowList(recentFiles) {
             }
         });
 
+        // --- Drag handlers ---
+        li.draggable = true;
+        li.addEventListener('dragstart', () => {
+            li.classList.add('dragging');
+        });
+        li.addEventListener('dragend', () => {
+            li.classList.remove('dragging');
+            const order = [...domRefs.flowList.querySelectorAll('.recent-file-item')].map(el => el.dataset.filePath);
+            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(order));
+            renderFlowList(order);
+        });
+
         domRefs.flowList.appendChild(li);
     });
+
+    domRefs.flowList.ondragover = (e) => {
+        e.preventDefault();
+        const dragging = domRefs.flowList.querySelector('.recent-file-item.dragging');
+        if (!dragging) return;
+        const afterEl = getAfterElement(domRefs.flowList, e.clientY);
+        if (afterEl == null) {
+            domRefs.flowList.appendChild(dragging);
+        } else {
+            domRefs.flowList.insertBefore(dragging, afterEl);
+        }
+    };
 }
 
 // --- MODIFIED FUNCTION ---
@@ -233,7 +284,8 @@ export async function handleSelectFlow(filePath) {
 
     // Proceed with loading
     appState.selectedStepId = null; // Reset step selection
-    loadAndRenderFlow(filePath); // Call the refactored loading function
+    // Do not reorder recent list when selecting from the sidebar
+    loadAndRenderFlow(filePath, false);
 
     // Update selection highlight in the recent files list (done within loadAndRenderFlow via addRecentFile)
     // renderFlowList(getRecentFiles()); // This is redundant if loadAndRenderFlow calls addRecentFile
@@ -398,7 +450,7 @@ export function handleDeleteFlow( /* flowId */ ) {
 
 
 // --- MODIFIED FUNCTION ---
-export async function loadAndRenderFlow(filePath) {
+export async function loadAndRenderFlow(filePath, moveToTop = true) {
     // Core function to load data from a file path and update the UI
     if (!filePath) {
         logger.warn("loadAndRenderFlow called with no filePath.");
@@ -428,7 +480,7 @@ export async function loadAndRenderFlow(filePath) {
                 initializeAppComponents(); // <-- MODIFIED: Call initializeAppComponents
                 renderCurrentFlow(); // Render the currently active view
                 updateWorkspaceTitle(); // Reflects new flow name and path
-                addRecentFile(filePath); // Add successfully loaded file to recents
+                addRecentFile(filePath, moveToTop); // Add successfully loaded file to recents
 
                 // Show controls now that flow is loaded
                 if(domRefs.toggleInfoBtn) domRefs.toggleInfoBtn.style.display = '';
@@ -703,7 +755,7 @@ export async function handleCancelFlow() {
         if (appState.currentFilePath) {
             // Revert to the saved version by reloading the file
             logger.info(`Cancelling changes, reverting to saved file: ${appState.currentFilePath}`);
-            const success = await loadAndRenderFlow(appState.currentFilePath);
+            const success = await loadAndRenderFlow(appState.currentFilePath, false);
             if (success) {
                 showMessage("Changes reverted to last saved version.", "success", domRefs.builderMessages);
             } else {
