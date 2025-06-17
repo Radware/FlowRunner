@@ -883,6 +883,7 @@ export class FlowVisualizer {
         if (e.button !== PAN_BUTTON || (e.target !== this.mountPoint && e.target !== this.canvas)) {
             return;
         }
+
         e.preventDefault();
         this.isPanning = true;
         this.panStartX = e.clientX;
