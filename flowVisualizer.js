@@ -1465,6 +1465,19 @@ export class FlowVisualizer {
     }
 
     // --- Minimap Methods ---
+
+    _addMiniRect(x, y, w, h) {
+        const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r.setAttribute('x', x);
+        r.setAttribute('y', y);
+        r.setAttribute('width', w);
+        r.setAttribute('height', h);
+        r.setAttribute('fill', 'none');
+        r.setAttribute('stroke', 'rgba(0,0,0,.45)');
+        r.setAttribute('stroke-width', '1');
+        return r;
+    }
+
     _updateMinimap() {
         if (!this.minimapContent) return;
         this.minimapContent.innerHTML = '';
@@ -1479,6 +1492,13 @@ export class FlowVisualizer {
                 p.removeAttribute('stroke');      // ← avoids black line
             });
             this.minimapContent.appendChild(cloneSvg);
+
+            // draw a thin rectangle for every visible node
+            this.nodes.forEach(nd => {
+                if (nd.element?.style.display !== 'none') {
+                    cloneSvg.appendChild(this._addMiniRect(nd.x, nd.y, nd.width, nd.height));
+                }
+            });
         }
         if (cloneCanvas) {
             cloneCanvas.querySelectorAll('.node-actions').forEach(el => el.remove());
