@@ -631,24 +631,28 @@ export function updateViewToggle() {
         if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = 'none';
         if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = 'none';
         if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = 'none';
+        if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = 'none';
         return;
     }
     domRefs.toggleViewBtn.style.display = ''; // Ensure button is visible if flow loaded
     if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if (appState.currentView === 'list-editor') {
         domRefs.toggleViewBtn.textContent = 'Visual View';
         domRefs.toggleViewBtn.title = 'Switch to Node-Graph View (Ctrl+3)';
         // Ensure Info/Vars buttons are potentially visible in list view
         if(domRefs.toggleInfoBtn) domRefs.toggleInfoBtn.style.display = '';
         if(domRefs.toggleVariablesBtn) domRefs.toggleVariablesBtn.style.display = '';
+        if(appState.visualizerComponent) appState.visualizerComponent.hideMinimap();
     } else { // Node-graph view
         domRefs.toggleViewBtn.textContent = 'Editor View';
         domRefs.toggleViewBtn.title = 'Switch to List/Editor View (Ctrl+3)';
         // Ensure Info/Vars buttons are potentially visible in graph view
         if(domRefs.toggleInfoBtn) domRefs.toggleInfoBtn.style.display = '';
         if(domRefs.toggleVariablesBtn) domRefs.toggleVariablesBtn.style.display = '';
+        if(appState.visualizerComponent) appState.visualizerComponent.showMinimap();
     }
 }
 
@@ -656,6 +660,7 @@ export function updateViewToggle() {
 export function syncPanelVisibility() {
     const toggleInfoBtn = domRefs.toggleInfoBtn;
     const toggleVariablesBtn = domRefs.toggleVariablesBtn;
+    const toggleMinimapBtn = domRefs.toggleMinimapBtn;
 
     // --- Update Info Panel Toggle Button ---
     if (toggleInfoBtn) {
@@ -675,10 +680,20 @@ export function syncPanelVisibility() {
         toggleVariablesBtn.querySelector('.btn-text').textContent = appState.isVariablesPanelVisible ? 'Hide Variables' : 'Show Variables';
     }
 
+    if (toggleMinimapBtn) {
+        const isVisible = appState.visualizerComponent?.isMinimapVisible() ?? false;
+        toggleMinimapBtn.classList.toggle('active', isVisible);
+        toggleMinimapBtn.textContent = isVisible ? 'Hide Minimap' : 'Show Minimap';
+    }
+
     // Show/hide the toggle buttons themselves based on whether a flow is loaded
     const shouldShowButtons = !!appState.currentFlowModel;
     if (toggleInfoBtn) toggleInfoBtn.style.display = shouldShowButtons ? '' : 'none';
     if (toggleVariablesBtn) toggleVariablesBtn.style.display = shouldShowButtons ? '' : 'none';
+    if (toggleMinimapBtn) {
+        const shouldShow = shouldShowButtons && appState.currentView === 'node-graph';
+        toggleMinimapBtn.style.display = shouldShow ? '' : 'none';
+    }
 }
 
 /** Clears all runtime-related status classes from steps in the list view */
