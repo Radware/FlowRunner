@@ -206,9 +206,12 @@ test.describe('E2E: File Operations', () => {
     await page.locator('.step-editor-actions .btn-save-step').click();
 
     // save (overwrite)
-    await expect(page.locator('#save-flow-btn')).toBeEnabled({ timeout: 5_000 });
-    await page.locator('#save-flow-btn').click();
-    await expect(page.locator('#save-flow-btn')).toBeDisabled({ timeout: 10000 }); // Increased timeout
+    const saveBtn = page.locator('#save-flow-btn');
+    await expect(saveBtn).toBeEnabled({ timeout: 5_000 });
+    await expect(saveBtn).toHaveClass(/needs-save/);
+    await saveBtn.click();
+    await expect(saveBtn).toBeDisabled({ timeout: 10000 }); // Increased timeout
+    await expect(saveBtn).not.toHaveClass(/needs-save/);
 
     const updated = JSON.parse(await fs.readFile(flowPath, 'utf8'));
     expect(updated.steps[0].name).toBe('edited‑name');

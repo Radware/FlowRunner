@@ -136,6 +136,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     const saveBtn = page.locator('#save-flow-btn');
     console.log('[Test] Waiting for save button to be enabled...');
     await expect(saveBtn).toBeEnabled({ timeout: 8_000 });
+    await expect(saveBtn).toHaveClass(/needs-save/);
     console.log('[Test] Save button enabled.');
 
     expect(await order()).toEqual(['a', 'c', 'b']);
@@ -144,6 +145,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     await saveBtn.click();
     console.log('[Test] Save button clicked.');
     await expect(saveBtn).toBeDisabled();
+    await expect(saveBtn).not.toHaveClass(/needs-save/);
     console.log('[Test] Save button disabled after save.');
 
     /* reload and re‑check */
