@@ -29,6 +29,15 @@ const NODE_DRAGGING_CLASS = 'dragging';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export class FlowVisualizer {
+    // --- Minimap update throttle ---------------------------------
+    _scheduleMinimapRefresh = () => {
+        if (this._minimapNeedsRefresh) return;          // already scheduled
+        this._minimapNeedsRefresh = true;
+        requestAnimationFrame(() => {
+            this._minimapNeedsRefresh = false;
+            this._updateMinimap();                      // existing heavy call
+        });
+    };
     /**
      * Initializes the FlowVisualizer.
      * @param {HTMLElement} mountPoint - The container element for the visualizer.
@@ -82,6 +91,7 @@ export class FlowVisualizer {
         this.isMinimapDragging = false;
         this._handleScroll = () => this._updateMinimapViewport();
         this._minimapFrame = null;
+        this._minimapNeedsRefresh = false;
 
         // Debounce resize handler
         this.resizeObserver = null;
@@ -157,6 +167,7 @@ export class FlowVisualizer {
         this.mountPoint.addEventListener('touchend', this._handleTouchEnd);
         this.mountPoint.addEventListener('scroll', this._handleScroll);
         this.minimapContainer.addEventListener('mousedown', this._handleMinimapMouseDown);
+        this.minimapContainer.addEventListener('dblclick', this._handleMinimapDoubleClick);
         // Mouse move/up listeners are added to document dynamically during drag/pan
 
         // Observe mount point resizing to potentially trigger re-layout/re-render
@@ -966,6 +977,9 @@ export class FlowVisualizer {
         if (nodeData) {
             // Update connectors based on the current visual position (using the modified _getPortPosition)
             this._updateNodeConnectors(nodeData);
+
+            // NEW – keep minimap in-sync while dragging
+            if (this.minimapVisible) this._scheduleMinimapRefresh();
         }
     }
 
@@ -1115,6 +1129,9 @@ export class FlowVisualizer {
              // +++ ADD LOGGING +++
              logger.debug("[Visualizer DragEnd] Cleanup complete.");
              // +++ END LOGGING +++
+
+            // Final refresh to lock-in the new coordinates
+            if (this.minimapVisible) this._updateMinimap();
         }
     }
     // --- END UPDATED _handleNodeDragEnd ---
@@ -1451,7 +1468,12 @@ export class FlowVisualizer {
         const cloneCanvas = this.canvas?.cloneNode(true);
         if (cloneSvg) {
             cloneSvg.style.transformOrigin = '0 0';
-            cloneSvg.querySelectorAll('.connector-path').forEach(p => p.classList.remove('connector-path'));
+
+            // Remove styling that is only relevant in the main canvas
+            cloneSvg.querySelectorAll('.connector-path').forEach(p => {
+                p.removeAttribute('class');
+                p.removeAttribute('stroke');      // ← avoids black line
+            });
             this.minimapContent.appendChild(cloneSvg);
         }
         if (cloneCanvas) {
@@ -1498,6 +1520,7 @@ export class FlowVisualizer {
 
     _handleMinimapMouseDown = (e) => {
         this.isMinimapDragging = true;
+        this.minimapContainer.style.cursor = 'grabbing';
         document.addEventListener('mousemove', this._handleMinimapMouseMove);
         document.addEventListener('mouseup', this._handleMinimapMouseUp);
         this._panToMinimapPoint(e);
@@ -1510,9 +1533,22 @@ export class FlowVisualizer {
 
     _handleMinimapMouseUp = () => {
         this.isMinimapDragging = false;
+        this.minimapContainer.style.cursor = 'pointer';
         document.removeEventListener('mousemove', this._handleMinimapMouseMove);
         document.removeEventListener('mouseup', this._handleMinimapMouseUp);
     }
+
+    /** Double-click recenters the main canvas */
+    _handleMinimapDoubleClick = (e) => {
+        const rect = this.minimapContainer.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / this.minimapScale;
+        const y = (e.clientY - rect.top)  / this.minimapScale;
+        this._applyScroll(
+            (x * this.zoomLevel) - this.mountPoint.clientWidth  / 2,
+            (y * this.zoomLevel) - this.mountPoint.clientHeight / 2
+        );
+        this._updateMinimapViewport();
+    };
 
     _panToMinimapPoint(e) {
         const rect = this.minimapContainer.getBoundingClientRect();

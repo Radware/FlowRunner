@@ -603,7 +603,8 @@ button:disabled {
 
 /* Minimap fade-in & Retina crispness */
 .visualizer-minimap {
-    transition: opacity .25s ease;
+    transition: opacity .25s ease, transform .15s ease;
+    cursor: pointer;
     opacity: 0;
 }
 .visualizer-minimap[style*="display: none"] {
@@ -616,6 +617,12 @@ button:disabled {
 /* Sharper lines inside miniature SVG */
 .visualizer-minimap svg {
     shape-rendering: crispEdges;
+    vector-effect: non-scaling-stroke;   /* keep strokes 1 px regardless of scale */
+}
+
+.visualizer-minimap path {
+    stroke: var(--border-color-dark);
+    stroke-width: 1;
 }
 
 .minimap-viewport {
