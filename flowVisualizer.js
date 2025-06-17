@@ -23,6 +23,11 @@ const PAN_BUTTON = 0;           // Left mouse button for panning
 // --- Constants for Styling & SVG ---
 const CONNECTOR_CLASS = 'connector-path';
 const CONNECTOR_ACTIVE_CLASS = 'active-connector'; // General active class
+const CONNECTOR_COLOURS = {
+    'branch-then': '#10b981',
+    'branch-else': '#ef4444',
+    'loop-body': '#6366f1'
+};
 const NODE_CLASS = 'flow-node';
 const NODE_SELECTED_CLASS = 'selected';
 const NODE_DRAGGING_CLASS = 'dragging';
@@ -787,6 +792,22 @@ export class FlowVisualizer {
         }
     }
 
+    _buildOrthogonalPath({ x: xs, y: ys }, { x: xe, y: ye }) {
+        const m = 16;
+        const vertical = Math.abs(ys - ye) > Math.abs(xs - xe);
+        const pts = [];
+        pts.push([xs, ys]);
+        if (vertical) {
+            const midY = ys + (ys < ye ? m : -m);
+            pts.push([xs, midY], [xe, midY]);
+        } else {
+            const midX = xs + (xs < xe ? m : -m);
+            pts.push([midX, ys], [midX, ye]);
+        }
+        pts.push([xe, ye]);
+        return 'M ' + pts.map(p => p.join(' ')).join(' L ');
+    }
+
     /** Draws a single SVG connector between two nodes using orthogonal paths. */
     _drawConnector(startNodeData, endNodeData, startPortType, endPortType) {
         if (!startNodeData || !endNodeData) {
@@ -806,59 +827,33 @@ export class FlowVisualizer {
                 throw new Error(`Invalid port positions calculated: Start(${startPos.x},${startPos.y}), End(${endPos.x},${endPos.y}) for nodes ${startNodeData.id} -> ${endNodeData.id}`);
             }
 
-            // --- Start: Orthogonal Path Calculation ---
-            let pathData = '';
-            const hPadding = 20; // Horizontal distance before/after vertical turn
-            const inputExtend = 15; // Horizontal distance the line extends left from the input port
-
-            if (startPortType === 'output' && endPortType === 'input') {
-                // Standard horizontal connection (Output -> Input)
-                const midX = startPos.x + hPadding;
-                pathData = `M ${startPos.x} ${startPos.y} ` + // Move to start port (middle-right)
-                           `L ${midX} ${startPos.y} ` +      // Line horizontally out
-                           `L ${midX} ${endPos.y} ` +        // Line vertically to target Y
-                           `L ${endPos.x - inputExtend} ${endPos.y} ` + // Line horizontally towards input port
-                           `L ${endPos.x} ${endPos.y}`;      // Line horizontally into input port (middle-left)
-            } else if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
-                // Connection from bottom of a node (branch/loop) to an input port
-                const vSegLength = Math.max(20, V_SPACING / 2); // How far down to go initially
-                pathData = `M ${startPos.x} ${startPos.y} ` + // Move to start port (middle-bottom)
-                           `V ${startPos.y + vSegLength} ` + // Line vertically down
-                           `H ${endPos.x - inputExtend} ` + // Line horizontally across to near target X
-                           `L ${endPos.x - inputExtend} ${endPos.y} ` + // Line vertically to target Y
-                           `L ${endPos.x} ${endPos.y}`;      // Line horizontally into input port (middle-left)
-            } else {
-                // Fallback (e.g., if connecting from branch to another branch - might need refinement)
-                // Use the standard horizontal logic as a default fallback for now
-                const midX = startPos.x + hPadding;
-                 pathData = `M ${startPos.x} ${startPos.y} ` +
-                            `L ${midX} ${startPos.y} ` +
-                            `L ${midX} ${endPos.y} ` +
-                            `L ${endPos.x - inputExtend} ${endPos.y} ` +
-                            `L ${endPos.x} ${endPos.y}`;
-                 logger.warn(`[Visualizer] Using fallback orthogonal path for connection: ${startPortType} -> ${endPortType}`);
-            }
-            // --- End: Orthogonal Path Calculation ---
+            const pathData = this._buildOrthogonalPath(startPos, endPos);
+            const stroke = CONNECTOR_COLOURS[startPortType] || 'var(--border-color-dark)';
 
 
             const path = document.createElementNS(SVG_NS, 'path');
             path.setAttribute('d', pathData);
             path.setAttribute('class', CONNECTOR_CLASS);
+            path.setAttribute('stroke', stroke);
             path.dataset.from = startNodeData.id;
             path.dataset.to = endNodeData.id;
             path.dataset.startPort = startPortType;
             path.dataset.endPort = endPortType;
 
-            const markerId = `arrow-${startNodeData.id}-${startPortType}-to-${endNodeData.id}-${endPortType}`.replace(/[^a-zA-Z0-9-_]/g, '_'); // Sanitize ID
+            const markerId = `arrow-${startNodeData.id}-${startPortType}-to-${endNodeData.id}-${endPortType}`.replace(/[^a-zA-Z0-9-_]/g, '_');
             const marker = document.createElementNS(SVG_NS, 'marker');
             marker.setAttribute('id', markerId);
             marker.setAttribute('viewBox', '0 -5 10 10');
-            marker.setAttribute('refX', '8'); // Position arrowhead slightly before endpoint
+            marker.setAttribute('refX', '8');
             marker.setAttribute('refY', '0');
             marker.setAttribute('markerWidth', '6');
             marker.setAttribute('markerHeight', '6');
             marker.setAttribute('orient', 'auto-start-reverse');
-            marker.innerHTML = `<path d="M0,-5L10,0L0,5" class="connector-arrowhead"></path>`;
+            const arrowPath = document.createElementNS(SVG_NS, 'path');
+            arrowPath.setAttribute('d', 'M0,-5L10,0L0,5');
+            arrowPath.setAttribute('class', 'connector-arrowhead');
+            arrowPath.setAttribute('fill', stroke);
+            marker.appendChild(arrowPath);
 
             // Only add marker definition if it doesn't exist already
             if (this.defs && !this.defs.querySelector(`#${markerId}`)) {
@@ -1022,24 +1017,11 @@ export class FlowVisualizer {
                         throw new Error(`Invalid port positions during connector update: Start(${startPos.x},${startPos.y}), End(${endPos.x},${endPos.y})`);
                     }
 
-                    // --- Start: Orthogonal Path Calculation ---
-                    let pathData = '';
-                    const hPadding = 20;
-                    const inputExtend = 15;
-
-                    if (startPortType === 'output' && endPortType === 'input') {
-                        const midX = startPos.x + hPadding;
-                        pathData = `M ${startPos.x} ${startPos.y} L ${midX} ${startPos.y} L ${midX} ${endPos.y} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
-                    } else if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
-                        const vSegLength = Math.max(20, V_SPACING / 2);
-                        pathData = `M ${startPos.x} ${startPos.y} V ${startPos.y + vSegLength} H ${endPos.x - inputExtend} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
-                    } else {
-                        const midX = startPos.x + hPadding;
-                        pathData = `M ${startPos.x} ${startPos.y} L ${midX} ${startPos.y} L ${midX} ${endPos.y} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
-                    }
-                    // --- End: Orthogonal Path Calculation ---
+                    const pathData = this._buildOrthogonalPath(startPos, endPos);
+                    const stroke = CONNECTOR_COLOURS[startPortType] || 'var(--border-color-dark)';
 
                     path.setAttribute('d', pathData);
+                    path.setAttribute('stroke', stroke);
                 } catch (error) {
                     logger.error(`Error updating connector d attribute for path ${fromId}->${toId}:`, error);
                 }
