@@ -1,6 +1,6 @@
 # FlowRunner 
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
 <!-- Optional: Add build status/license badges here if desired -->
 <!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
@@ -16,6 +16,9 @@
 ---
 
 ## Release Notes / Changelog
+
+### v1.1.1 (June 2025)
+- Documentation updates and minor improvements.
 
 ### v1.1.0 (May 2025)
 - **Continuous Flow Runner:**
@@ -88,17 +91,17 @@ This tool is particularly useful for:
 ## Prerequisites
 
 *   Windows (x64) or macOS (Apple Silicon / arm64).
-*   The appropriate FlowRunner installer package downloaded from the [v1.1.0 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.0) (or latest release).
+*   The appropriate FlowRunner installer package downloaded from the [v1.1.1 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.1) (or latest release).
 *   Network access is required *only* when executing flows that contain 'API Request' steps which need to reach external endpoints. Flow authoring, saving, loading, and visualization can be done offline.
 
 ## Installation
 
 1.  **Download the Correct Installer:**
     *   Go to the [FlowRunner Releases Page](https://github.com/Radware/FlowRunner/releases) on GitHub.
-    *   Find the latest release (e.g., v1.1.0).
+    *   Find the latest release (e.g., v1.1.1).
     *   Under **Assets**:
-        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.0.zip`. Unzip the file to find the `Setup.exe`.
-        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.0.dmg`.
+        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.1.zip`. Unzip the file to find the `Setup.exe`.
+        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.1.dmg`.
 2.  **Install on Windows:**
     *   Double-click the extracted `Setup.exe` file.
     *   The installation will proceed silently in the background (using Squirrel.Windows). It typically installs to your `AppData\Local\FlowRunner` folder.

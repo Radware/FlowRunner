@@ -4,8 +4,8 @@ export async function setupMockUpdateRoute(page) {
             status: 200,
             contentType: 'application/json',
             body: JSON.stringify({
-                tag_name: 'v1.1.0',
-                html_url: 'https://example.com/release/v1.1.0'
+                tag_name: 'v1.1.1',
+                html_url: 'https://example.com/release/v1.1.1'
             })
         });
     });
