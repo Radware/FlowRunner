@@ -575,6 +575,13 @@ button:disabled {
 }
 
 .visualizer-minimap {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 180px;
+    height: 140px;
+    overflow: hidden;
+    cursor: pointer;
     background: rgba(255, 255, 255, 0.9);
     border: 1px solid var(--border-color-medium);
     box-shadow: var(--box-shadow-light);
