@@ -180,6 +180,11 @@ export function initializeEventListeners() {
             e.preventDefault();
             domRefs.toggleViewBtn?.click(); // Simulate click on the button
         }
+
+        if (e.key.toLowerCase() === 'm' && appState.currentView === 'node-graph') {
+            e.preventDefault();
+            domRefs.toggleMinimapBtn?.click();
+        }
     });
 
     logger.info("All core event listeners initialized.");
