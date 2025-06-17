@@ -64,9 +64,9 @@ This tool is particularly useful for:
     *   **Loop:** Repeat steps for each item in an array.
 *   **Dual Views:** Work the way you prefer:
     *   **List/Editor View:** A detailed list of steps with a dedicated panel for configuration and drag-and-drop reordering.
-    *   **Node-Graph View:** An interactive visual graph showing the flow structure and connections. Drag nodes to arrange the layout.
+    *   **Node-Graph View:** An interactive visual graph showing the flow structure and connections. Drag nodes to arrange the layout. Use zoom controls and an optional minimap for easier navigation of large flows.
 *   **Variable Management:** Handle dynamic data effectively:
-    *   Define **Global Headers** and **Static Variables** for the entire flow.
+    *   Define **Global Headers** and **Static Variables** for the entire flow. Variables can be typed as String, Number, Boolean, or JSON to better control how values are parsed and substituted.
     *   **Extract** data from API responses (like status code, headers, or values from the body using JSON paths) into variables.
     *   **Substitute** variables (`{{variableName}}`) into URLs, headers, request bodies, condition values, etc.
     *   Use the **`{{…}}`** helper button to easily insert defined variable names.
@@ -77,15 +77,16 @@ This tool is particularly useful for:
     *   Configure a delay between steps during full runs for better observation.
     *   View **real-time highlighting** of the currently executing or completed step in both views.
     *   Monitor progress in the detailed **Results Panel**, showing each step's status, output, errors, and extraction warnings.
+    *   Use the search box and status filter to narrow displayed results, and copy any step's output to the clipboard.
 *   **Local Flow Management:** Work entirely offline:
     *   Create new flows from a template.
     *   **Save** flows to your local computer as `.flow.json` files.
     *   **Load** flows from your local files.
-    *   Access **Recent Files** quickly from the sidebar.
+    *   Access **Recent Files** quickly from the sidebar and reorder them via drag-and-drop.
     *   **Clone** existing flows to create variations easily.
 *   **User Interface:**
     *   Collapsible Sidebar and Runner panels to maximize workspace.
-    *   Clear indication of unsaved changes.
+    *   Clear indication of unsaved changes, with the Save button highlighted when edits are pending.
     *   Configurable visual layout for the Node-Graph view.
 
 ## Prerequisites
@@ -164,7 +165,7 @@ Click the **"Info ▼"** button in the workspace header to open the Flow Info ov
 *   **Flow Name:** A descriptive name for your flow.
 *   **Description:** Optional details about the flow's purpose.
 *   **Global Headers:** Define HTTP headers (Key-Value pairs) that will be automatically added to *all* 'API Request' steps in this flow. Headers defined within individual steps will override global headers with the same key.
-*   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. These are useful for configuration values or initial setup data. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`). Values may contain JSON arrays or objects for loops or complex data.
+*   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. Each variable can be typed as String, Number, Boolean, or JSON. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`). Values may contain JSON arrays or objects for loops or complex data.
 
 Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info ▲"** button again.
 
