@@ -173,6 +173,15 @@ Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info
 4.  **Save Step:** Click the **"Save Step"** button at the bottom of the editor panel to commit your changes for that specific step. This also marks the overall flow as unsaved.
 5.  **Cancel:** Click **"Cancel"** to discard any changes made in the editor panel since the last save for that step.
 
+### Unsaved Changes Tracking
+
+FlowRunner tracks edits using two flags within `appState`:
+
+* `isDirty` &ndash; Set when the flow structure or metadata changes and a file save is required.
+* `stepEditorIsDirty` &ndash; Indicates unsaved edits in the currently open step editor.
+
+The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Cancel are enabled whenever either flag is true, while Close is enabled only when both are false. Attempting to close the window also checks these flags to warn about unsaved work.
+
 #### Step Types
 
 *   **API Request:**
