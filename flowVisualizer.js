@@ -78,6 +78,7 @@ export class FlowVisualizer {
         this.minimapContent = null;
         this.minimapViewport = null;
         this.minimapScale = 0.15;
+        this.minimapVisible = true;
         this.isMinimapDragging = false;
         this._handleScroll = () => this._updateMinimapViewport();
 
@@ -1459,8 +1460,9 @@ export class FlowVisualizer {
         const scale = this.minimapScale / this.zoomLevel;
         const vw = this.mountPoint.clientWidth * scale;
         const vh = this.mountPoint.clientHeight * scale;
-        const left = this.mountPoint.scrollLeft * this.minimapScale;
-        const top = this.mountPoint.scrollTop * this.minimapScale;
+        const offsetScale = this.minimapScale / this.zoomLevel;
+        const left = this.mountPoint.scrollLeft * offsetScale;
+        const top = this.mountPoint.scrollTop * offsetScale;
         this.minimapViewport.style.width = `${vw}px`;
         this.minimapViewport.style.height = `${vh}px`;
         this.minimapViewport.style.left = `${left}px`;
@@ -1524,5 +1526,32 @@ export class FlowVisualizer {
         const dx = touches[0].clientX - touches[1].clientX;
         const dy = touches[0].clientY - touches[1].clientY;
         return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    showMinimap() {
+        if (this.minimapContainer) {
+            this.minimapContainer.style.display = '';
+            this.minimapVisible = true;
+            this._updateMinimap();
+        }
+    }
+
+    hideMinimap() {
+        if (this.minimapContainer) {
+            this.minimapContainer.style.display = 'none';
+            this.minimapVisible = false;
+        }
+    }
+
+    toggleMinimap() {
+        if (this.minimapVisible) {
+            this.hideMinimap();
+        } else {
+            this.showMinimap();
+        }
+    }
+
+    isMinimapVisible() {
+        return this.minimapVisible;
     }
 }
