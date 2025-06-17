@@ -124,13 +124,6 @@ export class FlowVisualizer {
 
         this.minimapContainer = document.createElement('div');
         this.minimapContainer.className = 'visualizer-minimap';
-        this.minimapContainer.style.position = 'absolute';
-        this.minimapContainer.style.right = '10px';
-        this.minimapContainer.style.bottom = '10px';
-        this.minimapContainer.style.width = '180px';
-        this.minimapContainer.style.height = '140px';
-        this.minimapContainer.style.overflow = 'hidden';
-        this.minimapContainer.style.cursor = 'pointer';
 
         this.minimapContent = document.createElement('div');
         this.minimapContent.className = 'minimap-content';
@@ -145,7 +138,11 @@ export class FlowVisualizer {
         this.minimapViewport.style.pointerEvents = 'none';
         this.minimapContainer.appendChild(this.minimapViewport);
 
-        this.mountPoint.appendChild(this.minimapContainer);
+        if (this.mountPoint.parentElement) {
+            this.mountPoint.parentElement.appendChild(this.minimapContainer);
+        } else {
+            this.mountPoint.appendChild(this.minimapContainer);
+        }
     }
 
     /** Binds essential event listeners for panning and potential resizing. */
@@ -1353,7 +1350,13 @@ export class FlowVisualizer {
         this.draggedNode = null;
         this.options = null; // Release options/callbacks
 
-        if (this.mountPoint) this.mountPoint.innerHTML = ''; // Clear mount point content
+        if (this.minimapContainer && this.minimapContainer.parentElement) {
+            this.minimapContainer.parentElement.removeChild(this.minimapContainer);
+        }
+
+        this.minimapContainer = null;
+
+        if (this.mountPoint) this.mountPoint.innerHTML = '';
         this.mountPoint = null;
 
         logger.info("FlowVisualizer destroyed.");
