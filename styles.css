@@ -127,6 +127,11 @@ button:disabled {
     color: var(--light-text-color) !important;
 }
 
+/* Highlight enabled Save button when flow needs saving */
+.needs-save:not(:disabled) {
+    box-shadow: 0 0 0 2px var(--warning-color), 0 0 8px var(--warning-color);
+}
+
 /* --- Main Application Layout --- */
 .app-container {
     display: flex;
