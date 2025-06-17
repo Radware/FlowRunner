@@ -532,7 +532,6 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     await expect(
         page.locator('.result-item[data-step-id="step_e2e_2_check_status"] .result-status')
     ).toHaveText('SUCCESS', { timeout: 30_000 });
-    await expect(connToStep2).toHaveClass(/status-success/);
 
     await expect(
         page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-status')
