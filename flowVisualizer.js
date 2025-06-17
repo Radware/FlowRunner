@@ -78,7 +78,7 @@ export class FlowVisualizer {
         this.minimapContent = null;
         this.minimapViewport = null;
         this.minimapScale = 0.15;
-        this.minimapVisible = true;
+        this.minimapVisible = false;
         this.isMinimapDragging = false;
         this._handleScroll = () => this._updateMinimapViewport();
 
@@ -125,6 +125,7 @@ export class FlowVisualizer {
 
         this.minimapContainer = document.createElement('div');
         this.minimapContainer.className = 'visualizer-minimap';
+        this.minimapContainer.style.display = 'none';
 
         this.minimapContent = document.createElement('div');
         this.minimapContent.className = 'minimap-content';
@@ -522,6 +523,17 @@ export class FlowVisualizer {
         if (this.svgConnectors) this.svgConnectors.style.transform = scale;
     }
 
+    _applyScroll(left, top) {
+        const canvasW = parseFloat(this.canvas?.style.width || this.canvas?.offsetWidth || '0');
+        const canvasH = parseFloat(this.canvas?.style.height || this.canvas?.offsetHeight || '0');
+        const scrollMaxLeft = this.mountPoint.scrollWidth - this.mountPoint.clientWidth;
+        const scrollMaxTop = this.mountPoint.scrollHeight - this.mountPoint.clientHeight;
+        const maxLeft = Math.max(0, scrollMaxLeft, canvasW - this.mountPoint.clientWidth);
+        const maxTop = Math.max(0, scrollMaxTop, canvasH - this.mountPoint.clientHeight);
+        this.mountPoint.scrollLeft = Math.max(0, Math.min(maxLeft, left));
+        this.mountPoint.scrollTop = Math.max(0, Math.min(maxTop, top));
+    }
+
     // --- Node Element Creation ---
 
     /** Creates the DOM element for a single node. */
@@ -890,8 +902,7 @@ export class FlowVisualizer {
         if (!this.isPanning) return;
         const dx = e.clientX - this.panStartX;
         const dy = e.clientY - this.panStartY;
-        this.mountPoint.scrollLeft = this.scrollLeftStart - dx;
-        this.mountPoint.scrollTop = this.scrollTopStart - dy;
+        this._applyScroll(this.scrollLeftStart - dx, this.scrollTopStart - dy);
         this._updateMinimapViewport();
     }
 
@@ -1464,16 +1475,18 @@ export class FlowVisualizer {
 
     _updateMinimapViewport() {
         if (!this.minimapViewport || !this.canvas) return;
-        const scale = this.minimapScale / this.zoomLevel;
-        const vw = this.mountPoint.clientWidth * scale;
-        const vh = this.mountPoint.clientHeight * scale;
-        const offsetScale = this.minimapScale / this.zoomLevel;
-        const left = this.mountPoint.scrollLeft * offsetScale;
-        const top = this.mountPoint.scrollTop * offsetScale;
+        const scale = this.minimapScale;
+        const vw = (this.mountPoint.clientWidth / this.zoomLevel) * scale;
+        const vh = (this.mountPoint.clientHeight / this.zoomLevel) * scale;
+        const left = this.mountPoint.scrollLeft * scale;
+        const top = this.mountPoint.scrollTop * scale;
+        const boundedLeft = Math.max(0, Math.min(this.minimapContainer.clientWidth - vw, left));
+        const boundedTop = Math.max(0, Math.min(this.minimapContainer.clientHeight - vh, top));
+
         this.minimapViewport.style.width = `${vw}px`;
         this.minimapViewport.style.height = `${vh}px`;
-        this.minimapViewport.style.left = `${left}px`;
-        this.minimapViewport.style.top = `${top}px`;
+        this.minimapViewport.style.left = `${boundedLeft}px`;
+        this.minimapViewport.style.top = `${boundedTop}px`;
     }
 
     _handleMinimapMouseDown = (e) => {
@@ -1498,8 +1511,10 @@ export class FlowVisualizer {
         const rect = this.minimapContainer.getBoundingClientRect();
         const x = (e.clientX - rect.left) / this.minimapScale;
         const y = (e.clientY - rect.top) / this.minimapScale;
-        this.mountPoint.scrollLeft = x - this.mountPoint.clientWidth / 2;
-        this.mountPoint.scrollTop = y - this.mountPoint.clientHeight / 2;
+        this._applyScroll(
+            x - this.mountPoint.clientWidth / 2,
+            y - this.mountPoint.clientHeight / 2
+        );
         this._updateMinimapViewport();
     }
 
