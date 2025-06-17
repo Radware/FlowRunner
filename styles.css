@@ -127,6 +127,14 @@ button:disabled {
     color: var(--light-text-color) !important;
 }
 
+/* Highlight save button when changes need persisting */
+.needs-save:not(:disabled) {
+    background-color: var(--warning-color);
+    border-color: var(--warning-color);
+    color: white;
+    animation: pulse-border-amber 1.8s infinite ease-in-out;
+}
+
 /* --- Main Application Layout --- */
 .app-container {
     display: flex;
