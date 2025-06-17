@@ -751,12 +751,13 @@ export class FlowVisualizer {
     /** Calculates the absolute position of a conceptual port on a node. */
     _getPortPosition(nodeData, portType) {
         if (!nodeData) return { x: NaN, y: NaN };
+        const zoom = this.zoomLevel || 1;
 
         let x, y;
         // If this node is currently being dragged, use its style position for accurate connector drawing during drag
         if (this.isDraggingNode && this.draggedNode && this.draggedNode.dataset.stepId === nodeData.id) {
-            x = parseFloat(this.draggedNode.style.left || '0');
-            y = parseFloat(this.draggedNode.style.top || '0');
+            x = parseFloat(this.draggedNode.style.left || '0') * (1/zoom);
+            y = parseFloat(this.draggedNode.style.top  || '0') * (1/zoom);
         } else {
             // Otherwise, use the stored layout coordinates
             x = nodeData.x;
@@ -963,8 +964,11 @@ export class FlowVisualizer {
         const mountRect = this.mountPoint.getBoundingClientRect();
 
         // Calculate new position relative to the canvas, considering scroll and drag offset
-        let newX = newPageX - mountRect.left + this.mountPoint.scrollLeft - this.dragOffsetX;
-        let newY = newPageY - mountRect.top + this.mountPoint.scrollTop - this.dragOffsetY;
+        const zoom = this.zoomLevel || 1;
+        let newX = (newPageX - mountRect.left + this.mountPoint.scrollLeft - this.dragOffsetX) / zoom;
+        let newY = (newPageY - mountRect.top  + this.mountPoint.scrollTop  - this.dragOffsetY) / zoom;
+        newX = Math.max(0, newX);
+        newY = Math.max(0, newY);
 
         // Directly update style, remove internal data update
         this.draggedNode.style.left = `${newX}px`;
