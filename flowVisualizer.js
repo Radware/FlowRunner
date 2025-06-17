@@ -695,6 +695,16 @@ export class FlowVisualizer {
     /** Renders all connectors based on the node layout. */
     _renderAllConnectors() {
         if (!this.svgConnectors || !this.defs) return;
+        Array.from(this.svgConnectors.querySelectorAll('path.' + CONNECTOR_CLASS))
+            .forEach(p => {
+                const fromId = p.dataset.from, toId = p.dataset.to;
+                if (!this.nodes.get(fromId)?.element ||
+                    !this.nodes.get(toId)?.element ||
+                    this.nodes.get(fromId).element.style.display === 'none' ||
+                    this.nodes.get(toId).element.style.display === 'none') {
+                    p.remove();
+                }
+            });
         // Store existing defs content temporarily
         const defsContent = this.defs.innerHTML;
         this.svgConnectors.innerHTML = ''; // Clear previous connectors AND defs
@@ -1035,6 +1045,10 @@ export class FlowVisualizer {
                 }
             } else {
                 logger.warn(`Skipping connector update for ${fromId}->${toId}: Missing node data for start or end.`);
+            }
+            if (!startNode?.element || startNode.element.style.display === 'none' ||
+                !endNode?.element   || endNode.element.style.display === 'none') {
+                path.remove();
             }
         });
     }
