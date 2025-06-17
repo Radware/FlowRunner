@@ -43,7 +43,7 @@
                     <h3>Sidebar (Left)</h3>
                     <ul>
                         <li><strong>Branding:</strong> Application logo and name.</li>
-                        <li><strong>Recent Flows:</strong> Lists recently opened/saved <code>.flow.json</code> files. Click to open. Use the '✕' button to remove an entry from this list.</li>
+                        <li><strong>Recent Flows:</strong> Lists recently opened/saved <code>.flow.json</code> files. Drag to reorder the list. Use the '✕' button to remove an entry.</li>
                         <li><strong>Actions:</strong>
                             <ul>
                                 <li><strong>+ New Flow:</strong> Creates a blank flow.</li>
@@ -59,7 +59,7 @@
                         <li><strong>Header:</strong>
                             <ul>
                                 <li><strong>Title:</strong> Shows the current flow name (with '*' if unsaved).</li>
-                                <li><strong>File Controls:</strong> Save, Save As, Cancel (revert changes), Close. Enabled based on flow state and unsaved changes.</li>
+                                <li><strong>File Controls:</strong> Save, Save As, Cancel (revert changes), Close. The Save button highlights when unsaved changes exist.</li>
                                 <li><strong>View Controls:</strong>
                                     <ul>
                                         <li><strong>Toggle View:</strong> Switches between List/Editor and Node-Graph views.</li>
@@ -85,7 +85,7 @@
                             </ul>
                         </li>
                         <li><strong>Status Messages:</strong> Shows brief messages about runner state (starting, stopped, errors).</li>
-                        <li><strong>Execution Results:</strong> A detailed log of each step execution, including status, output/error details, and extraction warnings.</li>
+                        <li><strong>Execution Results:</strong> A detailed log of each step execution, including status, output/error details, and extraction warnings. Use the search box and status filter to narrow the list, and click the copy icon to copy step output.</li>
                     </ul>
                 </div>
             </section>
@@ -98,7 +98,7 @@
                     <ul>
                         <li><strong>Name & Description:</strong> Basic identification.</li>
                         <li><strong>Global Headers:</strong> Headers automatically added to all API Request steps (can be overridden by step-specific headers).</li>
-                        <li><strong>Flow Variables (Static):</strong> Key-value pairs defined once and available throughout the flow execution context. Useful for configuration like base URLs or static tokens. Values may be JSON arrays or objects for loops or complex data.</li>
+                        <li><strong>Flow Variables (Static):</strong> Key-value pairs defined once and available throughout the flow execution context. Each variable can be typed as String, Number, Boolean, or JSON. Values may be JSON arrays or objects for loops or complex data.</li>
                     </ul>
                 </div>
                  <div class="subsection">
@@ -130,7 +130,7 @@
                     <h3>Views</h3>
                      <ul>
                         <li><strong>List/Editor View:</strong> Default view showing steps hierarchically. Best for detailed configuration using the step editor panel. Supports step reordering via drag-and-drop using the ☰ handle.</li>
-                        <li><strong>Node-Graph View:</strong> Visual representation of the flow structure with connecting lines. Useful for understanding branching and looping. Pan by dragging the background. Drag nodes to rearrange the visual layout (positions are saved with the flow). Select nodes by clicking them.</li>
+                        <li><strong>Node-Graph View:</strong> Visual representation of the flow structure with connecting lines. Useful for understanding branching and looping. Pan by dragging the background. Drag nodes to rearrange the visual layout (positions are saved with the flow). Select nodes by clicking them. Use zoom controls and the minimap to navigate large graphs.</li>
                     </ul>
                 </div>
             </section>
