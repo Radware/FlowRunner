@@ -283,6 +283,11 @@ button:disabled {
     padding-left: 17px;
 }
 
+.flow-list-item.dragging {
+    opacity: 0.5;
+    background-color: var(--medium-bg-color);
+}
+
 .flow-item-actions {
     margin-top: 5px;
     display: flex;
