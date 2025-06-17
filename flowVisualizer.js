@@ -81,6 +81,7 @@ export class FlowVisualizer {
         this.minimapVisible = false;
         this.isMinimapDragging = false;
         this._handleScroll = () => this._updateMinimapViewport();
+        this._minimapFrame = null;
 
         // Debounce resize handler
         this.resizeObserver = null;
@@ -149,7 +150,7 @@ export class FlowVisualizer {
 
     /** Binds essential event listeners for panning and potential resizing. */
     _bindBaseListeners() {
-        this.mountPoint.addEventListener('mousedown', this._handleMouseDown);
+        this.mountPoint.addEventListener('pointerdown', this._handlePanStart);
         this.mountPoint.addEventListener('wheel', this._handleWheel, { passive: false });
         this.mountPoint.addEventListener('touchstart', this._handleTouchStart, { passive: false });
         this.mountPoint.addEventListener('touchmove', this._handleTouchMove, { passive: false });
@@ -870,13 +871,6 @@ export class FlowVisualizer {
         }
     }
 
-    _handleMouseDown = (e) => {
-        // Pan only if clicking the background (mountPoint or canvas directly)
-        if (e.button === PAN_BUTTON && (e.target === this.mountPoint || e.target === this.canvas)) {
-            this._handlePanStart(e);
-        }
-    }
-
     _handleWheel = (e) => {
         if (!e.ctrlKey) return;
         e.preventDefault();
@@ -885,7 +879,11 @@ export class FlowVisualizer {
     }
     // --- End Bound Handlers ---
 
-    _handlePanStart(e) {
+    _handlePanStart = (e) => {
+        if (e.button !== PAN_BUTTON || (e.target !== this.mountPoint && e.target !== this.canvas)) {
+            return;
+        }
+        e.preventDefault();
         this.isPanning = true;
         this.panStartX = e.clientX;
         this.panStartY = e.clientY;
@@ -893,12 +891,11 @@ export class FlowVisualizer {
         this.scrollTopStart = this.mountPoint.scrollTop;
         this.mountPoint.style.cursor = 'grabbing';
         this.mountPoint.style.userSelect = 'none'; // Prevent text selection during pan
-        document.addEventListener('mousemove', this._handleMouseMove);
-        document.addEventListener('mouseup', this._handleMouseUp);
-        e.preventDefault();
+        document.addEventListener('pointermove', this._handlePanMove);
+        document.addEventListener('pointerup', this._handlePanEnd);
     }
 
-    _handlePanMove(e) {
+    _handlePanMove = (e) => {
         if (!this.isPanning) return;
         const dx = e.clientX - this.panStartX;
         const dy = e.clientY - this.panStartY;
@@ -906,13 +903,12 @@ export class FlowVisualizer {
         this._updateMinimapViewport();
     }
 
-    _handlePanEnd(e) {
+    _handlePanEnd = (e) => {
         this.isPanning = false;
         this.mountPoint.style.cursor = 'grab';
         this.mountPoint.style.userSelect = ''; // Re-enable text selection
-        document.removeEventListener('mousemove', this._handleMouseMove);
-        document.removeEventListener('mouseup', this._handleMouseUp);
-        this.mountPoint?.removeEventListener('wheel', this._handleWheel);
+        document.removeEventListener('pointermove', this._handlePanMove);
+        document.removeEventListener('pointerup', this._handlePanEnd);
     }
 
     _handleNodeMouseDown = (e) => { // Arrow function binds 'this'
@@ -1322,9 +1318,11 @@ export class FlowVisualizer {
         // Remove dynamically added document listeners
         document.removeEventListener('mousemove', this._handleMouseMove);
         document.removeEventListener('mouseup', this._handleMouseUp);
+        document.removeEventListener('pointermove', this._handlePanMove);
+        document.removeEventListener('pointerup', this._handlePanEnd);
 
         // Remove listeners attached to the mount point itself
-        this.mountPoint?.removeEventListener('mousedown', this._handleMouseDown);
+        this.mountPoint?.removeEventListener('pointerdown', this._handlePanStart);
         this.mountPoint?.removeEventListener('wheel', this._handleWheel);
         this.mountPoint?.removeEventListener('touchstart', this._handleTouchStart);
         this.mountPoint?.removeEventListener('touchmove', this._handleTouchMove);
@@ -1474,6 +1472,14 @@ export class FlowVisualizer {
     }
 
     _updateMinimapViewport() {
+        if (this._minimapFrame) return;
+        this._minimapFrame = requestAnimationFrame(() => {
+            this._minimapFrame = null;
+            this._doMinimapViewport();
+        });
+    }
+
+    _doMinimapViewport() {
         if (!this.minimapViewport || !this.canvas) return;
         const scale = this.minimapScale;
         const vw = (this.mountPoint.clientWidth / this.zoomLevel) * scale;
@@ -1512,8 +1518,8 @@ export class FlowVisualizer {
         const x = (e.clientX - rect.left) / this.minimapScale;
         const y = (e.clientY - rect.top) / this.minimapScale;
         this._applyScroll(
-            x - this.mountPoint.clientWidth / 2,
-            y - this.mountPoint.clientHeight / 2
+            (x * this.zoomLevel) - this.mountPoint.clientWidth  / 2,
+            (y * this.zoomLevel) - this.mountPoint.clientHeight / 2
         );
         this._updateMinimapViewport();
     }

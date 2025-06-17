@@ -601,6 +601,23 @@ button:disabled {
     z-index: 1000;
 }
 
+/* Minimap fade-in & Retina crispness */
+.visualizer-minimap {
+    transition: opacity .25s ease;
+    opacity: 0;
+}
+.visualizer-minimap[style*="display: none"] {
+    opacity: 0;
+}
+.visualizer-minimap:not([style*="display: none"]) {
+    opacity: 1;
+}
+
+/* Sharper lines inside miniature SVG */
+.visualizer-minimap svg {
+    shape-rendering: crispEdges;
+}
+
 .minimap-viewport {
     box-sizing: border-box;
     background: rgba(59,130,246,0.2);

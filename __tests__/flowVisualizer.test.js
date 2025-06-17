@@ -200,10 +200,10 @@ describe('FlowVisualizer', () => {
         await waitForVisualizerRender();
         const initialScrollLeft = visualizer.mountPoint.scrollLeft;
         const initialScrollTop = visualizer.mountPoint.scrollTop;
-        const mouseDownEvent = new MouseEvent('mousedown', { bubbles: true, clientX: 100, clientY: 100, button: 0 });
-        visualizer.canvas.dispatchEvent(mouseDownEvent);
-        const mouseMoveEvent = new MouseEvent('mousemove', { bubbles: true, clientX: 50, clientY: 70 });
-        document.dispatchEvent(mouseMoveEvent);
+        const pointerDownEvent = new MouseEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100, button: 0 });
+        visualizer.canvas.dispatchEvent(pointerDownEvent);
+        const pointerMoveEvent = new MouseEvent('pointermove', { bubbles: true, clientX: 50, clientY: 70 });
+        document.dispatchEvent(pointerMoveEvent);
         expect(visualizer.mountPoint.style.cursor).toBe('grabbing');
         const maxLeft = Math.max(0, visualizer.mountPoint.scrollWidth - visualizer.mountPoint.clientWidth);
         const maxTop = Math.max(0, visualizer.mountPoint.scrollHeight - visualizer.mountPoint.clientHeight);
@@ -211,8 +211,8 @@ describe('FlowVisualizer', () => {
         const expectedTop = Math.max(0, Math.min(maxTop, initialScrollTop - (70 - 100)));
         expect(visualizer.mountPoint.scrollLeft).toBe(expectedLeft);
         expect(visualizer.mountPoint.scrollTop).toBe(expectedTop);
-        const mouseUpEvent = new MouseEvent('mouseup', {});
-        document.dispatchEvent(mouseUpEvent);
+        const pointerUpEvent = new MouseEvent('pointerup', {});
+        document.dispatchEvent(pointerUpEvent);
         expect(visualizer.mountPoint.style.cursor).toBe('grab');
     });
 
