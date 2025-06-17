@@ -34,6 +34,7 @@ export function initializeDOMReferences() {
         zoomOutBtn: document.getElementById('zoom-out-btn'),
         zoomInBtn: document.getElementById('zoom-in-btn'),
         zoomResetBtn: document.getElementById('zoom-reset-btn'),
+        toggleMinimapBtn: document.getElementById('toggle-minimap-btn'),
 
         // Panels relative to Workspace
         variablesPanel: document.querySelector('.variables-panel'),

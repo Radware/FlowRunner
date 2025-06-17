@@ -205,8 +205,12 @@ describe('FlowVisualizer', () => {
         const mouseMoveEvent = new MouseEvent('mousemove', { bubbles: true, clientX: 50, clientY: 70 });
         document.dispatchEvent(mouseMoveEvent);
         expect(visualizer.mountPoint.style.cursor).toBe('grabbing');
-        expect(visualizer.mountPoint.scrollLeft).toBe(initialScrollLeft - (50 - 100));
-        expect(visualizer.mountPoint.scrollTop).toBe(initialScrollTop - (70 - 100));
+        const maxLeft = Math.max(0, visualizer.mountPoint.scrollWidth - visualizer.mountPoint.clientWidth);
+        const maxTop = Math.max(0, visualizer.mountPoint.scrollHeight - visualizer.mountPoint.clientHeight);
+        const expectedLeft = Math.max(0, Math.min(maxLeft, initialScrollLeft - (50 - 100)));
+        const expectedTop = Math.max(0, Math.min(maxTop, initialScrollTop - (70 - 100)));
+        expect(visualizer.mountPoint.scrollLeft).toBe(expectedLeft);
+        expect(visualizer.mountPoint.scrollTop).toBe(expectedTop);
         const mouseUpEvent = new MouseEvent('mouseup', {});
         document.dispatchEvent(mouseUpEvent);
         expect(visualizer.mountPoint.style.cursor).toBe('grab');
