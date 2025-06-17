@@ -443,8 +443,13 @@ button:disabled {
     margin-bottom: 18px;
 }
 .flow-info-overlay textarea {
+    width: 100%;
     min-height: 60px;
     resize: vertical;
+}
+
+.flow-info-overlay input[type="text"] {
+    width: 100%;
 }
 .flow-info-overlay .collapsible-header {
   display: flex;
@@ -978,6 +983,7 @@ button:disabled {
 }
 .result-extracted-values li {
     margin-bottom: 4px;
+    overflow-wrap: anywhere;
 }
 .result-extracted-values li:last-child {
     margin-bottom: 0;
