@@ -991,9 +991,8 @@ button:disabled {
     margin-bottom: 0;
 }
 .result-extracted-values li .copy-btn {
-    margin-top: 0;
-    margin-left: auto;
-    float: none;
+    margin-top: 4px;
+    float: right;
 }
 .result-extracted-values code {
     background-color: #dbeafe;
