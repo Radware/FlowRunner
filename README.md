@@ -154,7 +154,7 @@ Congratulations! You've created and run your first API flow.
 *   **Open:** Click **"Open Flow"** in the sidebar to browse and load a `.flow.json` file from your computer. If you have unsaved changes, you'll be prompted to confirm.
 *   **Save:** Click **"Save"** in the workspace header to save changes to the currently open file. This button is enabled only when there are unsaved changes (indicated by `*` in the title).
 *   **Save As:** Click **"Save As..."** in the workspace header to save the current flow to a new `.flow.json` file.
-*   **Recent Files:** The sidebar lists recently opened/saved files. Click an item to load it.
+*   **Recent Files:** The sidebar lists recently opened/saved files. Click an item to load it. Use the **✕** icon next to a file to remove it from the list.
 *   **Clone:** To duplicate a flow, load the flow you want to clone, then use **"Save As..."** to save it under a new name. FlowRunner ensures the internal steps get new unique IDs automatically when saved as a new file.
 *   **Delete:** To delete a flow, simply delete the corresponding `.flow.json` file from your computer using Finder (macOS) or File Explorer (Windows). The file will eventually disappear from the "Recent Files" list.
 
@@ -226,9 +226,10 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
 ### Running Flows
 
 *   **Run:** Executes the entire flow from the first step. Uses the configured **Delay** between steps. Highlights steps as they execute.
+*   **Continuous Run:** When checked, FlowRunner restarts the flow automatically after it finishes. It waits for the configured **Delay** between runs and continues until you uncheck the box or click **"Stop"**.
 *   **Step:** Executes only the *next* logical step in the flow. Allows you to inspect results and context between steps. Click "Step" repeatedly to advance through the flow.
 *   **Stop:** Immediately requests the flow execution to halt. If a network request is in progress, it will attempt to abort it. The step where execution stopped will be highlighted (often orange/warning).
-*   **Delay (ms):** Sets the pause duration (in milliseconds) between steps when using the **"Run"** button. Does not affect **"Step"** mode.
+*   **Delay (ms):** Sets the pause duration (in milliseconds) between steps when using **Run** and between full runs when **Continuous Run** is enabled. Does not affect **"Step"** mode.
 *   **Results Panel:** Shows a log of each step executed:
     *   **Step Name & Type:** Identifies the step.
     *   **Status:** `RUNNING`, `SUCCESS`, `ERROR`, `SKIPPED`, `STOPPED`.
