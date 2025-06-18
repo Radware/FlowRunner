@@ -70,5 +70,6 @@ describe('renderResultItemContent', () => {
         jest.advanceTimersByTime(1000);
         expect(btn.textContent).toBe('Copy');
         jest.useRealTimers();
+
     });
 });

@@ -440,6 +440,7 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     await page.waitForTimeout(1100);
     await expect(varCopyBtn).toHaveText('Copy');
 
+
     await page.fill('#results-search', 'userAgent');
     await page.waitForTimeout(200);
     await expect(step1ResultLocator).toBeVisible();

@@ -480,6 +480,7 @@ export function renderResultItemContent(listItem, resultData) {
             }
             const escapedVal = escapeHTML(valString);
             return `<li><div><code>${escapeHTML(name)}</code>: <span class="extracted-value">${escapedVal}</span></div><button class="copy-btn btn btn-sm" data-copy-value="${escapedVal}" title="Copy value" aria-label="Copy value">Copy</button></li>`;
+
         }).join('');
         extractedValuesHtml = `
             <div class="result-extracted-values">
@@ -530,6 +531,7 @@ export function renderResultItemContent(listItem, resultData) {
                 navigator.clipboard.writeText(val);
                 btn.textContent = 'Copied!';
                 setTimeout(() => { btn.textContent = 'Copy'; }, 1000);
+
             } catch (err) {
                 logger.error('Failed to copy extracted value:', err);
             }
