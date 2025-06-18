@@ -109,6 +109,12 @@
                         <li><strong>Condition (If/Else):</strong> Executes different branches (Then/Else) based on evaluating a variable against a value using an operator. Add steps to branches via the '+ Add Step' buttons inside the condition step in the List view.</li>
                         <li><strong>Loop (For Each):</strong> Repeats a sequence of steps (the Loop Body) for each item in a source array variable. Defines an 'Item Variable' (e.g., <code>item</code>) accessible within the loop body. Add steps to the body via the '+ Add Step' button inside the loop step in the List view.</li>
                     </ul>
+                    <p><em>Example:</em> Define a JSON variable <code>userList</code> in the Flow Info overlay:</p>
+                    <pre><code>[
+    { "name": "Alice", "active": true },
+    { "name": "Bob",   "active": false }
+]</code></pre>
+                    <p>Create a Loop step with source <code>{{userList}}</code> and item variable <code>user</code>. Within the loop body reference <code>{{user.name}}</code> or add a Condition step checking <code>user.active</code>.</p>
                 </div>
                  <div class="subsection">
                     <h3>Variables</h3>

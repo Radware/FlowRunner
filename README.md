@@ -212,7 +212,18 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
 *   **Loop (For Each):**
     *   **Source (Array Variable):** Enter the variable name (e.g., `{{userList}}`) that holds the array you want to iterate over. This variable must exist in the context and contain an array.
     *   **Item Variable Name:** Enter the name that will hold the current item during each iteration (e.g., `item`, `user`). You can access the item's properties within the loop body using `{{item.id}}`, `{{user.name}}`, etc.
-    *   **Loop Body:** Add steps within the loop body using the `+ Add Step` button within the step's content area in the List view. These steps will execute once for each item in the source array.
+*   **Loop Body:** Add steps within the loop body using the `+ Add Step` button within the step's content area in the List view. These steps will execute once for each item in the source array.
+    *   **Example:** Define a JSON variable `userList` in the Flow Info overlay:
+
+        ```json
+        [
+            { "id": 1, "name": "Alice", "active": true },
+            { "id": 2, "name": "Bob",   "active": false }
+        ]
+        ```
+
+        Add a Loop step with **Source** `{{userList}}` and **Item Variable Name** `user`.
+        Inside the loop body you can reference `{{user.name}}` or add a Condition step checking `{{user.active}}`.
 
 ### Variables
 
