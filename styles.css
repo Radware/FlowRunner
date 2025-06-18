@@ -1421,6 +1421,7 @@ body.flow-step-dragging { cursor: grabbing !important; }
     stroke: var(--border-color-dark);
     stroke-width: 2;
     fill: none !important;
+    vector-effect: non-scaling-stroke;   /* 1 px hairline at any zoom */
     transition: stroke 0.2s ease, stroke-width 0.2s ease;
 }
 .connector-path:hover {
