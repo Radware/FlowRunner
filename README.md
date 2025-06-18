@@ -261,6 +261,16 @@ FlowRunner configuration happens primarily through the user interface:
     *   **Settings:** X/Y coordinates for each node.
     *   **Persistence:** Saved within the `.flow.json` file under the `visualLayout` key when the flow is saved.
 
+### Keyboard Shortcuts
+
+FlowRunner supports several keyboard shortcuts to speed up common actions. A few highlights:
+
+*   **F1** – open the Help window.
+*   **Ctrl/Cmd + + / - / 0** – zoom in, zoom out, or reset the zoom level.
+*   **M** – toggle the Node-Graph minimap.
+
+See `help.html` for the full table of shortcuts.
+
 ## Troubleshooting
 
 *   **Windows: Installer Warning:** When running `Setup.exe`, Windows SmartScreen might show a warning because the application is not code-signed. Click "More info" and then "Run anyway" to proceed with the silent installation.
