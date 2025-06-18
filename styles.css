@@ -984,9 +984,15 @@ button:disabled {
 .result-extracted-values li {
     margin-bottom: 4px;
     overflow-wrap: anywhere;
+    display: flex;
+    flex-direction: column;
 }
 .result-extracted-values li:last-child {
     margin-bottom: 0;
+}
+.result-extracted-values li .copy-btn {
+    margin-top: 4px;
+    align-self: flex-end;
 }
 .result-extracted-values code {
     background-color: #dbeafe;
