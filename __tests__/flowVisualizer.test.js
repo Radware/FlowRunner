@@ -2,6 +2,8 @@
 import { jest, describe, beforeEach, afterEach, test, expect } from '@jest/globals';
 import { FlowVisualizer } from '../flowVisualizer.js';
 import { createTemplateFlow, createNewStep } from '../flowCore.js';
+import { handleVisualizerNodeLayoutUpdate } from '../eventHandlers.js';
+import { appState } from '../state.js';
 
 const NODE_WIDTH = 240; // From visualizer
 const NODE_MIN_HEIGHT = 160; // From visualizer
@@ -195,20 +197,50 @@ describe('FlowVisualizer', () => {
         expect(node.classList.contains('dragging')).toBe(false);
     });
 
+    test('dragging a node updates flow model layout', async () => {
+        appState.currentFlowModel = mockFlow;
+        mockCallbacks.onNodeLayoutUpdate = (id, x, y) => {
+            handleVisualizerNodeLayoutUpdate(id, x, y);
+        };
+        visualizer = new FlowVisualizer(container, mockCallbacks);
+        const initialX = mockFlow.visualLayout.step1.x;
+        const initialY = mockFlow.visualLayout.step1.y;
+        visualizer.render(mockFlow, null);
+        await waitForVisualizerRender();
+        const node = container.querySelector('.flow-node[data-step-id="step1"]');
+        const nodeHeader = node.querySelector('.node-header');
+        const rect = node.getBoundingClientRect();
+        const down = new MouseEvent('mousedown', { bubbles: true, clientX: rect.left + 10, clientY: rect.top + 10, button: 0 });
+        nodeHeader.dispatchEvent(down);
+        await waitForVisualizerRender();
+        const move = new MouseEvent('mousemove', { bubbles: true, clientX: rect.left + 60, clientY: rect.top + 60 });
+        document.dispatchEvent(move);
+        await waitForVisualizerRender();
+        const up = new MouseEvent('mouseup', { bubbles: true, clientX: rect.left + 60, clientY: rect.top + 60 });
+        document.dispatchEvent(up);
+        await waitForVisualizerRender();
+        expect(mockFlow.visualLayout.step1.x).not.toBe(initialX);
+        expect(mockFlow.visualLayout.step1.y).not.toBe(initialY);
+    });
+
     test('handles canvas panning correctly', async () => {
         visualizer.render(mockFlow, null);
         await waitForVisualizerRender();
         const initialScrollLeft = visualizer.mountPoint.scrollLeft;
         const initialScrollTop = visualizer.mountPoint.scrollTop;
-        const mouseDownEvent = new MouseEvent('mousedown', { bubbles: true, clientX: 100, clientY: 100, button: 0 });
-        visualizer.canvas.dispatchEvent(mouseDownEvent);
-        const mouseMoveEvent = new MouseEvent('mousemove', { bubbles: true, clientX: 50, clientY: 70 });
-        document.dispatchEvent(mouseMoveEvent);
+        const pointerDownEvent = new MouseEvent('pointerdown', { bubbles: true, clientX: 100, clientY: 100, button: 0 });
+        visualizer.canvas.dispatchEvent(pointerDownEvent);
+        const pointerMoveEvent = new MouseEvent('pointermove', { bubbles: true, clientX: 50, clientY: 70 });
+        document.dispatchEvent(pointerMoveEvent);
         expect(visualizer.mountPoint.style.cursor).toBe('grabbing');
-        expect(visualizer.mountPoint.scrollLeft).toBe(initialScrollLeft - (50 - 100));
-        expect(visualizer.mountPoint.scrollTop).toBe(initialScrollTop - (70 - 100));
-        const mouseUpEvent = new MouseEvent('mouseup', {});
-        document.dispatchEvent(mouseUpEvent);
+        const maxLeft = Math.max(0, visualizer.mountPoint.scrollWidth - visualizer.mountPoint.clientWidth);
+        const maxTop = Math.max(0, visualizer.mountPoint.scrollHeight - visualizer.mountPoint.clientHeight);
+        const expectedLeft = Math.max(0, Math.min(maxLeft, initialScrollLeft - (50 - 100)));
+        const expectedTop = Math.max(0, Math.min(maxTop, initialScrollTop - (70 - 100)));
+        expect(visualizer.mountPoint.scrollLeft).toBe(expectedLeft);
+        expect(visualizer.mountPoint.scrollTop).toBe(expectedTop);
+        const pointerUpEvent = new MouseEvent('pointerup', {});
+        document.dispatchEvent(pointerUpEvent);
         expect(visualizer.mountPoint.style.cursor).toBe('grab');
     });
 

@@ -43,7 +43,7 @@
                     <h3>Sidebar (Left)</h3>
                     <ul>
                         <li><strong>Branding:</strong> Application logo and name.</li>
-                        <li><strong>Recent Flows:</strong> Lists recently opened/saved <code>.flow.json</code> files. Click to open. Use the '✕' button to remove an entry from this list.</li>
+                        <li><strong>Recent Flows:</strong> Lists recently opened/saved <code>.flow.json</code> files. Drag to reorder the list. Use the '✕' button to remove an entry.</li>
                         <li><strong>Actions:</strong>
                             <ul>
                                 <li><strong>+ New Flow:</strong> Creates a blank flow.</li>
@@ -59,7 +59,7 @@
                         <li><strong>Header:</strong>
                             <ul>
                                 <li><strong>Title:</strong> Shows the current flow name (with '*' if unsaved).</li>
-                                <li><strong>File Controls:</strong> Save, Save As, Cancel (revert changes), Close. Enabled based on flow state and unsaved changes.</li>
+                                <li><strong>File Controls:</strong> Save, Save As, Cancel (revert changes), Close. The Save button highlights when unsaved changes exist.</li>
                                 <li><strong>View Controls:</strong>
                                     <ul>
                                         <li><strong>Toggle View:</strong> Switches between List/Editor and Node-Graph views.</li>
@@ -85,7 +85,7 @@
                             </ul>
                         </li>
                         <li><strong>Status Messages:</strong> Shows brief messages about runner state (starting, stopped, errors).</li>
-                        <li><strong>Execution Results:</strong> A detailed log of each step execution, including status, output/error details, and extraction warnings.</li>
+                        <li><strong>Execution Results:</strong> A detailed log of each step execution, including status, output/error details, and extraction warnings. Use the search box and status filter to narrow the list, and click the copy icon to copy step output.</li>
                     </ul>
                 </div>
             </section>
@@ -98,7 +98,7 @@
                     <ul>
                         <li><strong>Name & Description:</strong> Basic identification.</li>
                         <li><strong>Global Headers:</strong> Headers automatically added to all API Request steps (can be overridden by step-specific headers).</li>
-                        <li><strong>Flow Variables (Static):</strong> Key-value pairs defined once and available throughout the flow execution context. Useful for configuration like base URLs or static tokens.</li>
+                        <li><strong>Flow Variables (Static):</strong> Key-value pairs defined once and available throughout the flow execution context. Each variable can be typed as String, Number, Boolean, or JSON. Values may be JSON arrays or objects for loops or complex data.</li>
                     </ul>
                 </div>
                  <div class="subsection">
@@ -109,6 +109,12 @@
                         <li><strong>Condition (If/Else):</strong> Executes different branches (Then/Else) based on evaluating a variable against a value using an operator. Add steps to branches via the '+ Add Step' buttons inside the condition step in the List view.</li>
                         <li><strong>Loop (For Each):</strong> Repeats a sequence of steps (the Loop Body) for each item in a source array variable. Defines an 'Item Variable' (e.g., <code>item</code>) accessible within the loop body. Add steps to the body via the '+ Add Step' button inside the loop step in the List view.</li>
                     </ul>
+                    <p><em>Example:</em> Define a JSON variable <code>userList</code> in the Flow Info overlay:</p>
+                    <pre><code>[
+    { "name": "Alice", "active": true },
+    { "name": "Bob",   "active": false }
+]</code></pre>
+                    <p>Create a Loop step with source <code>{{userList}}</code> and item variable <code>user</code>. Within the loop body reference <code>{{user.name}}</code> or add a Condition step checking <code>user.active</code>.</p>
                 </div>
                  <div class="subsection">
                     <h3>Variables</h3>
@@ -130,7 +136,7 @@
                     <h3>Views</h3>
                      <ul>
                         <li><strong>List/Editor View:</strong> Default view showing steps hierarchically. Best for detailed configuration using the step editor panel. Supports step reordering via drag-and-drop using the ☰ handle.</li>
-                        <li><strong>Node-Graph View:</strong> Visual representation of the flow structure with connecting lines. Useful for understanding branching and looping. Pan by dragging the background. Drag nodes to rearrange the visual layout (positions are saved with the flow). Select nodes by clicking them.</li>
+                        <li><strong>Node-Graph View:</strong> Visual representation of the flow structure with connecting lines. Useful for understanding branching and looping. Pan by dragging the background. Drag nodes to rearrange the visual layout (positions are saved with the flow). Select nodes by clicking them. Use zoom controls and the minimap to navigate large graphs.</li>
                     </ul>
                 </div>
             </section>
@@ -190,11 +196,29 @@
                             <td><code>Cmd</code> + <code>2</code></td>
                             <td>Shows or hides the defined Variables panel.</td>
                         </tr>
-                         <tr>
+                        <tr>
                             <td>Toggle View (List/Graph)</td>
                             <td><code>Ctrl</code> + <code>3</code></td>
                             <td><code>Cmd</code> + <code>3</code></td>
                             <td>Switches between the List/Editor view and the Node-Graph view.</td>
+                        </tr>
+                        <tr>
+                            <td>Open Help</td>
+                            <td><code>F1</code></td>
+                            <td><code>F1</code></td>
+                            <td>Opens this help window.</td>
+                        </tr>
+                        <tr>
+                            <td>Zoom In / Out / Reset</td>
+                            <td><code>Ctrl</code> + <code>+</code> / <code>-</code> / <code>0</code></td>
+                            <td><code>Cmd</code> + <code>+</code> / <code>-</code> / <code>0</code></td>
+                            <td>Adjusts the workspace zoom level.</td>
+                        </tr>
+                        <tr>
+                            <td>Toggle Minimap (Graph)</td>
+                            <td><code>M</code></td>
+                            <td><code>M</code></td>
+                            <td>Shows or hides the Node-Graph minimap.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -220,9 +244,12 @@
                     <a href="https://github.com/Radware/FlowRunner" target="_blank" rel="noopener noreferrer">README.md file</a>
                     on the FlowRunner GitHub repository.
                 </p>
-                 <p>
-                    Application Version: 1.1.0 <!-- Update this manually or find a way to inject it -->
-                 </p>
+                <ul>
+                    <li>You can manually check for new releases via <strong>Help &gt; Check for Updates…</strong> (implemented in <code><a href="https://github.com/Radware/FlowRunner/blob/main/main.js#L274" target="_blank" rel="noopener noreferrer">main.js</a></code>).</li>
+                </ul>
+                <p>
+                    Application Version: 1.1.1 <!-- Update this manually or find a way to inject it -->
+                </p>
             </section>
         </main>
 

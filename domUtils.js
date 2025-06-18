@@ -31,6 +31,10 @@ export function initializeDOMReferences() {
         closeFlowBtn: document.getElementById('close-flow-btn'),   // <<< Ensure this ID matches your HTML
         toggleInfoBtn: document.getElementById('toggle-info-btn'),
         toggleVariablesBtn: document.getElementById('toggle-variables-btn'),
+        zoomOutBtn: document.getElementById('zoom-out-btn'),
+        zoomInBtn: document.getElementById('zoom-in-btn'),
+        zoomResetBtn: document.getElementById('zoom-reset-btn'),
+        toggleMinimapBtn: document.getElementById('toggle-minimap-btn'),
 
         // Panels relative to Workspace
         variablesPanel: document.querySelector('.variables-panel'),
@@ -66,6 +70,8 @@ export function initializeDOMReferences() {
         stopFlowBtn: document.getElementById('stop-flow-btn'),
         clearResultsBtn: document.getElementById('clear-results-btn'),
         requestDelayInput: document.getElementById('request-delay'),
+        resultsSearchInput: document.getElementById('results-search'),
+        resultsStatusFilter: document.getElementById('results-status-filter'),
         runnerResultsList: document.getElementById('runner-results'),
         runnerResultsContainer: document.querySelector('.runner-results-container'),
         runnerStatusMessages: document.getElementById('runner-status-messages'), // <<< --- ADDED THIS LINE ---
@@ -98,5 +104,7 @@ export function initializeDOMReferences() {
 
     // Check for runner status message container <<< --- ADDED THIS CHECK ---
     if (!domRefs.runnerStatusMessages) logger.warn("Required element #runner-status-messages not found in HTML.");
+    if (!domRefs.resultsSearchInput) logger.warn("Required input #results-search not found in HTML.");
+    if (!domRefs.resultsStatusFilter) logger.warn("Required select #results-status-filter not found in HTML.");
 
 }

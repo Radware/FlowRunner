@@ -6,6 +6,29 @@ import { showMessage, clearListViewHighlights, highlightStepInList, updateDefine
 import { findStepById, escapeHTML } from './flowCore.js'; // findStepById needed for result rendering
 import { logger } from './logger.js';
 
+function computeSearchText(stepName, output, error, extractedValues) {
+    const parts = [stepName];
+    if (output !== null && output !== undefined) {
+        try {
+            parts.push(typeof output === 'string' ? output : JSON.stringify(output));
+        } catch (_) {}
+    }
+    if (error) {
+        parts.push(typeof error === 'string' ? error : error.message || '');
+    }
+    if (extractedValues && Object.keys(extractedValues).length > 0) {
+        for (const [name, val] of Object.entries(extractedValues)) {
+            parts.push(name);
+            try {
+                parts.push(typeof val === 'string' ? val : JSON.stringify(val));
+            } catch (_) {
+                parts.push(String(val));
+            }
+        }
+    }
+    return parts.join(' ').toLowerCase();
+}
+
 // --- Runner Panel Logic & Callbacks ---
 
 export function getRequestDelay() {
@@ -206,7 +229,7 @@ export function handleRunnerStepStart(step, executionPath) {
 export function handleRunnerStepComplete(resultIndex, step, result, context, executionPath) {
     logger.debug(`[RUNNER CALLBACK] handleRunnerStepComplete: stepId=${step.id}, status=${result.status}, error=${result.error}, failures=${result.extractionFailures?.length}`);
     // Update the result entry with final status and details
-    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || []);
+    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || [], result.extractedValues || {});
     // Update the defined variables list based on the latest context
     updateDefinedVariables(context);
 
@@ -292,7 +315,7 @@ export function handleRunnerFlowComplete(finalContext, results) {
 
     if (resultIndex !== null && resultIndex >= 0 && resultIndex < appState.executionResults.length) {
         // Update existing entry if index provided
-        updateResultEntry(resultIndex, 'error', null, errorMessage);
+        updateResultEntry(resultIndex, 'error', null, errorMessage, [] , {});
         if (step) {
              if (appState.currentView === 'node-graph' && appState.visualizerComponent) {
                  appState.visualizerComponent.highlightNode(step.id, 'error');
@@ -307,7 +330,9 @@ export function handleRunnerFlowComplete(finalContext, results) {
             'error',
             executionPath || [],
             null,
-            errorMessage
+            errorMessage,
+            [],
+            {}
         );
          // Also highlight the step if provided
         if (step) {
@@ -332,7 +357,7 @@ export function handleRunnerContextUpdate(newContext) {
 
 // --- Runner Result Rendering ---
 
-export function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = []) {
+export function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = [], extractedValues = {}) {
     if (!domRefs.runnerResultsList) return -1;
 
     const noResultsLi = domRefs.runnerResultsList.querySelector('.no-results');
@@ -346,6 +371,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
     li.dataset.resultIndex = resultIndex;
 
     logger.debug(`[DOM UPDATE] addResultEntry: Adding li for stepId=${stepId}, status=${status}, index=${resultIndex}`);
+    const searchText = computeSearchText(step.name || 'Unnamed Step', output, error, extractedValues);
     const resultData = {
         stepId: stepId,
         stepName: step.name || 'Unnamed Step',
@@ -354,8 +380,13 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
         error: error,
         executionPath: executionPath || [],
         extractionFailures: extractionFailures || [],
+        extractedValues: extractedValues || {},
+        searchText: searchText,
     };
     appState.executionResults.push(resultData);
+
+    li.dataset.status = status;
+    li.dataset.searchText = searchText;
 
     renderResultItemContent(li, resultData);
 
@@ -369,7 +400,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
     return resultIndex;
 }
 
-export function updateResultEntry(index, status, output, error, extractionFailures = []) {
+export function updateResultEntry(index, status, output, error, extractionFailures = [], extractedValues = {}) {
     if (index < 0 || index >= appState.executionResults.length || !domRefs.runnerResultsList) return;
 
     const resultData = appState.executionResults[index];
@@ -377,12 +408,17 @@ export function updateResultEntry(index, status, output, error, extractionFailur
     resultData.output = output;
     resultData.error = error;
     resultData.extractionFailures = extractionFailures || [];
+    resultData.extractedValues = extractedValues || {};
+    resultData.searchText = computeSearchText(resultData.stepName, output, error, extractedValues);
 
     const li = domRefs.runnerResultsList.querySelector(`li.result-item[data-result-index="${index}"]`);
     if (!li) {
          logger.warn(`[DOM UPDATE] updateResultEntry: li element not found for index ${index}`);
          return;
     }
+
+    li.dataset.status = status;
+    li.dataset.searchText = resultData.searchText;
 
     logger.debug(`[DOM UPDATE] updateResultEntry: Updating li index=${index} (stepId=${resultData.stepId}) to status=${status}`);
     renderResultItemContent(li, resultData);
@@ -395,7 +431,7 @@ export function updateResultEntry(index, status, output, error, extractionFailur
 }
 
 export function renderResultItemContent(listItem, resultData) {
-    const { stepName, stepId, status, output, error, extractionFailures } = resultData;
+    const { stepName, stepId, status, output, error, extractionFailures, extractedValues } = resultData;
     const stepType = findStepById(appState.currentFlowModel?.steps, stepId)?.type || 'System'; // Default to System if step not found
 
     const statusClass = status === 'success' ? 'success'
@@ -410,7 +446,7 @@ export function renderResultItemContent(listItem, resultData) {
             const outputString = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
             outputHtml = `<div class="result-body"><pre>${escapeHTML(outputString)}</pre></div>`;
         } catch (e) {
-             outputHtml = `<div class="result-body"><pre>[Error formatting output: ${escapeHTML(e.message)}]</pre></div>`;
+            outputHtml = `<div class="result-body"><pre>[Error formatting output: ${escapeHTML(e.message)}]</pre></div>`;
         }
     }
 
@@ -433,6 +469,27 @@ export function renderResultItemContent(listItem, resultData) {
         `;
     }
 
+    let extractedValuesHtml = '';
+    if (extractedValues && Object.keys(extractedValues).length > 0) {
+        const valueItems = Object.entries(extractedValues).map(([name, val]) => {
+            let valString;
+            try {
+                valString = typeof val === 'string' ? val : JSON.stringify(val);
+            } catch (e) {
+                valString = String(val);
+            }
+            const escapedVal = escapeHTML(valString);
+            return `<li><div><code>${escapeHTML(name)}</code>: <span class="extracted-value">${escapedVal}</span></div><button class="copy-btn btn btn-sm" data-copy-value="${escapedVal}" title="Copy value" aria-label="Copy value">Copy</button></li>`;
+
+        }).join('');
+        extractedValuesHtml = `
+            <div class="result-extracted-values">
+                <strong>Extracted Values:</strong>
+                <ul>${valueItems}</ul>
+            </div>
+        `;
+    }
+
     listItem.className = `result-item ${statusClass}`; // Set class based on status
 
     listItem.innerHTML = `
@@ -442,6 +499,41 @@ export function renderResultItemContent(listItem, resultData) {
         </div>
         ${errorHtml}
         ${extractionFailuresHtml}
+        ${extractedValuesHtml}
         ${outputHtml}
     `;
+
+    if (outputHtml) {
+        const resultBody = listItem.querySelector('.result-body');
+        if (resultBody) {
+            const copyBtn = document.createElement('button');
+            copyBtn.className = 'copy-btn btn btn-sm';
+            copyBtn.textContent = 'Copy';
+            copyBtn.title = 'Copy raw output';
+            copyBtn.setAttribute('aria-label', 'Copy raw output');
+            copyBtn.addEventListener('click', () => {
+                try {
+                    const raw = typeof output === 'string' ? output : JSON.stringify(output, null, 2);
+                    navigator.clipboard.writeText(raw);
+                } catch (err) {
+                    logger.error('Failed to copy output:', err);
+                }
+            });
+            resultBody.appendChild(copyBtn);
+        }
+    }
+
+    const valueCopyBtns = listItem.querySelectorAll('.result-extracted-values .copy-btn');
+    valueCopyBtns.forEach(btn => {
+        const val = btn.getAttribute('data-copy-value') || '';
+        btn.addEventListener('click', () => {
+            try {
+                navigator.clipboard.writeText(val);
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = 'Copy'; }, 1000);
+            } catch (err) {
+                logger.error('Failed to copy extracted value:', err);
+            }
+        });
+    });
 }

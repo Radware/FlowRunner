@@ -594,10 +594,11 @@ describe('FlowRunner', () => {
             const eC = { eF: 'foo', eB: 'nested.bar' };
             const rO = { status: 200, headers: {}, body: { foo: 1, nested: { bar: 2 } } };
             const c = {};
-            const f = specificRunner._updateContextFromExtraction(eC, rO, c);
+            const res = specificRunner._updateContextFromExtraction(eC, rO, c);
             expect(c.eF).toBe(1);
             expect(c.eB).toBe(2);
-            expect(f).toEqual([]);
+            expect(res.failures).toEqual([]);
+            expect(res.extractedValues).toEqual({ eF: 1, eB: 2 });
             expect(specificMockEvaluatePathFn).toHaveBeenCalledWith(rO.body, 'foo');
             expect(specificMockEvaluatePathFn).toHaveBeenCalledWith(rO.body, 'nested.bar');
             expect(specificMockOnContextUpdate).toHaveBeenCalledWith({ eF: 1, eB: 2 });
@@ -606,19 +607,21 @@ describe('FlowRunner', () => {
             const eC = { eF: 'foo', mV: 'nonexistent.path' };
             const rO = { status: 200, headers: {}, body: { foo: 1 } };
             const c = {};
-            const f = specificRunner._updateContextFromExtraction(eC, rO, c);
+            const res = specificRunner._updateContextFromExtraction(eC, rO, c);
             expect(c.eF).toBe(1);
             expect(c.mV).toBeUndefined();
-            expect(f.length).toBe(1);
-            expect(f[0].varName).toBe('mV');
-            expect(f[0].path).toBe('nonexistent.path');
+            expect(res.failures.length).toBe(1);
+            expect(res.failures[0].varName).toBe('mV');
+            expect(res.failures[0].path).toBe('nonexistent.path');
+            expect(res.extractedValues).toEqual({ eF: 1, mV: undefined });
             expect(specificMockOnContextUpdate).toHaveBeenCalledWith({ eF: 1, mV: undefined });
         });
         it('should handle empty extractConfig gracefully', () => {
             const c = { a: 1 };
-            const f = specificRunner._updateContextFromExtraction({}, { status: 200, body: {} }, c);
+            const res = specificRunner._updateContextFromExtraction({}, { status: 200, body: {} }, c);
             expect(c).toEqual({ a: 1 });
-            expect(f).toEqual([]);
+            expect(res.failures).toEqual([]);
+            expect(res.extractedValues).toEqual({});
             expect(specificMockOnContextUpdate).not.toHaveBeenCalled();
         });
     });
@@ -749,10 +752,74 @@ describe('FlowRunner', () => {
             expect(resultArg.output.body).toEqual({ data: 'actual_data' });
             expect(resultArg.extractionFailures).toBeDefined();
             expect(Array.isArray(resultArg.extractionFailures)).toBe(true);
+            expect(resultArg.extractedValues).toEqual({ dataValue: 'actual_data', missingValue: undefined });
             const missingFailure = resultArg.extractionFailures.find(f => f.varName === 'missingValue');
             expect(missingFailure).toBeDefined();
             expect(missingFailure.path).toBe('nonexistent');
             expect(resultArg.extractionFailures.length).toBe(1);
+        });
+
+        it('should handle 204 No Content responses without warning', async () => {
+            const flow = createTemplateFlow();
+            flow.steps = [{
+                ...createNewStep('request'),
+                id: 'r1',
+                name: 'Req1'
+            }];
+            global.fetch.mockResolvedValueOnce(Promise.resolve({
+                ok: true,
+                status: 204,
+                headers: {
+                    get: () => null,
+                    forEach: () => {},
+                    [Symbol.iterator]: function* () {}
+                },
+                text: async () => ''
+            }));
+            await runner.run(flow);
+            await processAsyncOps(2);
+            expect(mockOnMessage).not.toHaveBeenCalledWith(expect.stringContaining('Response body parsing failed'), 'warning');
+            const resultArg = mockOnStepComplete.mock.calls[0][2];
+            expect(resultArg.status).toBe('success');
+            expect(resultArg.output.body).toBeNull();
+        });
+    });
+
+    describe('Global headers', () => {
+        beforeEach(() => {
+            mockOnStepStart.mockImplementation(step => {
+                runner.state.results.push({ stepId: step.id, status: 'pending_start' });
+                return runner.state.results.length - 1;
+            });
+        });
+
+        it('merges global and step headers for requests', async () => {
+            const flow = createTemplateFlow();
+            flow.headers = { G: '1', Shared: 'global' };
+            flow.steps = [
+                { ...createNewStep('request'), id: 'r1', name: 'Req1' },
+                { ...createNewStep('request'), id: 'r2', name: 'Req2', headers: { Shared: 'step', Step: '2' } }
+            ];
+
+            const seen = [];
+            global.fetch.mockImplementation(() => Promise.resolve({
+                ok: true,
+                status: 200,
+                json: async () => ({}),
+                text: async () => "",
+                headers: {
+                    get: jest.fn(h => h.toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null),
+                    forEach: jest.fn(cb => cb('application/json; charset=utf-8', 'content-type')),
+                    [Symbol.iterator]: function* () { yield ['content-type', 'application/json; charset=utf-8']; }
+                }
+            }));
+            await runner.run(flow);
+            await processAsyncOps(flow.steps.length + 2);
+            for (const call of global.fetch.mock.calls) {
+                seen.push(call[1].headers);
+            }
+            expect(seen[0]).toEqual({ G: '1', Shared: 'global' });
+            expect(seen[1]).toEqual({ G: '1', Shared: 'step', Step: '2' });
         });
     });
 });

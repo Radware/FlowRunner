@@ -23,12 +23,26 @@ const PAN_BUTTON = 0;           // Left mouse button for panning
 // --- Constants for Styling & SVG ---
 const CONNECTOR_CLASS = 'connector-path';
 const CONNECTOR_ACTIVE_CLASS = 'active-connector'; // General active class
+const CONNECTOR_COLOURS = {
+    'branch-then': '#10b981',
+    'branch-else': '#ef4444',
+    'loop-body': '#6366f1'
+};
 const NODE_CLASS = 'flow-node';
 const NODE_SELECTED_CLASS = 'selected';
 const NODE_DRAGGING_CLASS = 'dragging';
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export class FlowVisualizer {
+    // --- Minimap update throttle ---------------------------------
+    _scheduleMinimapRefresh = () => {
+        if (this._minimapNeedsRefresh) return;          // already scheduled
+        this._minimapNeedsRefresh = true;
+        requestAnimationFrame(() => {
+            this._minimapNeedsRefresh = false;
+            this._updateMinimap();                      // existing heavy call
+        });
+    };
     /**
      * Initializes the FlowVisualizer.
      * @param {HTMLElement} mountPoint - The container element for the visualizer.
@@ -67,6 +81,23 @@ export class FlowVisualizer {
         this.scrollLeftStart = 0;
         this.scrollTopStart = 0;
 
+        // Zoom state
+        this.zoomLevel = 1;
+        this.minZoom = 0.5;
+        this.maxZoom = 2;
+        this.pinchStartDistance = null;
+
+        // Minimap
+        this.minimapContainer = null;
+        this.minimapContent = null;
+        this.minimapViewport = null;
+        this.minimapScale = 0.15;
+        this.minimapVisible = false;
+        this.isMinimapDragging = false;
+        this._handleScroll = () => this._updateMinimapViewport();
+        this._minimapFrame = null;
+        this._minimapNeedsRefresh = false;
+
         // Debounce resize handler
         this.resizeObserver = null;
         this.debounceTimer = null;
@@ -75,6 +106,7 @@ export class FlowVisualizer {
 
         this._createBaseStructure();
         this._bindBaseListeners();
+        this._applyZoom();
     }
 
     /** Creates the initial SVG and Canvas elements within the mount point. */
@@ -93,6 +125,7 @@ export class FlowVisualizer {
         this.svgConnectors.style.height = '100%';
         this.svgConnectors.style.pointerEvents = 'none'; // Allow interaction with nodes beneath
         this.svgConnectors.style.overflow = 'visible'; // Allow connectors to extend beyond initial viewbox if needed
+        this.svgConnectors.style.transformOrigin = '0 0';
 
         // Add <defs> for arrowheads
         this.defs = document.createElementNS(SVG_NS, 'defs');
@@ -105,11 +138,41 @@ export class FlowVisualizer {
 
         this.mountPoint.appendChild(this.svgConnectors);
         this.mountPoint.appendChild(this.canvas);
+
+        this.minimapContainer = document.createElement('div');
+        this.minimapContainer.className = 'visualizer-minimap';
+        this.minimapContainer.style.display = 'none';
+
+        this.minimapContent = document.createElement('div');
+        this.minimapContent.className = 'minimap-content';
+        this.minimapContent.style.transformOrigin = '0 0';
+        this.minimapContent.style.pointerEvents = 'none';
+        this.minimapContainer.appendChild(this.minimapContent);
+
+        this.minimapViewport = document.createElement('div');
+        this.minimapViewport.className = 'minimap-viewport';
+        this.minimapViewport.style.position = 'absolute';
+        this.minimapViewport.style.border = '1px solid red';
+        this.minimapViewport.style.pointerEvents = 'none';
+        this.minimapContainer.appendChild(this.minimapViewport);
+
+        if (this.mountPoint.parentElement) {
+            this.mountPoint.parentElement.appendChild(this.minimapContainer);
+        } else {
+            this.mountPoint.appendChild(this.minimapContainer);
+        }
     }
 
     /** Binds essential event listeners for panning and potential resizing. */
     _bindBaseListeners() {
-        this.mountPoint.addEventListener('mousedown', this._handleMouseDown);
+        this.mountPoint.addEventListener('pointerdown', this._handlePanStart);
+        this.mountPoint.addEventListener('wheel', this._handleWheel, { passive: false });
+        this.mountPoint.addEventListener('touchstart', this._handleTouchStart, { passive: false });
+        this.mountPoint.addEventListener('touchmove', this._handleTouchMove, { passive: false });
+        this.mountPoint.addEventListener('touchend', this._handleTouchEnd);
+        this.mountPoint.addEventListener('scroll', this._handleScroll);
+        this.minimapContainer.addEventListener('mousedown', this._handleMinimapMouseDown);
+        this.minimapContainer.addEventListener('dblclick', this._handleMinimapDoubleClick);
         // Mouse move/up listeners are added to document dynamically during drag/pan
 
         // Observe mount point resizing to potentially trigger re-layout/re-render
@@ -301,6 +364,7 @@ export class FlowVisualizer {
         this._updateCanvasAndSvgSize(effectiveWidth, effectiveHeight);
 
         this._renderAllConnectors(); // Render connectors based on FINAL node positions
+        this._updateMinimap();
 
         // Apply selection highlight
         if (this.selectedNodeId) {
@@ -436,6 +500,7 @@ export class FlowVisualizer {
         }
 
         this._updateSvgViewBox();
+        this._updateMinimap();
     }
 
     /** Updates the SVG viewbox to match the current canvas size. */
@@ -449,6 +514,41 @@ export class FlowVisualizer {
                 this.svgConnectors.style.height = `${height}px`;
             }
         }
+    }
+
+    setZoom(level) {
+        this.zoomLevel = Math.min(this.maxZoom, Math.max(this.minZoom, level));
+        this._applyZoom();
+        this._updateMinimapViewport();
+    }
+
+    zoomIn() {
+        this.setZoom(this.zoomLevel + 0.1);
+    }
+
+    zoomOut() {
+        this.setZoom(this.zoomLevel - 0.1);
+    }
+
+    resetZoom() {
+        this.setZoom(1);
+    }
+
+    _applyZoom() {
+        const scale = `scale(${this.zoomLevel})`;
+        if (this.canvas) this.canvas.style.transform = scale;
+        if (this.svgConnectors) this.svgConnectors.style.transform = scale;
+    }
+
+    _applyScroll(left, top) {
+        const canvasW = parseFloat(this.canvas?.style.width || this.canvas?.offsetWidth || '0');
+        const canvasH = parseFloat(this.canvas?.style.height || this.canvas?.offsetHeight || '0');
+        const scrollMaxLeft = this.mountPoint.scrollWidth - this.mountPoint.clientWidth;
+        const scrollMaxTop = this.mountPoint.scrollHeight - this.mountPoint.clientHeight;
+        const maxLeft = Math.max(0, scrollMaxLeft, canvasW - this.mountPoint.clientWidth);
+        const maxTop = Math.max(0, scrollMaxTop, canvasH - this.mountPoint.clientHeight);
+        this.mountPoint.scrollLeft = Math.max(0, Math.min(maxLeft, left));
+        this.mountPoint.scrollTop = Math.max(0, Math.min(maxTop, top));
     }
 
     // --- Node Element Creation ---
@@ -600,6 +700,16 @@ export class FlowVisualizer {
     /** Renders all connectors based on the node layout. */
     _renderAllConnectors() {
         if (!this.svgConnectors || !this.defs) return;
+        Array.from(this.svgConnectors.querySelectorAll('path.' + CONNECTOR_CLASS))
+            .forEach(p => {
+                const fromId = p.dataset.from, toId = p.dataset.to;
+                if (!this.nodes.get(fromId)?.element ||
+                    !this.nodes.get(toId)?.element ||
+                    this.nodes.get(fromId).element.style.display === 'none' ||
+                    this.nodes.get(toId).element.style.display === 'none') {
+                    p.remove();
+                }
+            });
         // Store existing defs content temporarily
         const defsContent = this.defs.innerHTML;
         this.svgConnectors.innerHTML = ''; // Clear previous connectors AND defs
@@ -656,12 +766,12 @@ export class FlowVisualizer {
     /** Calculates the absolute position of a conceptual port on a node. */
     _getPortPosition(nodeData, portType) {
         if (!nodeData) return { x: NaN, y: NaN };
-
         let x, y;
         // If this node is currently being dragged, use its style position for accurate connector drawing during drag
         if (this.isDraggingNode && this.draggedNode && this.draggedNode.dataset.stepId === nodeData.id) {
+            // style.left/top already store logical coordinates, so do not scale
             x = parseFloat(this.draggedNode.style.left || '0');
-            y = parseFloat(this.draggedNode.style.top || '0');
+            y = parseFloat(this.draggedNode.style.top  || '0');
         } else {
             // Otherwise, use the stored layout coordinates
             x = nodeData.x;
@@ -672,17 +782,79 @@ export class FlowVisualizer {
         const h = nodeData.height;
 
         switch (portType) {
-            case 'input': return { x: x, y: y + h / 2 };
-            case 'output': return { x: x + w, y: y + h / 2 };
+            case 'input':  return { x: x,       y: y + h / 2 };
+            case 'output': return { x: x + w,   y: y + h / 2 };
+            case 'top':    return { x: x + w / 2, y: y };
+            case 'bottom': return { x: x + w / 2, y: y + h };
             case 'branch-then': return { x: x + w / 2, y: y + h };
             case 'branch-else': return { x: x + w / 2, y: y + h };
-            case 'loop-body': return { x: x + w / 2, y: y + h };
+            case 'loop-body':   return { x: x + w / 2, y: y + h };
             default: return { x: x + w / 2, y: y + h / 2 };
         }
     }
 
-    /** Draws a single SVG connector between two nodes using orthogonal paths. */
-    _drawConnector(startNodeData, endNodeData, startPortType, endPortType) {
+    /* --------------------------------------------------------------- *
+     *  === Smart‑port selection  ==================================== *
+     *  Picks the two ports that produce the shortest Manhattan path.  *
+     * --------------------------------------------------------------- */
+    _autoSelectPorts(src, dst) {
+        const srcCx = src.x + src.width  / 2;
+        const srcCy = src.y + src.height / 2;
+        const dstCx = dst.x + dst.width  / 2;
+        const dstCy = dst.y + dst.height / 2;
+        const dx = dstCx - srcCx, dy = dstCy - srcCy;
+
+        // Most of the time a purely horizontal or vertical hop is clearer.
+        // If the delta on one axis is ≥ 1.2 × bigger than the other, prefer that axis.
+        const bias = 1.2;
+        if (Math.abs(dx) > Math.abs(dy) * bias) {
+            return { start: dx > 0 ? 'output' : 'input',
+                     end:   dx > 0 ? 'input'  : 'output' };
+        } else if (Math.abs(dy) > Math.abs(dx) * bias) {
+            return { start: dy > 0 ? 'bottom' : 'top',
+                     end:   dy > 0 ? 'top'    : 'bottom' };
+        }
+        // Similar deltas → pick the quadrant that keeps the first segment short
+        return { start: dx >= 0 ? 'output' : 'input',
+                 end:   dy >= 0 ? 'top'    : 'bottom' };
+    }
+
+    /* --------------------------------------------------------------- *
+     *  === Manhattan router  ======================================== *
+     *  • keeps a constant 14‑px elbow gap *in screen pixels*          *
+     *  • adapts whether we start with a horiz or vert segment         *
+     * --------------------------------------------------------------- */
+    _buildOrthogonalPath(start, end) {
+        const { x: xs, y: ys } = start;
+        const { x: xe, y: ye } = end;
+        if ([xs, ys, xe, ye].some(v => Number.isNaN(v))) return '';
+
+        // keep the visual gap ~14 px regardless of zoom
+        const m = 14 / (this.zoomLevel || 1);
+        const horizontalFirst = Math.abs(xs - xe) > Math.abs(ys - ye);
+
+        const pts = [[xs, ys]];
+        if (horizontalFirst) {
+            const midX = xs + (xs < xe ? m : -m);
+            pts.push([midX, ys], [midX, ye]);
+        } else {
+            const midY = ys + (ys < ye ? m : -m);
+            pts.push([xs, midY], [xe, midY]);
+        }
+        pts.push([xe, ye]);
+        return 'M ' + pts.map(([x, y]) => `${x} ${y}`).join(' L ');
+    }
+
+    /*  === Central draw routine ==================================== *
+     *  All internal callers used to pass literal 'output','input'.    *
+     *  We now *always* re‑route them through _autoSelectPorts, so     *
+     *  you don’t have to hunt every call‑site.                     */
+    _drawConnector(startNodeData, endNodeData,
+                   startPortType = 'output', endPortType = 'input') {
+        // Let the smart router override default L/R if a better pair exists
+        const chosen = this._autoSelectPorts(startNodeData, endNodeData);
+        startPortType = chosen.start;
+        endPortType   = chosen.end;
         if (!startNodeData || !endNodeData) {
             logger.warn("Skipping connector draw: Missing start or end node data.");
             return;
@@ -700,59 +872,34 @@ export class FlowVisualizer {
                 throw new Error(`Invalid port positions calculated: Start(${startPos.x},${startPos.y}), End(${endPos.x},${endPos.y}) for nodes ${startNodeData.id} -> ${endNodeData.id}`);
             }
 
-            // --- Start: Orthogonal Path Calculation ---
-            let pathData = '';
-            const hPadding = 20; // Horizontal distance before/after vertical turn
-            const inputExtend = 15; // Horizontal distance the line extends left from the input port
-
-            if (startPortType === 'output' && endPortType === 'input') {
-                // Standard horizontal connection (Output -> Input)
-                const midX = startPos.x + hPadding;
-                pathData = `M ${startPos.x} ${startPos.y} ` + // Move to start port (middle-right)
-                           `L ${midX} ${startPos.y} ` +      // Line horizontally out
-                           `L ${midX} ${endPos.y} ` +        // Line vertically to target Y
-                           `L ${endPos.x - inputExtend} ${endPos.y} ` + // Line horizontally towards input port
-                           `L ${endPos.x} ${endPos.y}`;      // Line horizontally into input port (middle-left)
-            } else if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
-                // Connection from bottom of a node (branch/loop) to an input port
-                const vSegLength = Math.max(20, V_SPACING / 2); // How far down to go initially
-                pathData = `M ${startPos.x} ${startPos.y} ` + // Move to start port (middle-bottom)
-                           `V ${startPos.y + vSegLength} ` + // Line vertically down
-                           `H ${endPos.x - inputExtend} ` + // Line horizontally across to near target X
-                           `L ${endPos.x - inputExtend} ${endPos.y} ` + // Line vertically to target Y
-                           `L ${endPos.x} ${endPos.y}`;      // Line horizontally into input port (middle-left)
-            } else {
-                // Fallback (e.g., if connecting from branch to another branch - might need refinement)
-                // Use the standard horizontal logic as a default fallback for now
-                const midX = startPos.x + hPadding;
-                 pathData = `M ${startPos.x} ${startPos.y} ` +
-                            `L ${midX} ${startPos.y} ` +
-                            `L ${midX} ${endPos.y} ` +
-                            `L ${endPos.x - inputExtend} ${endPos.y} ` +
-                            `L ${endPos.x} ${endPos.y}`;
-                 logger.warn(`[Visualizer] Using fallback orthogonal path for connection: ${startPortType} -> ${endPortType}`);
-            }
-            // --- End: Orthogonal Path Calculation ---
+            const pathData = this._buildOrthogonalPath(startPos, endPos);
+            const stroke = CONNECTOR_COLOURS[startPortType] || 'var(--border-color-dark)';
 
 
             const path = document.createElementNS(SVG_NS, 'path');
             path.setAttribute('d', pathData);
             path.setAttribute('class', CONNECTOR_CLASS);
+            path.setAttribute('stroke', stroke);
             path.dataset.from = startNodeData.id;
             path.dataset.to = endNodeData.id;
             path.dataset.startPort = startPortType;
             path.dataset.endPort = endPortType;
 
-            const markerId = `arrow-${startNodeData.id}-${startPortType}-to-${endNodeData.id}-${endPortType}`.replace(/[^a-zA-Z0-9-_]/g, '_'); // Sanitize ID
+            const markerId = `arrow-${startNodeData.id}-${startPortType}-to-${endNodeData.id}-${endPortType}`.replace(/[^a-zA-Z0-9-_]/g, '_');
             const marker = document.createElementNS(SVG_NS, 'marker');
             marker.setAttribute('id', markerId);
             marker.setAttribute('viewBox', '0 -5 10 10');
-            marker.setAttribute('refX', '8'); // Position arrowhead slightly before endpoint
+            marker.setAttribute('refX', '8');
             marker.setAttribute('refY', '0');
-            marker.setAttribute('markerWidth', '6');
-            marker.setAttribute('markerHeight', '6');
+            marker.setAttribute('markerUnits', 'userSpaceOnUse');
+            marker.setAttribute('markerWidth', '7');
+            marker.setAttribute('markerHeight', '7');
             marker.setAttribute('orient', 'auto-start-reverse');
-            marker.innerHTML = `<path d="M0,-5L10,0L0,5" class="connector-arrowhead"></path>`;
+            const arrowPath = document.createElementNS(SVG_NS, 'path');
+            arrowPath.setAttribute('d', 'M0,-5L10,0L0,5');
+            arrowPath.setAttribute('class', 'connector-arrowhead');
+            arrowPath.setAttribute('fill', stroke);
+            marker.appendChild(arrowPath);
 
             // Only add marker definition if it doesn't exist already
             if (this.defs && !this.defs.querySelector(`#${markerId}`)) {
@@ -787,15 +934,20 @@ export class FlowVisualizer {
         }
     }
 
-    _handleMouseDown = (e) => {
-        // Pan only if clicking the background (mountPoint or canvas directly)
-        if (e.button === PAN_BUTTON && (e.target === this.mountPoint || e.target === this.canvas)) {
-            this._handlePanStart(e);
-        }
+    _handleWheel = (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const delta = e.deltaY;
+        this.setZoom(this.zoomLevel - delta / 500);
     }
     // --- End Bound Handlers ---
 
-    _handlePanStart(e) {
+    _handlePanStart = (e) => {
+        if (e.button !== PAN_BUTTON || (e.target !== this.mountPoint && e.target !== this.canvas)) {
+            return;
+        }
+
+        e.preventDefault();
         this.isPanning = true;
         this.panStartX = e.clientX;
         this.panStartY = e.clientY;
@@ -803,25 +955,24 @@ export class FlowVisualizer {
         this.scrollTopStart = this.mountPoint.scrollTop;
         this.mountPoint.style.cursor = 'grabbing';
         this.mountPoint.style.userSelect = 'none'; // Prevent text selection during pan
-        document.addEventListener('mousemove', this._handleMouseMove);
-        document.addEventListener('mouseup', this._handleMouseUp);
-        e.preventDefault();
+        document.addEventListener('pointermove', this._handlePanMove);
+        document.addEventListener('pointerup', this._handlePanEnd);
     }
 
-    _handlePanMove(e) {
+    _handlePanMove = (e) => {
         if (!this.isPanning) return;
         const dx = e.clientX - this.panStartX;
         const dy = e.clientY - this.panStartY;
-        this.mountPoint.scrollLeft = this.scrollLeftStart - dx;
-        this.mountPoint.scrollTop = this.scrollTopStart - dy;
+        this._applyScroll(this.scrollLeftStart - dx, this.scrollTopStart - dy);
+        this._updateMinimapViewport();
     }
 
-    _handlePanEnd(e) {
+    _handlePanEnd = (e) => {
         this.isPanning = false;
         this.mountPoint.style.cursor = 'grab';
         this.mountPoint.style.userSelect = ''; // Re-enable text selection
-        document.removeEventListener('mousemove', this._handleMouseMove);
-        document.removeEventListener('mouseup', this._handleMouseUp);
+        document.removeEventListener('pointermove', this._handlePanMove);
+        document.removeEventListener('pointerup', this._handlePanEnd);
     }
 
     _handleNodeMouseDown = (e) => { // Arrow function binds 'this'
@@ -864,8 +1015,11 @@ export class FlowVisualizer {
         const mountRect = this.mountPoint.getBoundingClientRect();
 
         // Calculate new position relative to the canvas, considering scroll and drag offset
-        let newX = newPageX - mountRect.left + this.mountPoint.scrollLeft - this.dragOffsetX;
-        let newY = newPageY - mountRect.top + this.mountPoint.scrollTop - this.dragOffsetY;
+        const zoom = this.zoomLevel || 1;
+        let newX = (newPageX - mountRect.left + this.mountPoint.scrollLeft - this.dragOffsetX) / zoom;
+        let newY = (newPageY - mountRect.top  + this.mountPoint.scrollTop  - this.dragOffsetY) / zoom;
+        newX = Math.max(0, newX);
+        newY = Math.max(0, newY);
 
         // Directly update style, remove internal data update
         this.draggedNode.style.left = `${newX}px`;
@@ -878,6 +1032,9 @@ export class FlowVisualizer {
         if (nodeData) {
             // Update connectors based on the current visual position (using the modified _getPortPosition)
             this._updateNodeConnectors(nodeData);
+
+            // NEW – keep minimap in-sync while dragging
+            if (this.minimapVisible) this._scheduleMinimapRefresh();
         }
     }
 
@@ -886,7 +1043,15 @@ export class FlowVisualizer {
         if (!nodeData || !this.svgConnectors) return;
         const stepId = nodeData.id;
 
-        const paths = this.svgConnectors.querySelectorAll(`path.${CONNECTOR_CLASS}[data-from="${stepId}"], path.${CONNECTOR_CLASS}[data-to="${stepId}"]`);
+        const paths = Array.from(
+            this.svgConnectors.querySelectorAll(`path.${CONNECTOR_CLASS}[data-from="${stepId}"]`)
+        );
+        if (!paths.length) {
+            // no outgoing lines – try incoming ones
+            const incoming = this.svgConnectors
+                .querySelectorAll(`path.${CONNECTOR_CLASS}[data-to="${stepId}"]`);
+            incoming.forEach(p => paths.push(p));
+        }
 
         paths.forEach(path => {
             const fromId = path.dataset.from;
@@ -906,29 +1071,20 @@ export class FlowVisualizer {
                         throw new Error(`Invalid port positions during connector update: Start(${startPos.x},${startPos.y}), End(${endPos.x},${endPos.y})`);
                     }
 
-                    // --- Start: Orthogonal Path Calculation ---
-                    let pathData = '';
-                    const hPadding = 20;
-                    const inputExtend = 15;
-
-                    if (startPortType === 'output' && endPortType === 'input') {
-                        const midX = startPos.x + hPadding;
-                        pathData = `M ${startPos.x} ${startPos.y} L ${midX} ${startPos.y} L ${midX} ${endPos.y} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
-                    } else if ((startPortType === 'branch-then' || startPortType === 'branch-else' || startPortType === 'loop-body') && endPortType === 'input') {
-                        const vSegLength = Math.max(20, V_SPACING / 2);
-                        pathData = `M ${startPos.x} ${startPos.y} V ${startPos.y + vSegLength} H ${endPos.x - inputExtend} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
-                    } else {
-                        const midX = startPos.x + hPadding;
-                        pathData = `M ${startPos.x} ${startPos.y} L ${midX} ${startPos.y} L ${midX} ${endPos.y} L ${endPos.x - inputExtend} ${endPos.y} L ${endPos.x} ${endPos.y}`;
-                    }
-                    // --- End: Orthogonal Path Calculation ---
+                    const pathData = this._buildOrthogonalPath(startPos, endPos);
+                    const stroke = CONNECTOR_COLOURS[startPortType] || 'var(--border-color-dark)';
 
                     path.setAttribute('d', pathData);
+                    path.setAttribute('stroke', stroke);
                 } catch (error) {
                     logger.error(`Error updating connector d attribute for path ${fromId}->${toId}:`, error);
                 }
             } else {
                 logger.warn(`Skipping connector update for ${fromId}->${toId}: Missing node data for start or end.`);
+            }
+            if (!startNode?.element || startNode.element.style.display === 'none' ||
+                !endNode?.element   || endNode.element.style.display === 'none') {
+                path.remove();
             }
         });
     }
@@ -1011,6 +1167,8 @@ export class FlowVisualizer {
                  }
              }
         } finally {
+            // Redraw all connectors once the node position is final
+            this._renderAllConnectors();
              // Cleanup
             if (draggedNodeAtStart) {
                 draggedNodeAtStart.classList.remove(NODE_DRAGGING_CLASS);
@@ -1027,6 +1185,9 @@ export class FlowVisualizer {
              // +++ ADD LOGGING +++
              logger.debug("[Visualizer DragEnd] Cleanup complete.");
              // +++ END LOGGING +++
+
+            // Final refresh to lock-in the new coordinates
+            if (this.minimapVisible) this._updateMinimap();
         }
     }
     // --- END UPDATED _handleNodeDragEnd ---
@@ -1231,9 +1392,17 @@ export class FlowVisualizer {
         // Remove dynamically added document listeners
         document.removeEventListener('mousemove', this._handleMouseMove);
         document.removeEventListener('mouseup', this._handleMouseUp);
+        document.removeEventListener('pointermove', this._handlePanMove);
+        document.removeEventListener('pointerup', this._handlePanEnd);
 
         // Remove listeners attached to the mount point itself
-        this.mountPoint?.removeEventListener('mousedown', this._handleMouseDown);
+        this.mountPoint?.removeEventListener('pointerdown', this._handlePanStart);
+        this.mountPoint?.removeEventListener('wheel', this._handleWheel);
+        this.mountPoint?.removeEventListener('touchstart', this._handleTouchStart);
+        this.mountPoint?.removeEventListener('touchmove', this._handleTouchMove);
+        this.mountPoint?.removeEventListener('touchend', this._handleTouchEnd);
+        this.mountPoint?.removeEventListener('scroll', this._handleScroll);
+        this.minimapContainer?.removeEventListener('mousedown', this._handleMinimapMouseDown);
         // Remove listeners attached to nodes (more complex, requires iterating nodes if needed)
         this.nodes?.forEach(nodeData => { // Add safe navigation
             if (nodeData.element) {
@@ -1266,7 +1435,13 @@ export class FlowVisualizer {
         this.draggedNode = null;
         this.options = null; // Release options/callbacks
 
-        if (this.mountPoint) this.mountPoint.innerHTML = ''; // Clear mount point content
+        if (this.minimapContainer && this.minimapContainer.parentElement) {
+            this.minimapContainer.parentElement.removeChild(this.minimapContainer);
+        }
+
+        this.minimapContainer = null;
+
+        if (this.mountPoint) this.mountPoint.innerHTML = '';
         this.mountPoint = null;
 
         logger.info("FlowVisualizer destroyed.");
@@ -1340,4 +1515,214 @@ export class FlowVisualizer {
 
         return acc; // Return the accumulated set
     }
+
+    // --- Minimap Methods ---
+
+    _addMiniRect(x, y, w, h) {
+        const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r.classList.add('minimap-node-frame');          // NEW — for CSS styling
+        r.setAttribute('x', x);
+        r.setAttribute('y', y);
+        r.setAttribute('width', Math.max(2, w));        // avoid 0-size artefacts
+        r.setAttribute('height', Math.max(2, h));
+        r.setAttribute('fill', 'none');                  // appearance now in CSS
+        r.setAttribute('vector-effect', 'non-scaling-stroke');
+        return r;
+    }
+
+    _updateMinimap() {
+        if (!this.minimapContent) return;
+        this.minimapContent.innerHTML = '';
+        const cloneSvg = this.svgConnectors?.cloneNode(true);
+        const cloneCanvas = this.canvas?.cloneNode(true);
+
+        //
+        //  ─────────────  LAYERS  ──────────────
+        //  cloneCanvas  → gives us a “ghost” of every node so the user keeps
+        //                  spatial context, but has NO outlines or connectors
+        //  cloneSvg     → only the lines + blue node frames go here; we append
+        //                  it *after* the canvas so that nothing is hidden.
+        //
+        const frag = document.createDocumentFragment();
+
+        /* --- node clones (white boxes) --- */
+        if (cloneCanvas) {
+            cloneCanvas.querySelectorAll('.node-actions').forEach(el => el.remove());
+            cloneCanvas.querySelectorAll('.flow-node').forEach(n => {
+                n.classList.remove('flow-node');
+                n.style.border = 'none';          // remove 1 px border that caused “gaps”
+                n.style.background = 'transparent';
+            });
+            cloneCanvas.style.pointerEvents = 'none';
+            cloneCanvas.style.transformOrigin = '0 0';
+            frag.appendChild(cloneCanvas);
+        }
+
+        /* --- connectors + blue outlines --- */
+        if (cloneSvg) {
+            cloneSvg.style.transformOrigin = '0 0';
+            cloneSvg.querySelectorAll('.connector-path').forEach(p => {
+                p.removeAttribute('class');
+                p.removeAttribute('marker-end');
+                p.setAttribute('fill',  'none');
+                p.setAttribute('stroke','#64748b');        // slate-500 – less harsh than black
+                p.setAttribute('stroke-width','1');
+                p.setAttribute('vector-effect','non-scaling-stroke');
+            });
+            cloneSvg.querySelectorAll('marker').forEach(m => m.remove());
+
+            // ––– add node frames *beneath* the connectors so the lines stay visible
+            this.nodes.forEach(nd => {
+                if (nd.element?.style.display !== 'none') {
+                    const r = this._addMiniRect(nd.x, nd.y, nd.width, nd.height);
+                    cloneSvg.insertBefore(r, cloneSvg.firstChild);
+                }
+            });
+
+            frag.appendChild(cloneSvg);
+        }
+
+        this.minimapContent.appendChild(frag);
+        const canvasWidth = parseFloat(this.canvas?.style.width || this.canvas?.offsetWidth || 0);
+        const canvasHeight = parseFloat(this.canvas?.style.height || this.canvas?.offsetHeight || 0);
+        const containerW = this.minimapContainer.clientWidth;
+        const containerH = this.minimapContainer.clientHeight;
+        if (canvasWidth > 0 && canvasHeight > 0) {
+            this.minimapScale = Math.min(containerW / canvasWidth, containerH / canvasHeight);
+        }
+        const scale = this.minimapScale;
+        this.minimapContent.style.transform = `scale(${scale})`;
+        this._updateMinimapViewport();
+    }
+
+    _updateMinimapViewport() {
+        if (this._minimapFrame) return;
+        this._minimapFrame = requestAnimationFrame(() => {
+            this._minimapFrame = null;
+            this._doMinimapViewport();
+        });
+    }
+
+    _doMinimapViewport() {
+        if (!this.minimapViewport || !this.canvas) return;
+        const scale = this.minimapScale;
+        const vw = (this.mountPoint.clientWidth / this.zoomLevel) * scale;
+        const vh = (this.mountPoint.clientHeight / this.zoomLevel) * scale;
+        const left = (this.mountPoint.scrollLeft / this.zoomLevel) * scale;
+        const top  = (this.mountPoint.scrollTop  / this.zoomLevel) * scale;
+        const boundedLeft = Math.max(0, Math.min(this.minimapContainer.clientWidth - vw, left));
+        const boundedTop = Math.max(0, Math.min(this.minimapContainer.clientHeight - vh, top));
+
+        this.minimapViewport.style.width = `${vw}px`;
+        this.minimapViewport.style.height = `${vh}px`;
+        this.minimapViewport.style.left = `${boundedLeft}px`;
+        this.minimapViewport.style.top = `${boundedTop}px`;
+    }
+
+    _handleMinimapMouseDown = (e) => {
+        this.isMinimapDragging = true;
+        this.minimapContainer.style.cursor = 'grabbing';
+        document.addEventListener('mousemove', this._handleMinimapMouseMove);
+        document.addEventListener('mouseup', this._handleMinimapMouseUp);
+        this._panToMinimapPoint(e);
+    }
+
+    _handleMinimapMouseMove = (e) => {
+        if (!this.isMinimapDragging) return;
+        this._panToMinimapPoint(e);
+    }
+
+    _handleMinimapMouseUp = () => {
+        this.isMinimapDragging = false;
+        this.minimapContainer.style.cursor = 'pointer';
+        document.removeEventListener('mousemove', this._handleMinimapMouseMove);
+        document.removeEventListener('mouseup', this._handleMinimapMouseUp);
+    }
+
+    /** Double-click recenters the main canvas */
+    _handleMinimapDoubleClick = (e) => {
+        const rect = this.minimapContainer.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / this.minimapScale;
+        const y = (e.clientY - rect.top)  / this.minimapScale;
+        this._applyScroll(
+            (x * this.zoomLevel) - this.mountPoint.clientWidth  / 2,
+            (y * this.zoomLevel) - this.mountPoint.clientHeight / 2
+        );
+        this._updateMinimapViewport();
+    };
+
+    _panToMinimapPoint(e) {
+        const rect = this.minimapContainer.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / this.minimapScale;
+        const y = (e.clientY - rect.top) / this.minimapScale;
+        this._applyScroll(
+            (x * this.zoomLevel) - this.mountPoint.clientWidth  / 2,
+            (y * this.zoomLevel) - this.mountPoint.clientHeight / 2
+        );
+        this._updateMinimapViewport();
+    }
+
+    // --- Touch Zoom ---
+    _handleTouchStart = (e) => {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            this.pinchStartDistance = this._getTouchDistance(e.touches);
+        }
+    }
+
+    _handleTouchMove = (e) => {
+        if (this.pinchStartDistance && e.touches.length === 2) {
+            e.preventDefault();
+            const newDist = this._getTouchDistance(e.touches);
+            const delta = newDist - this.pinchStartDistance;
+            if (Math.abs(delta) > 2) {
+                this.setZoom(this.zoomLevel + delta / 200);
+                this.pinchStartDistance = newDist;
+            }
+        }
+    }
+
+    _handleTouchEnd = (e) => {
+        if (e.touches.length < 2) {
+            this.pinchStartDistance = null;
+        }
+    }
+
+    _getTouchDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    showMinimap() {
+        if (this.minimapContainer) {
+            this.minimapContainer.style.display = '';
+            this.minimapVisible = true;
+            this._updateMinimap();
+        }
+    }
+
+    hideMinimap() {
+        if (this.minimapContainer) {
+            this.minimapContainer.style.display = 'none';
+            this.minimapVisible = false;
+        }
+    }
+
+    toggleMinimap() {
+        if (this.minimapVisible) {
+            this.hideMinimap();
+        } else {
+            this.showMinimap();
+        }
+    }
+
+    isMinimapVisible() {
+        return this.minimapVisible;
+    }
 }
+
+// tiny helper so external code (tests, Cypress, etc.) can force a minimap redraw
+FlowVisualizer.prototype.__forceMinimapRefresh = function () {
+    this._updateMinimap();
+};

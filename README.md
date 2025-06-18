@@ -1,6 +1,6 @@
 # FlowRunner 
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
 <!-- Optional: Add build status/license badges here if desired -->
 <!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
@@ -16,6 +16,9 @@
 ---
 
 ## Release Notes / Changelog
+
+### v1.1.1 (June 2025)
+- Documentation updates and minor improvements.
 
 ### v1.1.0 (May 2025)
 - **Continuous Flow Runner:**
@@ -35,6 +38,7 @@
   - Expanded E2E and unit test coverage for flows, file operations, and UI.
 - **Update Notification:**
   - App checks for new releases on GitHub and notifies the user if available.
+  - You can also manually check for updates via **Help > Check for Updates…**, which triggers the menu item defined in [`main.js`](https://github.com/Radware/FlowRunner/blob/main/main.js#L274).
 
 ### v1.0.0 (Initial Release)
 - First public release with visual flow authoring, dual views, variable management, and local file operations.
@@ -61,9 +65,9 @@ This tool is particularly useful for:
     *   **Loop:** Repeat steps for each item in an array.
 *   **Dual Views:** Work the way you prefer:
     *   **List/Editor View:** A detailed list of steps with a dedicated panel for configuration and drag-and-drop reordering.
-    *   **Node-Graph View:** An interactive visual graph showing the flow structure and connections. Drag nodes to arrange the layout.
+    *   **Node-Graph View:** An interactive visual graph showing the flow structure and connections. Drag nodes to arrange the layout. Use zoom controls and an optional minimap for easier navigation of large flows.
 *   **Variable Management:** Handle dynamic data effectively:
-    *   Define **Global Headers** and **Static Variables** for the entire flow.
+    *   Define **Global Headers** and **Static Variables** for the entire flow. Variables can be typed as String, Number, Boolean, or JSON to better control how values are parsed and substituted.
     *   **Extract** data from API responses (like status code, headers, or values from the body using JSON paths) into variables.
     *   **Substitute** variables (`{{variableName}}`) into URLs, headers, request bodies, condition values, etc.
     *   Use the **`{{…}}`** helper button to easily insert defined variable names.
@@ -74,31 +78,32 @@ This tool is particularly useful for:
     *   Configure a delay between steps during full runs for better observation.
     *   View **real-time highlighting** of the currently executing or completed step in both views.
     *   Monitor progress in the detailed **Results Panel**, showing each step's status, output, errors, and extraction warnings.
+    *   Use the search box and status filter to narrow displayed results, and copy any step's output to the clipboard.
 *   **Local Flow Management:** Work entirely offline:
     *   Create new flows from a template.
     *   **Save** flows to your local computer as `.flow.json` files.
     *   **Load** flows from your local files.
-    *   Access **Recent Files** quickly from the sidebar.
+    *   Access **Recent Files** quickly from the sidebar and reorder them via drag-and-drop.
     *   **Clone** existing flows to create variations easily.
 *   **User Interface:**
     *   Collapsible Sidebar and Runner panels to maximize workspace.
-    *   Clear indication of unsaved changes.
+    *   Clear indication of unsaved changes, with the Save button highlighted when edits are pending.
     *   Configurable visual layout for the Node-Graph view.
 
 ## Prerequisites
 
 *   Windows (x64) or macOS (Apple Silicon / arm64).
-*   The appropriate FlowRunner installer package downloaded from the [v1.1.0 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.0) (or latest release).
+*   The appropriate FlowRunner installer package downloaded from the [v1.1.1 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.1) (or latest release).
 *   Network access is required *only* when executing flows that contain 'API Request' steps which need to reach external endpoints. Flow authoring, saving, loading, and visualization can be done offline.
 
 ## Installation
 
 1.  **Download the Correct Installer:**
     *   Go to the [FlowRunner Releases Page](https://github.com/Radware/FlowRunner/releases) on GitHub.
-    *   Find the latest release (e.g., v1.1.0).
+    *   Find the latest release (e.g., v1.1.1).
     *   Under **Assets**:
-        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.0.zip`. Unzip the file to find the `Setup.exe`.
-        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.0.dmg`.
+        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.1.zip`. Unzip the file to find the `Setup.exe`.
+        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.1.dmg`.
 2.  **Install on Windows:**
     *   Double-click the extracted `Setup.exe` file.
     *   The installation will proceed silently in the background (using Squirrel.Windows). It typically installs to your `AppData\Local\FlowRunner` folder.
@@ -150,7 +155,7 @@ Congratulations! You've created and run your first API flow.
 *   **Open:** Click **"Open Flow"** in the sidebar to browse and load a `.flow.json` file from your computer. If you have unsaved changes, you'll be prompted to confirm.
 *   **Save:** Click **"Save"** in the workspace header to save changes to the currently open file. This button is enabled only when there are unsaved changes (indicated by `*` in the title).
 *   **Save As:** Click **"Save As..."** in the workspace header to save the current flow to a new `.flow.json` file.
-*   **Recent Files:** The sidebar lists recently opened/saved files. Click an item to load it.
+*   **Recent Files:** The sidebar lists recently opened/saved files. Click an item to load it. Use the **✕** icon next to a file to remove it from the list.
 *   **Clone:** To duplicate a flow, load the flow you want to clone, then use **"Save As..."** to save it under a new name. FlowRunner ensures the internal steps get new unique IDs automatically when saved as a new file.
 *   **Delete:** To delete a flow, simply delete the corresponding `.flow.json` file from your computer using Finder (macOS) or File Explorer (Windows). The file will eventually disappear from the "Recent Files" list.
 
@@ -161,7 +166,7 @@ Click the **"Info ▼"** button in the workspace header to open the Flow Info ov
 *   **Flow Name:** A descriptive name for your flow.
 *   **Description:** Optional details about the flow's purpose.
 *   **Global Headers:** Define HTTP headers (Key-Value pairs) that will be automatically added to *all* 'API Request' steps in this flow. Headers defined within individual steps will override global headers with the same key.
-*   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. These are useful for configuration values or initial setup data. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`).
+*   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. Each variable can be typed as String, Number, Boolean, or JSON. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`). Values may contain JSON arrays or objects for loops or complex data.
 
 Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info ▲"** button again.
 
@@ -172,6 +177,15 @@ Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info
 3.  **Configure:** Modify the fields as needed.
 4.  **Save Step:** Click the **"Save Step"** button at the bottom of the editor panel to commit your changes for that specific step. This also marks the overall flow as unsaved.
 5.  **Cancel:** Click **"Cancel"** to discard any changes made in the editor panel since the last save for that step.
+
+### Unsaved Changes Tracking
+
+FlowRunner tracks edits using two flags within `appState`:
+
+* `isDirty` &ndash; Set when the flow structure or metadata changes and a file save is required.
+* `stepEditorIsDirty` &ndash; Indicates unsaved edits in the currently open step editor.
+
+The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Cancel are enabled whenever either flag is true, while Close is enabled only when both are false. Attempting to close the window also checks these flags to warn about unsaved work.
 
 #### Step Types
 
@@ -199,12 +213,24 @@ Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info
 *   **Loop (For Each):**
     *   **Source (Array Variable):** Enter the variable name (e.g., `{{userList}}`) that holds the array you want to iterate over. This variable must exist in the context and contain an array.
     *   **Item Variable Name:** Enter the name that will hold the current item during each iteration (e.g., `item`, `user`). You can access the item's properties within the loop body using `{{item.id}}`, `{{user.name}}`, etc.
-    *   **Loop Body:** Add steps within the loop body using the `+ Add Step` button within the step's content area in the List view. These steps will execute once for each item in the source array.
+*   **Loop Body:** Add steps within the loop body using the `+ Add Step` button within the step's content area in the List view. These steps will execute once for each item in the source array.
+    *   **Example:** Define a JSON variable `userList` in the Flow Info overlay:
+
+        ```json
+        [
+            { "id": 1, "name": "Alice", "active": true },
+            { "id": 2, "name": "Bob",   "active": false }
+        ]
+        ```
+
+        Add a Loop step with **Source** `{{userList}}` and **Item Variable Name** `user`.
+        Inside the loop body you can reference `{{user.name}}` or add a Condition step checking `{{user.active}}`.
 
 ### Variables
 
 *   **Definition:** Variables are defined statically in the Flow Info overlay or dynamically via the 'Extract' tab in Request steps. Loop steps also introduce an item variable.
 *   **Substitution:** Use `{{variableName}}` syntax in fields that support it (URL, Header values, Request Body, Condition Value, Loop Source). The runner replaces this with the variable's current value during execution.
+*   **URL Encoding:** When using the `FlowRunner` class programmatically, pass `{ encodeUrlVars: true }` to automatically URL-encode variable values inserted into URLs.
 *   **Extraction Paths:** Use dot notation (`object.property`) and array indexing (`array[index]`) to access values within JSON response bodies. Special paths include `.status`, `headers.Header-Name`, and `body`.
 *   **Insertion Helper:** Click the **`{{…}}`** button next to an input field to open a searchable dropdown of currently defined variables. Clicking a variable name inserts `{{variableName}}` into the input field.
 *   **Variables Panel:** View all variables defined by the flow structure (Static, Extract, Loop). Click **"Show/Hide Variables"** in the workspace header to toggle this panel. *Note: This panel shows where variables are defined, not their live values during execution.*
@@ -212,9 +238,10 @@ Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info
 ### Running Flows
 
 *   **Run:** Executes the entire flow from the first step. Uses the configured **Delay** between steps. Highlights steps as they execute.
+*   **Continuous Run:** When checked, FlowRunner restarts the flow automatically after it finishes. It waits for the configured **Delay** between runs and continues until you uncheck the box or click **"Stop"**.
 *   **Step:** Executes only the *next* logical step in the flow. Allows you to inspect results and context between steps. Click "Step" repeatedly to advance through the flow.
 *   **Stop:** Immediately requests the flow execution to halt. If a network request is in progress, it will attempt to abort it. The step where execution stopped will be highlighted (often orange/warning).
-*   **Delay (ms):** Sets the pause duration (in milliseconds) between steps when using the **"Run"** button. Does not affect **"Step"** mode.
+*   **Delay (ms):** Sets the pause duration (in milliseconds) between steps when using **Run** and between full runs when **Continuous Run** is enabled. Does not affect **"Step"** mode.
 *   **Results Panel:** Shows a log of each step executed:
     *   **Step Name & Type:** Identifies the step.
     *   **Status:** `RUNNING`, `SUCCESS`, `ERROR`, `SKIPPED`, `STOPPED`.
@@ -246,6 +273,16 @@ FlowRunner configuration happens primarily through the user interface:
     *   **Location:** Node-Graph View (drag nodes to position them).
     *   **Settings:** X/Y coordinates for each node.
     *   **Persistence:** Saved within the `.flow.json` file under the `visualLayout` key when the flow is saved.
+
+### Keyboard Shortcuts
+
+FlowRunner supports several keyboard shortcuts to speed up common actions. A few highlights:
+
+*   **F1** – open the Help window.
+*   **Ctrl/Cmd + + / - / 0** – zoom in, zoom out, or reset the zoom level.
+*   **M** – toggle the Node-Graph minimap.
+
+See `help.html` for the full table of shortcuts.
 
 ## Troubleshooting
 
@@ -285,6 +322,37 @@ FlowRunner configuration happens primarily through the user interface:
 *   **General Issues / UI Glitches:**
     *   Try restarting the packaged application.
     *   For more advanced debugging, you can open the **Developer Tools** from the **View** menu (`View > Toggle Developer Tools`). Check the **Console** tab within the Developer Tools for any error messages logged by the application.
+
+## Development Setup
+
+FlowRunner requires **Node.js 18 or newer**. Use the setup script (which runs `npm ci`) or run `npm ci` yourself to install dependencies:
+
+```bash
+./setup_env.sh
+# or
+npm ci
+```
+
+The script also downloads the Playwright browsers needed for e2e tests.
+
+Launch the app locally with:
+
+```bash
+npm start
+```
+
+Run the unit and end-to-end tests:
+
+```bash
+npm test     # runs with NODE_ENV=test
+npm run e2e  # runs with E2E=true
+```
+
+These npm scripts automatically set the required environment variables.
+## Building Packages
+
+Run `build_all.sh` to install dependencies, test, and create distributables for macOS and Windows. Set `ZSCALER_CA` to your root CA if required.
+
 
 
 <div align="center" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">

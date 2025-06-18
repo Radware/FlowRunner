@@ -24,6 +24,7 @@ export class FlowRunner {
         this.onContextUpdate = options.onContextUpdate || (() => {}); // (context) => {}
         this.onIterationStart = options.onIterationStart || (() => {}); // NEW: Called at the start of each continuous run iteration
         this.updateRunnerUICallback = options.updateRunnerUICallback || (() => {}); // Callback to request UI update
+        this.encodeUrlVars = options.encodeUrlVars ?? false; // Whether to URL-encode substituted variables in URLs
 
         // Core logic functions provided by the main app
         this.substituteVariablesFn = options.substituteVariablesFn || ((step, context) => ({ processedStep: step, unquotedPlaceholders: {} })); // Default pass-through, MUST now return { processedStep, unquotedPlaceholders }
@@ -36,6 +37,9 @@ export class FlowRunner {
         this.currentFlowModelForContinuousRun = null;
         this.flowModelForNextContinuousRun = null; // NEW: Store next iteration's flow model
         // --- END NEW ---
+
+        // Global headers to be applied to all request steps
+        this.globalHeaders = {};
 
         this.reset();
     }
@@ -51,6 +55,9 @@ export class FlowRunner {
                 logger.error("[FlowRunner] Error aborting fetch controller during reset:", e);
             }
         }
+
+        // Clear global headers on reset
+        this.globalHeaders = {};
 
         this.state = {
             isRunning: false,
@@ -142,6 +149,8 @@ export class FlowRunner {
         if (!flowModel || !flowModel.steps) {
             throw new Error("Invalid flow model provided.");
         }
+
+        this.globalHeaders = flowModel.headers || {};
 
         // If this is the first continuous invocation, store the model and activate continuous mode
         if (!this.currentFlowModelForContinuousRun && isContinuousInvocation) {
@@ -419,8 +428,9 @@ export class FlowRunner {
                 case 'request':
                     result = await this._executeRequestStep(processedStep, unquotedPlaceholders);
                     if (result.status === 'success' && processedStep.extract) {
-                        const failures = this._updateContextFromExtraction(processedStep.extract, result.output, stepContext);
+                        const { failures, extractedValues } = this._updateContextFromExtraction(processedStep.extract, result.output, stepContext);
                         result.extractionFailures = failures;
+                        result.extractedValues = extractedValues;
                     }
                     break;
                 case 'condition':
@@ -565,7 +575,7 @@ export class FlowRunner {
 
         const fetchOptions = {
             method: method || 'GET',
-            headers: headers || {},
+            headers: { ...this.globalHeaders, ...(headers || {}) },
             signal: controller.signal, // Use the controller's signal
         };
 
@@ -669,12 +679,24 @@ export class FlowRunner {
             const responseHeaders = {};
             response.headers.forEach((value, key) => { responseHeaders[key] = value; });
             let responseBody = null;
-            const respContentType = response.headers.get('content-type');
-            try {
-                if (respContentType && respContentType.includes('application/json')) { responseBody = await response.json(); }
-                else { responseBody = await response.text(); }
-            } catch (parseError) {
-                try { responseBody = await response.text(); } catch (textError) { responseBody = "[Failed to retrieve response body]"; this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error'); } this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
+
+            if (responseStatus !== 204) {
+                const respContentType = response.headers.get('content-type');
+                try {
+                    if (respContentType && respContentType.includes('application/json')) {
+                        responseBody = await response.json();
+                    } else {
+                        responseBody = await response.text();
+                    }
+                } catch (parseError) {
+                    try {
+                        responseBody = await response.text();
+                    } catch (textError) {
+                        responseBody = "[Failed to retrieve response body]";
+                        this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error');
+                    }
+                    this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
+                }
             }
 
             // --- MODIFICATION START: Implement onFailure logic for HTTP status (remains the same logic) ---
@@ -929,18 +951,17 @@ export class FlowRunner {
      * @param {Object} context - The context object to modify directly.
      * @returns {Array<Object>} An array of objects detailing failed extractions, e.g., [{ varName: 'user', path: 'body.data.user.id', reason: '...' }]
      */
-    _updateContextFromExtraction(extractConfig, responseOutput, context) { // <-- Modified return type comment
-        const failures = []; // <-- Initialize failures array
-        if (!extractConfig || !responseOutput) return failures; // <-- Return empty failures if no config/output
+    _updateContextFromExtraction(extractConfig, responseOutput, context) {
+        const failures = [];
+        const extractedValues = {};
+        if (!extractConfig || !responseOutput) return { failures, extractedValues };
 
         const evaluatePath = this.evaluatePathFn;
         if (typeof evaluatePath !== 'function') {
             // --- MODIFICATION: No global message, log error ---
             // this.onMessage(`Extraction failed: evaluatePath function is not available.`, 'error');
             logger.error("FlowRunner: this.evaluatePathFn is missing or not a function during extraction.");
-            // Return a general failure indication? Or just empty? Let's return empty for now.
-            // failures.push({ varName: 'ALL', path: 'N/A', reason: 'evaluatePathFn missing' });
-            return failures;
+            return { failures, extractedValues };
         }
 
         logger.info("[Extraction] Attempting extractions. Config:", extractConfig, "Response Output:", responseOutput);
@@ -1068,13 +1089,14 @@ export class FlowRunner {
                 }
                 // --- END MODIFICATION ---
             }
+            extractedValues[varName] = extractedValue;
         }
         // Notify context update *once* after all extractions for the step are done, only if changed
         if (contextChanged) {
             this.onContextUpdate(context);
         }
 
-        return failures; // <-- Return the array of failed extractions
+        return { failures, extractedValues };
     }
 
 

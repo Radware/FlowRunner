@@ -3,7 +3,7 @@
     – fixes invalid matcher, aligns with real title.
     – UPDATED: flowPath to look in e2e-test-data
     – UPDATED: "Run flow" test to wait more robustly for results
-    – UPDATED: Dynamically create httpbin-flow.flow.json in test.beforeAll
+    – UPDATED: Dynamically create mock-flow.flow.json in test.beforeAll
 */
 
 import { test, expect, _electron as electron } from '@playwright/test';
@@ -11,6 +11,8 @@ import path   from 'node:path';
 import fs     from 'node:fs/promises'; // fs/promises for async operations
 import { fileURLToPath } from 'url';
 import fsSync from 'node:fs';
+import { startHttpbinServer, stopHttpbinServer } from './httpbin-server.js';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 /* ───────────── paths & constants ───────────── */
 
@@ -18,17 +20,19 @@ const __filename      = fileURLToPath(import.meta.url);
 const __dirname       = path.dirname(__filename);
 const projectRoot     = path.resolve(__dirname, '..'); // Renamed for clarity
 const testDataDir     = path.resolve(__dirname, 'e2e-test-data'); // Define test data directory
-const flowPath        = path.resolve(testDataDir, 'httpbin-flow.flow.json'); // Path for the flow file
+const flowPath        = path.resolve(testDataDir, 'mock-flow.flow.json'); // Path for the flow file
 
 const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
 const MAX_RECENT_FILES = 10;
-const FLOW_TITLE       = 'E2E All‑Features HTTPBin Flow';
+const FLOW_TITLE       = 'E2E All‑Features Mock Flow';
+let mockServer;
+let mockUrl;
 
-// Content for the httpbin-flow.flow.json
-const HTTPBIN_FLOW_CONTENT = {
-  "id": "flow_e2e_httpbin_all_features",
-  "name": "E2E All‑Features HTTPBin Flow",
-  "description": "Comprehensive flow that touches every FlowRunner v1.0.0 feature against https://httpbin.org.",
+// Content for the local mock httpbin flow
+const MOCK_FLOW_CONTENT = {
+  "id": "flow_e2e_mock_all_features",
+  "name": "E2E All‑Features Mock Flow",
+  "description": "Comprehensive flow that touches every FlowRunner v1.0.0 feature using a local mock server.",
   "headers": {
     "X-Global-Header": "FlowRunner E2E",
     "Accept": "application/json"
@@ -250,7 +254,7 @@ const HTTPBIN_FLOW_CONTENT = {
     }
   ],
   "staticVars": {
-    "baseUrl": "https://httpbin.org",
+    "baseUrl": "http://localhost",
     "testMode": true,
     "randomNumber": 42,
     "userName": "FlowRunnerUser"
@@ -304,10 +308,13 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
   test.beforeAll(async () => {
     console.log('--- E2E flow-execution setup ---');
 
+    ({ server: mockServer, baseUrl: mockUrl } = await startHttpbinServer());
+    MOCK_FLOW_CONTENT.staticVars.baseUrl = mockUrl;
+
     // Ensure the test data directory exists
     await fs.mkdir(testDataDir, { recursive: true });
     // Write the flow file content dynamically
-    await fs.writeFile(flowPath, JSON.stringify(HTTPBIN_FLOW_CONTENT, null, 2));
+    await fs.writeFile(flowPath, JSON.stringify(MOCK_FLOW_CONTENT, null, 2));
     console.log(`[E2E flow-execution setup] Dynamically created flow file at: ${flowPath}`);
 
     // The fs.access check is now redundant here if we just created it, but good for sanity
@@ -327,6 +334,7 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     page = await app.firstWindow();
     await page.waitForLoadState('domcontentloaded', { timeout: 20000 });
     page.setDefaultTimeout(30_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page);
 
     await pushRecent(page, flowPath);
@@ -363,7 +371,9 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
 
   // Modified afterAll to clean up the dynamically created file and directory if it's empty
   test.afterAll(async () => {
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     if (app) await app.close();
+    if (mockServer) await stopHttpbinServer(mockServer);
     try {
       await fs.rm(flowPath, { force: true }); // Remove the specific flow file
       console.log(`[E2E flow-execution teardown] Removed flow file: ${flowPath}`);
@@ -402,9 +412,86 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
     await expect(step1StatusLocator).toHaveText('SUCCESS', { timeout: 30_000 });
     console.log('[Test] Step 1 SUCCESS result verified.');
 
+    const extractedValues = step1ResultLocator.locator('.result-extracted-values');
+    await expect(extractedValues).toBeVisible();
+    await expect(extractedValues).toContainText('ip');
+    await expect(extractedValues).toContainText('userAgent');
+
+    await page.evaluate(() => {
+        navigator.clipboard.writeText = text => {
+            window.__copied = text;
+        };
+    });
+
+    const expectedRaw = await step1ResultLocator.locator('.result-body pre').textContent();
+
+    await step1ResultLocator.locator('.result-body .copy-btn').click();
+
+    const copied = await page.evaluate(() => window.__copied);
+    expect(copied).toBe(expectedRaw);
+
+    await page.evaluate(() => { window.__copied = null; });
+    const extractedVal = await step1ResultLocator.locator('.result-extracted-values li span.extracted-value').first().textContent();
+    const varCopyBtn = step1ResultLocator.locator('.result-extracted-values .copy-btn').first();
+    await varCopyBtn.click();
+    const copiedVar = await page.evaluate(() => window.__copied);
+    expect(copiedVar).toBe(extractedVal);
+    await expect(varCopyBtn).toHaveText('Copied!');
+    await page.waitForTimeout(1100);
+    await expect(varCopyBtn).toHaveText('Copy');
+    await page.fill('#results-search', 'userAgent');
+    await page.waitForTimeout(200);
+    await expect(step1ResultLocator).toBeVisible();
+    await page.fill('#results-search', '');
+
+    const step3Failures = page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-extraction-failures');
+    await expect(step3Failures).toBeVisible();
+    await expect(step3Failures).toContainText('contentTypeHeader');
+
     await expect(page.locator('#run-flow-btn'))
       .toBeEnabled({ timeout: 90_000 });
     console.log('[Test] Flow run finished (run button enabled).');
+  });
+
+  /* --------------- results search & filter --------------- */
+  test('Search and filter runner results', async () => {
+    await page.locator('#run-flow-btn').click();
+    await expect(page.locator('#run-flow-btn'))
+      .toBeEnabled({ timeout: 90_000 });
+
+    await page.evaluate(() => {
+      const list = document.getElementById('runner-results');
+      if (!list) return;
+      const entries = [
+        { text: 'zxqsuccess', status: 'success' },
+        { text: 'zxqerrorOne', status: 'error' },
+        { text: 'zxqskip', status: 'skipped' },
+        { text: 'zxqerrorTwo', status: 'error' },
+      ];
+      entries.forEach(({ text, status }) => {
+        const li = document.createElement('li');
+        li.className = 'result-item';
+        li.dataset.status = status;
+        li.dataset.searchText = text;
+        li.textContent = `${status} - ${text}`;
+        list.appendChild(li);
+      });
+    });
+
+    const total = await page.locator('li.result-item').count();
+
+    await page.fill('#results-search', 'zxqerr');
+    await page.waitForTimeout(200);
+    await expect(page.locator('li.result-item:visible')).toHaveCount(2);
+
+    await page.selectOption('#results-status-filter', 'error');
+    await page.waitForTimeout(200);
+    await expect(page.locator('li.result-item:visible')).toHaveCount(2);
+
+    await page.fill('#results-search', '');
+    await page.selectOption('#results-status-filter', '');
+    await page.waitForTimeout(200);
+    await expect(page.locator('li.result-item:visible')).toHaveCount(total);
   });
 
   /* --------------- step through first 3 --------------- */
@@ -431,5 +518,41 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
       page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-status')
     ).toHaveText('SUCCESS', { timeout: 20_000 });
     console.log('[Test] Stepping: Step 3 SUCCESS. Test complete.');
+  });
+
+  /* --------------- graph view connector highlights --------------- */
+  test('Graph view connectors reflect step status', async () => {
+    const currentView = await page.evaluate(() => window.appState?.currentView || 'list-editor');
+    if (currentView === 'list-editor') {
+        await page.locator('#toggle-view-btn').click();
+        await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/);
+    }
+
+    await page.fill('#request-delay', '1000');
+
+    const connToStep2 = page.locator(
+        '.connector-path[data-to="step_e2e_2_check_status"]'
+    );
+    const connToStep3 = page.locator(
+        '.connector-path[data-to="step_e2e_3_post_data"]'
+    );
+
+    await page.locator('#run-flow-btn').click();
+
+    await expect(
+        page.locator('.result-item[data-step-id="step_e2e_1_get_ip"] .result-status')
+    ).toHaveText('SUCCESS', { timeout: 30_000 });
+
+    await expect(
+        page.locator('.result-item[data-step-id="step_e2e_2_check_status"] .result-status')
+    ).toHaveText('SUCCESS', { timeout: 30_000 });
+
+    await expect(
+        page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-status')
+    ).toHaveText('SUCCESS', { timeout: 30_000 });
+    await expect(connToStep3).toHaveClass(/status-success/);
+    await expect(connToStep2).not.toHaveClass(/status-success/);
+
+    await expect(page.locator('#run-flow-btn')).toBeEnabled({ timeout: 90_000 });
   });
 });

@@ -12,6 +12,7 @@ import path   from 'node:path';
 import fs     from 'node:fs/promises';
 import { fileURLToPath } from 'url';
 import fsSync from 'node:fs';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 /* ───────────── paths / constants ───────────── */
 
@@ -124,6 +125,7 @@ test.describe('E2E: File Operations', () => {
     page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');
     page.setDefaultTimeout(30_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page); // <-- Capture renderer logs to file
     console.log('--- Setup complete ---');
   });
@@ -132,6 +134,7 @@ test.describe('E2E: File Operations', () => {
     console.log('--- E2E Teardown (file-operations) ---');
     // --- MODIFICATION: Commented out restoreSaveDialog as it causes errors and is not needed now ---
     // await restoreSaveDialog(electronApp).catch(() => {});
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     if (electronApp) await electronApp.close();
     await fs.rm(testDataRoot, { recursive: true, force: true }).catch(() => {});
   });
@@ -203,9 +206,12 @@ test.describe('E2E: File Operations', () => {
     await page.locator('.step-editor-actions .btn-save-step').click();
 
     // save (overwrite)
-    await expect(page.locator('#save-flow-btn')).toBeEnabled({ timeout: 5_000 });
-    await page.locator('#save-flow-btn').click();
-    await expect(page.locator('#save-flow-btn')).toBeDisabled({ timeout: 10000 }); // Increased timeout
+    const saveBtn = page.locator('#save-flow-btn');
+    await expect(saveBtn).toBeEnabled({ timeout: 5_000 });
+    await expect(saveBtn).toHaveClass(/needs-save/);
+    await saveBtn.click();
+    await expect(saveBtn).toBeDisabled({ timeout: 10000 }); // Increased timeout
+    await expect(saveBtn).not.toHaveClass(/needs-save/);
 
     const updated = JSON.parse(await fs.readFile(flowPath, 'utf8'));
     expect(updated.steps[0].name).toBe('edited‑name');

@@ -74,7 +74,8 @@ export function substituteVariablesInStep(step, context) {
         // 1. Substitute URL using standard {{variable}} syntax
         const originalUrl = step.url || '';
         // console.log(`[Sub URL ${step.id}] Attempting standard substitution for URL: "${originalUrl}"`);
-        processedStepData.url = substituteVariables(originalUrl, context);
+        const encodeUrlVars = this instanceof FlowRunner ? this.encodeUrlVars : false;
+        processedStepData.url = substituteVariables(originalUrl, context, { encode: encodeUrlVars });
         // console.log(`[Sub URL ${step.id}] Substituted URL: "${processedStepData.url}"`);
 
 
@@ -164,8 +165,9 @@ export function substituteVariablesInStep(step, context) {
  * @param {Object} context - Execution context.
  * @return {string} String with variables replaced.
  */
-export function substituteVariables(text, context) {
+export function substituteVariables(text, context, opts = {}) {
     if (typeof text !== 'string') return text; // Only process strings
+    const encode = opts.encode === true;
 
     // Regex to find {{variable.path}} placeholders
     return text.replace(/\{\{([^}]+)\}\}/g, (match, varRef) => {
@@ -179,20 +181,19 @@ export function substituteVariables(text, context) {
         }
 
         // If value is object/array, stringify it for embedding in URL/header string etc.
+        let stringValue;
         if (typeof evaluatedValue === 'object' && evaluatedValue !== null) {
             try {
-                // Avoid circular references during stringification for safety
-                // This simple approach works for basic cases.
-                // For complex objects, a library might be needed.
-                return JSON.stringify(evaluatedValue);
+                stringValue = JSON.stringify(evaluatedValue);
             } catch (e) {
                 console.warn(`Substitution failed: Could not stringify object for ${match}.`, e);
-                return match; // Fallback to original placeholder on stringify error
+                return match;
             }
+        } else {
+            stringValue = String(evaluatedValue);
         }
 
-        // Convert other types (number, boolean) to string
-        return String(evaluatedValue);
+        return encode ? encodeURIComponent(stringValue) : stringValue;
     });
 }
 

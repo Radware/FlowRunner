@@ -114,6 +114,11 @@ code {
     font-size: 0.875em;
 }
 
+.copy-btn {
+    margin-top: 5px;
+    float: right;
+}
+
 button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
@@ -122,6 +127,14 @@ button:disabled {
     color: var(--light-text-color) !important;
 }
 
+/* Highlight save button when changes need persisting */
+.needs-save:not(:disabled) {
+    background-color: var(--warning-color);
+    border-color: var(--warning-color);
+    color: white;
+    animation: pulse-border-amber 1.8s infinite ease-in-out;
+
+}
 /* --- Main Application Layout --- */
 .app-container {
     display: flex;
@@ -278,6 +291,11 @@ button:disabled {
     padding-left: 17px;
 }
 
+.flow-list-item.dragging {
+    opacity: 0.5;
+    background-color: var(--medium-bg-color);
+}
+
 .flow-item-actions {
     margin-top: 5px;
     display: flex;
@@ -425,8 +443,13 @@ button:disabled {
     margin-bottom: 18px;
 }
 .flow-info-overlay textarea {
+    width: 100%;
     min-height: 60px;
     resize: vertical;
+}
+
+.flow-info-overlay input[type="text"] {
+    width: 100%;
 }
 .flow-info-overlay .collapsible-header {
   display: flex;
@@ -567,6 +590,49 @@ button:disabled {
     transform-origin: 0 0;
     min-width: 100%;
     min-height: 100%;
+}
+
+.visualizer-minimap {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 180px;
+    height: 140px;
+    overflow: hidden;
+    cursor: pointer;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid var(--border-color-medium);
+    box-shadow: var(--box-shadow-light);
+    z-index: 1000;
+}
+
+/* Minimap fade-in & Retina crispness */
+.visualizer-minimap {
+    transition: opacity .25s ease, transform .15s ease;
+    cursor: pointer;
+    opacity: 0;
+}
+.visualizer-minimap[style*="display: none"] {
+    opacity: 0;
+}
+.visualizer-minimap:not([style*="display: none"]) {
+    opacity: 1;
+}
+
+/* Sharper lines inside miniature SVG */
+.visualizer-minimap svg {
+    shape-rendering: crispEdges;
+    vector-effect: non-scaling-stroke;   /* keep strokes 1 px regardless of scale */
+}
+
+.visualizer-minimap path {
+    stroke: var(--border-color-dark);
+    stroke-width: 1;
+}
+
+.minimap-viewport {
+    box-sizing: border-box;
+    background: rgba(59,130,246,0.2);
 }
 
 /* --- Runner Panel --- */
@@ -770,6 +836,22 @@ button:disabled {
     background-color: #fff;
     color: var(--dark-text-color);
 }
+
+.results-filter {
+    display: flex;
+    gap: 8px;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border-color-light);
+    background-color: #fff;
+}
+.results-filter input[type="text"] {
+    flex: 1;
+    padding: 5px 8px;
+}
+.results-filter select {
+    flex: 0 0 120px;
+    padding: 5px 8px;
+}
 .runner-results-list {
     flex: 1;
     overflow-y: auto;
@@ -874,6 +956,46 @@ button:disabled {
 }
 .result-extraction-failures code {
     background-color: #fed7aa;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-family: var(--font-family-code);
+    font-size: 0.95em;
+}
+
+.result-extracted-values {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background-color: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: var(--border-radius);
+    font-size: 0.9em;
+    color: #1e40af;
+}
+.result-extracted-values strong {
+    color: #1e3a8a;
+    display: block;
+    margin-bottom: 5px;
+}
+.result-extracted-values ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.result-extracted-values li {
+    margin-bottom: 4px;
+    overflow-wrap: anywhere;
+    display: flex;
+    flex-direction: column;
+}
+.result-extracted-values li:last-child {
+    margin-bottom: 0;
+}
+.result-extracted-values li .copy-btn {
+    margin-top: 4px;
+    align-self: flex-end;
+}
+.result-extracted-values code {
+    background-color: #dbeafe;
     padding: 1px 4px;
     border-radius: 3px;
     font-family: var(--font-family-code);
@@ -1104,7 +1226,7 @@ button:disabled {
 .headers-list, .extracts-list, .global-headers-list, .flow-vars-list {
     margin-bottom: 10px;
 }
-.header-row, .extract-row, .global-header-row, .flow-var-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(150px, 2fr) auto auto; gap: 10px; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color-light); }
+.header-row, .extract-row, .global-header-row, .flow-var-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(150px, 2fr) minmax(90px, 1fr) auto auto; gap: 10px; align-items: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color-light); }
 .header-row:last-child, .extract-row:last-child, .global-header-row:last-child, .flow-var-row:last-child { border-bottom: none; margin-bottom: 0; }
 .header-row input, .extract-row input, .global-header-row input, .flow-var-row input { min-width: 0; width: 100%; }
 .header-row .btn-insert-var, .extract-row .btn-insert-var, .global-header-row .btn-insert-var, .flow-var-row .btn-insert-var { padding: 0; width: 24px; height: 24px; font-size: 12px; border: 1px solid var(--border-color-medium); background: var(--light-bg-color); border-radius: 3px; color: var(--primary-color); line-height: 22px; text-align: center; align-self: center; justify-self: center; }
@@ -1305,6 +1427,7 @@ body.flow-step-dragging { cursor: grabbing !important; }
     stroke: var(--border-color-dark);
     stroke-width: 2;
     fill: none !important;
+    vector-effect: non-scaling-stroke;   /* crisp 1 px at any zoom */
     transition: stroke 0.2s ease, stroke-width 0.2s ease;
 }
 .connector-path:hover {
@@ -1405,7 +1528,7 @@ body.flow-step-dragging { cursor: grabbing !important; }
           linear-gradient(transparent 45%,#bdbdbd 45%,#bdbdbd 55%,transparent 55%);
         background-size:100% 4px;
       }
-    .header-row, .extract-row, .global-header-row, .flow-var-row { grid-template-columns: 1fr auto auto; }
+    .header-row, .extract-row, .global-header-row, .flow-var-row { grid-template-columns: 1fr auto auto auto; }
     .header-row input, .extract-row input, .global-header-row input, .flow-var-row input { grid-column: 1 / 2; }
     .header-row input:nth-of-type(2), .extract-row input:nth-of-type(2), .global-header-row input:nth-of-type(2), .flow-var-row input:nth-of-type(2) { margin-top: 5px; }
     .header-row .btn-insert-var, .extract-row .btn-insert-var, .global-header-row .btn-insert-var, .flow-var-row .btn-insert-var { grid-column: 2 / 3; grid-row: 1 / 3; align-self: center; }
@@ -1553,4 +1676,29 @@ body.flow-step-dragging { cursor: grabbing !important; }
     display: inline-block;
     margin-top: 15px;
     text-decoration: none;
+}
+
+/* --- FlowVisualizer minimap enhancements --- */
+.visualizer-minimap rect {
+    shape-rendering: crispEdges;            /* pixel-perfect hairlines       */
+}
+
+.visualizer-minimap rect:hover {
+    stroke-width: 2;                        /* hint the user can click / pan */
+}
+
+.visualizer-minimap .minimap-node-frame {
+    stroke: #2563eb;        /* blue-500 – easy to spot           */
+    stroke-width: 2.25;     /* thicker than connector hairlines  */
+    filter: drop-shadow(0 0 1px #2563eb);          /* light glow */
+    vector-effect: non-scaling-stroke;               /* stays ≥2 px no matter zoom */
+}
+
+.visualizer-minimap .minimap-node-frame.highlighted {
+    stroke: #ea580c;        /* optional – orange when a node is  */
+    filter: drop-shadow(0 0 2px #ea580c);   /*   hovered / selected        */
+}
+
+.visualizer-canvas.nodes-dragging {
+    cursor: grabbing !important;            /* keep hand cursor on drag      */
 }

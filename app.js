@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeRunner();
     initializeEventListeners(); // <-- Call the consolidated listener setup from eventHandlers.js
     setupGlobalOverlayListeners(); // For the global Info Overlay *content* listeners (inputs, adds)
+    initializeResultFilters();
 
     updateRunnerUI();
     updateViewToggle();
@@ -409,8 +410,25 @@ function getCurrentFlowVarsFromUI() {
      domRefs.infoOverlayFlowVarsList?.querySelectorAll('.flow-var-row').forEach(row => {
          const keyInput = row.querySelector('.flow-var-key');
          const valueInput = row.querySelector('.flow-var-value');
+         const typeSelect = row.querySelector('.flow-var-type');
          const key = keyInput?.value.trim();
-         const value = valueInput?.value; // Allow empty values
+         const rawValue = valueInput?.value; // Allow empty values
+
+         let value;
+         switch (typeSelect?.value) {
+              case 'number':
+                  value = Number(rawValue);
+                  if (Number.isNaN(value)) value = rawValue;
+                  break;
+              case 'boolean':
+                  value = String(rawValue).toLowerCase() === 'true';
+                  break;
+              case 'json':
+                  try { value = JSON.parse(rawValue); } catch (e) { value = rawValue; }
+                  break;
+              default:
+                  value = rawValue;
+         }
 
          if (key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) { // Validate variable name format
               staticVars[key] = value ?? '';
@@ -435,12 +453,29 @@ function addFlowVarRow(key, value, container) { // `container` is passed from ha
     row.className = 'flow-var-row';
     const keyId = `fv-key-global-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const valueId = `fv-val-global-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const typeId = `fv-type-global-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    let detectedType = 'string';
+    if (typeof value === 'number') detectedType = 'number';
+    else if (typeof value === 'boolean') detectedType = 'boolean';
+    else if (typeof value === 'object' && value !== null) {
+        detectedType = 'json';
+        try { value = JSON.stringify(value); } catch (e) { value = String(value); }
+    }
+
     row.innerHTML = `
         <input type="text" class="flow-var-key" id="${keyId}" value="${escapeHTML(key)}" placeholder="Variable Name (letters, numbers, _)">
         <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value">
+        <select class="flow-var-type" id="${typeId}">
+            <option value="string">String</option>
+            <option value="number">Number</option>
+            <option value="boolean">Boolean</option>
+            <option value="json">JSON</option>
+        </select>
         <button class="btn-insert-var" data-target-input="${valueId}" title="Insert Variable">{{…}}</button>
         <button class="btn-remove-flow-var" title="Remove Variable">✕</button>
     `;
+    row.querySelector('.flow-var-type').value = detectedType;
     container.appendChild(row);
     adjustCollapsibleHeight(domRefs.infoOverlayFlowVarsToggle, domRefs.infoOverlayFlowVarsContent);
 }
@@ -526,6 +561,25 @@ export function adjustCollapsibleHeight(toggleBtn, contentEl) {
             contentEl.style.maxHeight = currentScrollHeight + "px";
          });
      }
+}
+
+function initializeResultFilters() {
+    domRefs.resultsSearchInput?.addEventListener('input', filterRunnerResults);
+    domRefs.resultsStatusFilter?.addEventListener('change', filterRunnerResults);
+}
+
+function filterRunnerResults() {
+    const query = domRefs.resultsSearchInput?.value.toLowerCase() || '';
+    const status = domRefs.resultsStatusFilter?.value || '';
+    const list = domRefs.runnerResultsList;
+    if (!list) return;
+    const items = list.querySelectorAll('li.result-item');
+    items.forEach(li => {
+        const text = li.dataset.searchText || '';
+        const matchesText = text.includes(query);
+        const matchesStatus = !status || li.dataset.status === status;
+        li.style.display = matchesText && matchesStatus ? '' : 'none';
+    });
 }
 
 // --- REMOVED setupPanelListeners and its helpers ---

@@ -53,6 +53,12 @@ export function initializeEventListeners() {
     // Variables Panel Toggle Button (Main Header) - Toggles based on current state
     domRefs.toggleVariablesBtn?.addEventListener('click', () => handleToggleVariablesPanel());
 
+    // Zoom Controls
+    domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
+    domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
+    domRefs.zoomResetBtn?.addEventListener('click', () => appState.visualizerComponent?.resetZoom());
+    domRefs.toggleMinimapBtn?.addEventListener('click', () => handleToggleMinimap());
+
     // Info Panel Close Button (Inside Panel) - Explicitly closes
     domRefs.actualInfoOverlayCloseBtn?.addEventListener('click', () => handleToggleInfoOverlay(false));
 
@@ -148,6 +154,19 @@ export function initializeEventListeners() {
              }
         }
 
+        if (ctrlOrCmd && (e.key === '=' || e.key === '+')) {
+            e.preventDefault();
+            domRefs.zoomInBtn?.click();
+        }
+        if (ctrlOrCmd && (e.key === '-' || e.key === '_')) {
+            e.preventDefault();
+            domRefs.zoomOutBtn?.click();
+        }
+        if (ctrlOrCmd && e.key === '0') {
+            e.preventDefault();
+            domRefs.zoomResetBtn?.click();
+        }
+
         // View/Panel Toggles
         if (ctrlOrCmd && e.key === '1') {
             e.preventDefault();
@@ -160,6 +179,11 @@ export function initializeEventListeners() {
         if (ctrlOrCmd && e.key === '3') {
             e.preventDefault();
             domRefs.toggleViewBtn?.click(); // Simulate click on the button
+        }
+
+        if (e.key.toLowerCase() === 'm' && appState.currentView === 'node-graph') {
+            e.preventDefault();
+            domRefs.toggleMinimapBtn?.click();
         }
     });
 
@@ -219,6 +243,17 @@ export function handleToggleVariablesPanel(forceState = null) {
 
     // No need to update button state here - syncPanelVisibility does it
     syncPanelVisibility(); // Sync button states and potentially other UI elements
+}
+
+export function handleToggleMinimap(forceState = null) {
+    if (!appState.visualizerComponent) return;
+    const willBeVisible = forceState ?? !appState.visualizerComponent.isMinimapVisible();
+    if (willBeVisible) {
+        appState.visualizerComponent.showMinimap();
+    } else {
+        appState.visualizerComponent.hideMinimap();
+    }
+    syncPanelVisibility();
 }
 
 
@@ -527,8 +562,9 @@ export function handleVisualizerNodeLayoutUpdate(stepId, x, y, options = {}) {
 
         // Create a new layout object by merging current and new properties
         const newLayout = {
-            ...currentLayout, // Keep any existing unrelated properties
-            ...(collapseChanged && { collapsed: options.collapsed }) // Conditionally update collapsed
+            ...currentLayout,
+            ...(positionChanged && { x, y }),
+            ...(collapseChanged && { collapsed: options.collapsed })
         };
 
         // Update the model

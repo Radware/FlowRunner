@@ -4,6 +4,7 @@
 import { test, expect, _electron as electron } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'url';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,9 +104,11 @@ test.describe('IPC and File I/O Integration Tests', () => {
         });
         page = await electronApp.firstWindow();
         await page.waitForLoadState('domcontentloaded');
+        await setupMockUpdateRoute(page);
     });
 
     test.afterAll(async () => {
+        if (page) await removeMockUpdateRoute(page).catch(() => {});
         if (electronApp) {
             await electronApp.close();
         }

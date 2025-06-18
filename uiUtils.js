@@ -387,12 +387,29 @@ function _addFlowVarRow(key, value, triggerUpdate = true) {
     row.className = 'flow-var-row';
     const keyId = `fv-key-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const valueId = `fv-val-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const typeId = `fv-type-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    let detectedType = 'string';
+    if (typeof value === 'number') detectedType = 'number';
+    else if (typeof value === 'boolean') detectedType = 'boolean';
+    else if (typeof value === 'object' && value !== null) {
+        detectedType = 'json';
+        try { value = JSON.stringify(value); } catch (e) { value = String(value); }
+    }
+
     row.innerHTML = `
         <input type="text" class="flow-var-key" id="${keyId}" value="${escapeHTML(key)}" placeholder="Variable Name (letters, numbers, _)">
         <input type="text" class="flow-var-value" id="${valueId}" value="${escapeHTML(value)}" placeholder="Variable Value">
+        <select class="flow-var-type" id="${typeId}">
+            <option value="string">String</option>
+            <option value="number">Number</option>
+            <option value="boolean">Boolean</option>
+            <option value="json">JSON</option>
+        </select>
         <button class="btn-insert-var" data-target-input="${valueId}" title="Insert Variable">{{…}}</button>
         <button class="btn-remove-flow-var" title="Remove Variable">✕</button>
     `;
+    row.querySelector('.flow-var-type').value = detectedType;
     container.appendChild(row);
 
     // Removed local event listeners - handled globally in app.js
@@ -412,8 +429,25 @@ function _getCurrentFlowVarsFromUI() {
     domRefs.infoOverlayFlowVarsList?.querySelectorAll('.flow-var-row').forEach(row => {
         const keyInput = row.querySelector('.flow-var-key');
         const valueInput = row.querySelector('.flow-var-value');
+        const typeSelect = row.querySelector('.flow-var-type');
         const key = keyInput?.value.trim();
-        const value = valueInput?.value || '';
+        const rawValue = valueInput?.value || '';
+
+        let value;
+        switch (typeSelect?.value) {
+            case 'number':
+                value = Number(rawValue);
+                if (Number.isNaN(value)) value = rawValue;
+                break;
+            case 'boolean':
+                value = rawValue.toLowerCase() === 'true';
+                break;
+            case 'json':
+                try { value = JSON.parse(rawValue); } catch (e) { value = rawValue; }
+                break;
+            default:
+                value = rawValue;
+        }
 
         if (key && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
              staticVars[key] = value;
@@ -594,21 +628,31 @@ export function _updateVariablesPanelUI() { // Keep as internal helper
 export function updateViewToggle() {
     if (!appState.currentFlowModel || !domRefs.toggleViewBtn) {
         if(domRefs.toggleViewBtn) domRefs.toggleViewBtn.style.display = 'none';
+        if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = 'none';
+        if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = 'none';
+        if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = 'none';
+        if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = 'none';
         return;
     }
     domRefs.toggleViewBtn.style.display = ''; // Ensure button is visible if flow loaded
+    if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if (appState.currentView === 'list-editor') {
         domRefs.toggleViewBtn.textContent = 'Visual View';
         domRefs.toggleViewBtn.title = 'Switch to Node-Graph View (Ctrl+3)';
         // Ensure Info/Vars buttons are potentially visible in list view
         if(domRefs.toggleInfoBtn) domRefs.toggleInfoBtn.style.display = '';
         if(domRefs.toggleVariablesBtn) domRefs.toggleVariablesBtn.style.display = '';
+        if(appState.visualizerComponent) appState.visualizerComponent.hideMinimap();
     } else { // Node-graph view
         domRefs.toggleViewBtn.textContent = 'Editor View';
         domRefs.toggleViewBtn.title = 'Switch to List/Editor View (Ctrl+3)';
         // Ensure Info/Vars buttons are potentially visible in graph view
         if(domRefs.toggleInfoBtn) domRefs.toggleInfoBtn.style.display = '';
         if(domRefs.toggleVariablesBtn) domRefs.toggleVariablesBtn.style.display = '';
+        if(appState.visualizerComponent) appState.visualizerComponent.showMinimap();
     }
 }
 
@@ -616,6 +660,7 @@ export function updateViewToggle() {
 export function syncPanelVisibility() {
     const toggleInfoBtn = domRefs.toggleInfoBtn;
     const toggleVariablesBtn = domRefs.toggleVariablesBtn;
+    const toggleMinimapBtn = domRefs.toggleMinimapBtn;
 
     // --- Update Info Panel Toggle Button ---
     if (toggleInfoBtn) {
@@ -635,10 +680,20 @@ export function syncPanelVisibility() {
         toggleVariablesBtn.querySelector('.btn-text').textContent = appState.isVariablesPanelVisible ? 'Hide Variables' : 'Show Variables';
     }
 
+    if (toggleMinimapBtn) {
+        const isVisible = appState.visualizerComponent?.isMinimapVisible() ?? false;
+        toggleMinimapBtn.classList.toggle('active', isVisible);
+        toggleMinimapBtn.textContent = isVisible ? 'Hide Minimap' : 'Show Minimap';
+    }
+
     // Show/hide the toggle buttons themselves based on whether a flow is loaded
     const shouldShowButtons = !!appState.currentFlowModel;
     if (toggleInfoBtn) toggleInfoBtn.style.display = shouldShowButtons ? '' : 'none';
     if (toggleVariablesBtn) toggleVariablesBtn.style.display = shouldShowButtons ? '' : 'none';
+    if (toggleMinimapBtn) {
+        const shouldShow = shouldShowButtons && appState.currentView === 'node-graph';
+        toggleMinimapBtn.style.display = shouldShow ? '' : 'none';
+    }
 }
 
 /** Clears all runtime-related status classes from steps in the list view */

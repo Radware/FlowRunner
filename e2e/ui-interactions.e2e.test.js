@@ -8,6 +8,8 @@ import path   from 'node:path';
 import fs     from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { fileURLToPath } from 'url';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
+import { pushRecent, esc, setupRendererLogCapture } from './testUtils.js';
 
 /* ───────────── paths / constants ───────────── */
 
@@ -16,43 +18,6 @@ const __dirname   = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 const dataRoot    = path.resolve(__dirname, 'e2e-test-data');
 const flowPath    = path.join(dataRoot, 'ui-interactions.flow.json');
-
-const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
-const MAX_RECENT_FILES = 10;
-
-/* ───────────── helpers ───────────── */
-
-async function pushRecent(page, fp) {
-  await page.evaluate(
-    ({ k, fp, m }) => {
-      let a; try { a = JSON.parse(localStorage.getItem(k) || '[]'); }
-      catch { a = []; }
-      if (!Array.isArray(a)) a = [];
-      a = a.filter(p => p !== fp); a.unshift(fp);
-      if (a.length > m) a = a.slice(0, m);
-      localStorage.setItem(k, JSON.stringify(a));
-    },
-    { k: RECENT_FILES_KEY, fp, m: MAX_RECENT_FILES }
-  );
-}
-
-const esc = (p) => p.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-
-function setupRendererLogCapture(page, logFile = 'e2e-renderer-logs.txt') {
-  // Clear the log file at the start of capture setup
-  try {
-    fsSync.writeFileSync(logFile, ''); // Overwrite existing or create new empty file
-    console.log(`[E2E Log Capture] Cleared/Created log file: ${logFile}`);
-  } catch (err) {
-    console.error(`[E2E Log Capture] Error clearing log file ${logFile}:`, err);
-  }
-
-  page.on('console', msg => {
-    const line = `[renderer][${msg.type()}] ${msg.text()}\n`;
-    fsSync.appendFileSync(logFile, line);
-  });
-}
-
 
 /* ───────────── suite ───────────── */
 
@@ -73,8 +38,8 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
       ],
       visualLayout: {
         a: { x: 50,  y: 50 },
-        b: { x: 300, y: 50 },
-        c: { x: 550, y: 50 },
+        b: { x: 50,  y: 600 },
+        c: { x: 50,  y: 1150 },
       },
     };
     await fs.writeFile(flowPath, JSON.stringify(flow, null, 2));
@@ -87,6 +52,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     page = await app.firstWindow();
     await page.waitForLoadState('domcontentloaded');
     page.setDefaultTimeout(30_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page); // <-- Capture renderer logs to file
 
     await pushRecent(page, flowPath);
@@ -103,6 +69,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
   });
 
   test.afterAll(async () => {
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     app && await app.close();
     await fs.rm(dataRoot, { recursive: true, force: true }).catch(() => {});
   });
@@ -133,6 +100,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     const saveBtn = page.locator('#save-flow-btn');
     console.log('[Test] Waiting for save button to be enabled...');
     await expect(saveBtn).toBeEnabled({ timeout: 8_000 });
+    await expect(saveBtn).toHaveClass(/needs-save/);
     console.log('[Test] Save button enabled.');
 
     expect(await order()).toEqual(['a', 'c', 'b']);
@@ -141,6 +109,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     await saveBtn.click();
     console.log('[Test] Save button clicked.');
     await expect(saveBtn).toBeDisabled();
+    await expect(saveBtn).not.toHaveClass(/needs-save/);
     console.log('[Test] Save button disabled after save.');
 
     /* reload and re‑check */
@@ -193,4 +162,103 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     expect(sy).toBeGreaterThan(start.y + 50);
   });
   */
+
+  test('Graph View Zoom Controls and Minimap Pan', async () => {
+    await page.locator('#toggle-view-btn').click();
+    await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/);
+
+    await page.waitForFunction(() => !!document.querySelector('#flow-visualizer-mount .visualizer-canvas'), { timeout: 5000 });
+    const canvas = page.locator('#flow-visualizer-mount .visualizer-canvas').first();
+    const zoomInBtn = page.locator('#zoom-in-btn');
+    const zoomOutBtn = page.locator('#zoom-out-btn');
+
+    const parseScale = (t) => {
+      const m = t.match(/scale\(([^)]+)\)/);
+      return m ? parseFloat(m[1]) : 1;
+    };
+
+    const initialScale = await canvas.evaluate(el => el.style.transform);
+    await zoomInBtn.click();
+    await page.waitForTimeout(100);
+    const zoomedIn = await canvas.evaluate(el => el.style.transform);
+    const scaleIn = parseScale(zoomedIn);
+    expect(scaleIn).toBeGreaterThan(parseScale(initialScale));
+    expect(scaleIn).toBeLessThanOrEqual(2);
+
+    await zoomOutBtn.click();
+    await page.waitForTimeout(100);
+    const zoomedOut = await canvas.evaluate(el => el.style.transform);
+    const scaleOut = parseScale(zoomedOut);
+    expect(scaleOut).toBeLessThanOrEqual(scaleIn);
+    expect(scaleOut).toBeGreaterThanOrEqual(0.5);
+
+    const mount = page.locator('#flow-visualizer-mount');
+    const before = await mount.evaluate(el => ({ left: el.scrollLeft, top: el.scrollTop }));
+    const minimap = page.locator('.visualizer-minimap');
+    const box = await minimap.boundingBox();
+    await minimap.click({ position: { x: box.width - 5, y: box.height - 5 } });
+    await page.waitForTimeout(200);
+    const after = await mount.evaluate(el => ({ left: el.scrollLeft, top: el.scrollTop }));
+    expect(after.left).not.toBe(before.left);
+    expect(after.top).not.toBe(before.top);
+  });
+
+    test('Minimap stays fixed during pan', async () => {
+        const mount = page.locator('#flow-visualizer-mount');
+        const canvas = mount.locator('.visualizer-canvas').first();
+        await page.waitForFunction(
+            () => !!document.querySelector('#flow-visualizer-mount .visualizer-canvas'),
+            { timeout: 5000 }
+        );
+
+        const minimap = page.locator('.visualizer-minimap');
+        const mmBoxBefore = await minimap.boundingBox();
+        const canvasBox = await canvas.boundingBox();
+
+        await canvas.hover();
+        await page.mouse.down();
+        await page.mouse.move(
+            canvasBox.x + canvasBox.width / 2 - 100,
+            canvasBox.y + canvasBox.height / 2 - 50,
+            { steps: 10 }
+        );
+        await page.mouse.up();
+
+        const mmBoxAfter = await minimap.boundingBox();
+        expect(mmBoxAfter.x).toBeCloseTo(mmBoxBefore.x, 1);
+        expect(mmBoxAfter.y).toBeCloseTo(mmBoxBefore.y, 1);
+    });
+
+    test('Viewport updates while panning', async () => {
+        const mount = page.locator('#flow-visualizer-mount');
+        const canvas = mount.locator('.visualizer-canvas').first();
+        await page.waitForFunction(
+            () => !!document.querySelector('#flow-visualizer-mount .visualizer-canvas'),
+            { timeout: 5000 }
+        );
+
+        const viewport = page.locator('.minimap-viewport');
+        const before = await viewport.evaluate(el => ({
+            left: el.style.left,
+            top: el.style.top
+        }));
+
+        const canvasBox = await canvas.boundingBox();
+        await canvas.hover();
+        await page.mouse.down();
+        await page.mouse.move(
+            canvasBox.x + canvasBox.width / 2 + 120,
+            canvasBox.y + canvasBox.height / 2 + 60,
+            { steps: 10 }
+        );
+        await page.mouse.up();
+        await page.waitForTimeout(100);
+
+        const after = await viewport.evaluate(el => ({
+            left: el.style.left,
+            top: el.style.top
+        }));
+        expect(after.left).not.toBe(before.left);
+        expect(after.top).not.toBe(before.top);
+    });
 });

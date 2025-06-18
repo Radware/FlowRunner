@@ -4,6 +4,8 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import { fileURLToPath } from 'url';
+import { startHttpbinServer, stopHttpbinServer } from './httpbin-server.js';
+import { setupMockUpdateRoute, removeMockUpdateRoute } from './mockUpdate.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -14,6 +16,8 @@ const simpleFlowPath  = path.join(testDataRoot, 'simple-request.flow.json');
 
 const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
 const MAX_RECENT_FILES = 10;
+let mockServer;
+let mockUrl;
 
 async function pushToRecentFiles(page, filePath) {
   return page.evaluate(
@@ -59,20 +63,34 @@ test.describe('E2E: Simple Request Flow Execution', () => {
   test.beforeAll(async () => {
     console.log('--- E2E Setup (simple-request) ---');
     await fs.mkdir(testDataRoot, { recursive: true });
+    ({ server: mockServer, baseUrl: mockUrl } = await startHttpbinServer());
 
     const flow = {
       name : 'Simple Request Flow',
-      steps: [{
-        id   : 'step_simple_1',
-        name : 'Get IP',
-        type : 'request',
-        method: 'GET',
-        url  : 'https://httpbin.org/get',
-        headers: { Accept: 'application/json' },
-        body : '',
-        extract: { clientIp: 'body.origin' },
-        onFailure: 'stop',
-      }],
+      steps: [
+        {
+          id   : 'step_simple_1',
+          name : 'Get IP',
+          type : 'request',
+          method: 'GET',
+          url  : `${mockUrl}/get`,
+          headers: { Accept: 'application/json' },
+          body : '',
+          extract: { clientIp: 'body.origin' },
+          onFailure: 'stop',
+        },
+        {
+          id   : 'step_simple_2',
+          name : 'Get UUID',
+          type : 'request',
+          method: 'GET',
+          url  : `${mockUrl}/uuid`,
+          headers: { Accept: 'application/json' },
+          body : '',
+          extract: { uuid: 'body.uuid' },
+          onFailure: 'stop',
+        }
+      ],
     };
     await fs.writeFile(simpleFlowPath, JSON.stringify(flow, null, 2));
 
@@ -84,16 +102,18 @@ test.describe('E2E: Simple Request Flow Execution', () => {
     page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');
     page.setDefaultTimeout(20_000);
+    await setupMockUpdateRoute(page);
     setupRendererLogCapture(page); // <-- Capture renderer logs to file
 
+    // Ensure a clean recent files list
+    await page.evaluate(key => localStorage.setItem(key, '[]'), RECENT_FILES_KEY);
     await pushToRecentFiles(page, simpleFlowPath);
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
 
-    const escaped = simpleFlowPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    await page.locator(`#flow-list .recent-file-item[data-file-path="${escaped}"]`).click();
+    await page.locator('#flow-list .recent-file-item').filter({ hasText: 'simple-request.flow.json' }).click();
 
-    await expect(page.locator('#workspace-title')).toContainText('Simple Request Flow');
+    await expect(page.locator('#workspace-title')).toContainText('Simple Request Flow', { timeout: 10000 });
 
     // Log loaded flow info for verification
     const loadedFlowInfo = await page.evaluate(() => {
@@ -110,7 +130,9 @@ test.describe('E2E: Simple Request Flow Execution', () => {
   });
 
   test.afterAll(async () => {
+    if (page) await removeMockUpdateRoute(page).catch(() => {});
     if (electronApp) await electronApp.close();
+    if (mockServer) await stopHttpbinServer(mockServer);
     try { await fs.rm(simpleFlowPath, { force: true }); } catch {}
   });
 
@@ -126,10 +148,15 @@ test.describe('E2E: Simple Request Flow Execution', () => {
 
     // instead of racing the stop‑button, just wait for SUCCESS
     console.log('[Test] Waiting for SUCCESS result...');
-    const result = page.locator('#runner-results .result-item[data-step-id="step_simple_1"]');
-    await expect(result.locator('.result-status')).toHaveText('SUCCESS', { timeout: 15_000 });
-    await expect(result.locator('.result-body pre')).toContainText('"origin"');
-    console.log('[Test] SUCCESS result found.');
+    const step1 = page.locator('#runner-results .result-item[data-step-id="step_simple_1"]');
+    await expect(step1.locator('.result-status')).toHaveText('SUCCESS', { timeout: 15_000 });
+    await expect(step1.locator('.result-body pre')).toContainText('"origin"');
+    console.log('[Test] Step 1 SUCCESS result found.');
+
+    const step2 = page.locator('#runner-results .result-item[data-step-id="step_simple_2"]');
+    await expect(step2.locator('.result-status')).toHaveText('SUCCESS', { timeout: 15_000 });
+    await expect(step2.locator('.result-body pre')).toContainText('"uuid"');
+    console.log('[Test] Step 2 SUCCESS result found.');
 
     // final UI state
     await expect(page.locator('#run-flow-btn')).toBeEnabled();
