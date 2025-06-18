@@ -793,6 +793,7 @@ export class FlowVisualizer {
     }
 
     _buildOrthogonalPath({ x: xs, y: ys }, { x: xe, y: ye }) {
+        if ([xs, ys, xe, ye].some(v => Number.isNaN(v))) return '';
         const m = 16;
         const vertical = Math.abs(ys - ye) > Math.abs(xs - xe);
         const pts = [];
@@ -997,7 +998,15 @@ export class FlowVisualizer {
         if (!nodeData || !this.svgConnectors) return;
         const stepId = nodeData.id;
 
-        const paths = this.svgConnectors.querySelectorAll(`path.${CONNECTOR_CLASS}[data-from="${stepId}"], path.${CONNECTOR_CLASS}[data-to="${stepId}"]`);
+        const paths = Array.from(
+            this.svgConnectors.querySelectorAll(`path.${CONNECTOR_CLASS}[data-from="${stepId}"]`)
+        );
+        if (!paths.length) {
+            // no outgoing lines – try incoming ones
+            const incoming = this.svgConnectors
+                .querySelectorAll(`path.${CONNECTOR_CLASS}[data-to="${stepId}"]`);
+            incoming.forEach(p => paths.push(p));
+        }
 
         paths.forEach(path => {
             const fromId = path.dataset.from;
@@ -1113,6 +1122,8 @@ export class FlowVisualizer {
                  }
              }
         } finally {
+            // Redraw all connectors once the node position is final
+            this._renderAllConnectors();
              // Cleanup
             if (draggedNodeAtStart) {
                 draggedNodeAtStart.classList.remove(NODE_DRAGGING_CLASS);
@@ -1466,11 +1477,12 @@ export class FlowVisualizer {
         const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         r.setAttribute('x', x);
         r.setAttribute('y', y);
-        r.setAttribute('width', w);
-        r.setAttribute('height', h);
+        r.setAttribute('width', Math.max(2, w));   // avoid 0-size artefacts
+        r.setAttribute('height', Math.max(2, h));
         r.setAttribute('fill', 'none');
-        r.setAttribute('stroke', 'rgba(0,0,0,.45)');
-        r.setAttribute('stroke-width', '1');
+        r.setAttribute('stroke', '#2563eb');       // blue-500 – easy to see
+        r.setAttribute('stroke-width', '1.25');
+        r.setAttribute('vector-effect','non-scaling-stroke');
         return r;
     }
 
@@ -1486,7 +1498,10 @@ export class FlowVisualizer {
             cloneSvg.querySelectorAll('.connector-path').forEach(p => {
                 p.removeAttribute('class');
                 p.removeAttribute('stroke');      // ← avoids black line
+                p.setAttribute('fill', 'none');         // new — prevent solid fill
+                p.setAttribute('vector-effect','non-scaling-stroke'); // keep 1-px hairlines
             });
+            cloneSvg.querySelectorAll('marker').forEach(m => m.remove());
             this.minimapContent.appendChild(cloneSvg);
 
             // draw a thin rectangle for every visible node
