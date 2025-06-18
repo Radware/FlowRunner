@@ -1680,6 +1680,18 @@ body.flow-step-dragging { cursor: grabbing !important; }
     stroke-width: 2;                        /* hint the user can click / pan */
 }
 
+.visualizer-minimap .minimap-node-frame {
+    stroke: #2563eb;        /* blue-500 – easy to spot           */
+    stroke-width: 2.25;     /* thicker than connector hairlines  */
+    filter: drop-shadow(0 0 1px #2563eb);          /* light glow */
+    vector-effect: non-scaling-stroke;               /* stays ≥2 px no matter zoom */
+}
+
+.visualizer-minimap .minimap-node-frame.highlighted {
+    stroke: #ea580c;        /* optional – orange when a node is  */
+    filter: drop-shadow(0 0 2px #ea580c);   /*   hovered / selected        */
+}
+
 .visualizer-canvas.nodes-dragging {
     cursor: grabbing !important;            /* keep hand cursor on drag      */
 }
