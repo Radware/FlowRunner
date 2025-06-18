@@ -562,8 +562,9 @@ export function handleVisualizerNodeLayoutUpdate(stepId, x, y, options = {}) {
 
         // Create a new layout object by merging current and new properties
         const newLayout = {
-            ...currentLayout, // Keep any existing unrelated properties
-            ...(collapseChanged && { collapsed: options.collapsed }) // Conditionally update collapsed
+            ...currentLayout,
+            ...(positionChanged && { x, y }),
+            ...(collapseChanged && { collapsed: options.collapsed })
         };
 
         // Update the model
