@@ -783,13 +783,36 @@ export class FlowVisualizer {
         const h = nodeData.height;
 
         switch (portType) {
-            case 'input': return { x: x, y: y + h / 2 };
-            case 'output': return { x: x + w, y: y + h / 2 };
+            case 'input':  return { x: x,       y: y + h / 2 };
+            case 'output': return { x: x + w,   y: y + h / 2 };
+            case 'top':    return { x: x + w / 2, y: y };
+            case 'bottom': return { x: x + w / 2, y: y + h };
             case 'branch-then': return { x: x + w / 2, y: y + h };
             case 'branch-else': return { x: x + w / 2, y: y + h };
-            case 'loop-body': return { x: x + w / 2, y: y + h };
+            case 'loop-body':   return { x: x + w / 2, y: y + h };
             default: return { x: x + w / 2, y: y + h / 2 };
         }
+    }
+
+    /** Decide automatically which side of the source/target boxes to use.
+     *  Returns { start: <port>, end: <port> } */
+    _autoSelectPorts(src, dst) {
+        const srcCx = src.x + src.width  / 2;
+        const srcCy = src.y + src.height / 2;
+        const dstCx = dst.x + dst.width  / 2;
+        const dstCy = dst.y + dst.height / 2;
+        const dx = dstCx - srcCx, dy = dstCy - srcCy;
+
+        if (Math.abs(dx) >= Math.abs(dy)) {
+            return {
+                start: dx > 0 ? 'output' : 'input',
+                end:   dx > 0 ? 'input'  : 'output'
+            };
+        }
+        return {
+            start: dy > 0 ? 'bottom' : 'top',
+            end:   dy > 0 ? 'top'    : 'bottom'
+        };
     }
 
     _buildOrthogonalPath({ x: xs, y: ys }, { x: xe, y: ye }) {
@@ -809,8 +832,13 @@ export class FlowVisualizer {
         return 'M ' + pts.map(p => p.join(' ')).join(' L ');
     }
 
-    /** Draws a single SVG connector between two nodes using orthogonal paths. */
-    _drawConnector(startNodeData, endNodeData, startPortType, endPortType) {
+    /** Draw one connector (caller may pass 'auto' for either port). */
+    _drawConnector(startNodeData, endNodeData, startPortType = 'auto', endPortType = 'auto') {
+        if (startPortType === 'auto' || endPortType === 'auto') {
+            const chosen = this._autoSelectPorts(startNodeData, endNodeData);
+            if (startPortType === 'auto') startPortType = chosen.start;
+            if (endPortType   === 'auto') endPortType   = chosen.end;
+        }
         if (!startNodeData || !endNodeData) {
             logger.warn("Skipping connector draw: Missing start or end node data.");
             return;
@@ -847,8 +875,9 @@ export class FlowVisualizer {
             marker.setAttribute('viewBox', '0 -5 10 10');
             marker.setAttribute('refX', '8');
             marker.setAttribute('refY', '0');
-            marker.setAttribute('markerWidth', '6');
-            marker.setAttribute('markerHeight', '6');
+            marker.setAttribute('markerUnits', 'userSpaceOnUse');
+            marker.setAttribute('markerWidth', '7');
+            marker.setAttribute('markerHeight', '7');
             marker.setAttribute('orient', 'auto-start-reverse');
             const arrowPath = document.createElementNS(SVG_NS, 'path');
             arrowPath.setAttribute('d', 'M0,-5L10,0L0,5');
