@@ -1491,32 +1491,54 @@ export class FlowVisualizer {
         this.minimapContent.innerHTML = '';
         const cloneSvg = this.svgConnectors?.cloneNode(true);
         const cloneCanvas = this.canvas?.cloneNode(true);
-        if (cloneSvg) {
-            cloneSvg.style.transformOrigin = '0 0';
 
-            // Remove styling that is only relevant in the main canvas
-            cloneSvg.querySelectorAll('.connector-path').forEach(p => {
-                p.removeAttribute('class');
-                p.removeAttribute('stroke');      // ← avoids black line
-                p.setAttribute('fill', 'none');         // new — prevent solid fill
-                p.setAttribute('vector-effect','non-scaling-stroke'); // keep 1-px hairlines
-            });
-            cloneSvg.querySelectorAll('marker').forEach(m => m.remove());
-            this.minimapContent.appendChild(cloneSvg);
+        //
+        //  ─────────────  LAYERS  ──────────────
+        //  cloneCanvas  → gives us a “ghost” of every node so the user keeps
+        //                  spatial context, but has NO outlines or connectors
+        //  cloneSvg     → only the lines + blue node frames go here; we append
+        //                  it *after* the canvas so that nothing is hidden.
+        //
+        const frag = document.createDocumentFragment();
 
-            // draw a thin rectangle for every visible node
-            this.nodes.forEach(nd => {
-                if (nd.element?.style.display !== 'none') {
-                    cloneSvg.appendChild(this._addMiniRect(nd.x, nd.y, nd.width, nd.height));
-                }
-            });
-        }
+        /* --- node clones (white boxes) --- */
         if (cloneCanvas) {
             cloneCanvas.querySelectorAll('.node-actions').forEach(el => el.remove());
-            cloneCanvas.querySelectorAll('.flow-node').forEach(n => n.classList.remove('flow-node'));
+            cloneCanvas.querySelectorAll('.flow-node').forEach(n => {
+                n.classList.remove('flow-node');
+                n.style.border = 'none';          // remove 1 px border that caused “gaps”
+                n.style.background = 'transparent';
+            });
+            cloneCanvas.style.pointerEvents = 'none';
             cloneCanvas.style.transformOrigin = '0 0';
-            this.minimapContent.appendChild(cloneCanvas);
+            frag.appendChild(cloneCanvas);
         }
+
+        /* --- connectors + blue outlines --- */
+        if (cloneSvg) {
+            cloneSvg.style.transformOrigin = '0 0';
+            cloneSvg.querySelectorAll('.connector-path').forEach(p => {
+                p.removeAttribute('class');
+                p.removeAttribute('marker-end');
+                p.setAttribute('fill',  'none');
+                p.setAttribute('stroke','#64748b');        // slate-500 – less harsh than black
+                p.setAttribute('stroke-width','1');
+                p.setAttribute('vector-effect','non-scaling-stroke');
+            });
+            cloneSvg.querySelectorAll('marker').forEach(m => m.remove());
+
+            // ––– add node frames *beneath* the connectors so the lines stay visible
+            this.nodes.forEach(nd => {
+                if (nd.element?.style.display !== 'none') {
+                    const r = this._addMiniRect(nd.x, nd.y, nd.width, nd.height);
+                    cloneSvg.insertBefore(r, cloneSvg.firstChild);
+                }
+            });
+
+            frag.appendChild(cloneSvg);
+        }
+
+        this.minimapContent.appendChild(frag);
         const canvasWidth = parseFloat(this.canvas?.style.width || this.canvas?.offsetWidth || 0);
         const canvasHeight = parseFloat(this.canvas?.style.height || this.canvas?.offsetHeight || 0);
         const containerW = this.minimapContainer.clientWidth;
