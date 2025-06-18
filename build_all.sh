@@ -16,9 +16,9 @@ npm run e2e
 
 # Build macOS (arm64)
 echo "Building macOS package..."
-NODE_OPTIONS= npx electron-forge make --platform=darwin --arch=arm64
+NODE_OPTIONS= npx electron-builder --mac --arm64
 
 # Build Windows (x64)
 echo "Building Windows package..."
-NODE_OPTIONS= npx electron-forge make --platform=win32 --arch=x64
+NODE_OPTIONS= npx electron-builder --win --x64
 
