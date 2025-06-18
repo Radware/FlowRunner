@@ -26,8 +26,8 @@ jobs:
         run: npm install
 
       - name: Build application
-        # This is the line that has been changed to fix the error
-        run: npm run dist -- --no-publish
+        # THIS IS THE CORRECTED LINE
+        run: npm run dist -- --publish never
         
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
