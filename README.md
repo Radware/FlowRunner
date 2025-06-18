@@ -38,6 +38,7 @@
   - Expanded E2E and unit test coverage for flows, file operations, and UI.
 - **Update Notification:**
   - App checks for new releases on GitHub and notifies the user if available.
+  - You can also manually check for updates via **Help > Check for Updates…**, which triggers the menu item defined in [`main.js`](https://github.com/Radware/FlowRunner/blob/main/main.js#L274).
 
 ### v1.0.0 (Initial Release)
 - First public release with visual flow authoring, dual views, variable management, and local file operations.
