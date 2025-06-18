@@ -63,7 +63,13 @@ describe('renderResultItemContent', () => {
         renderResultItemContent(li, data);
         const btn = li.querySelector('.result-extracted-values .copy-btn');
         expect(btn).not.toBeNull();
+        jest.useFakeTimers();
         btn.dispatchEvent(new Event('click'));
         expect(writeMock).toHaveBeenCalledWith('abc');
+        expect(btn.textContent).toBe('Copied!');
+        jest.advanceTimersByTime(1000);
+        expect(btn.textContent).toBe('Copy');
+        jest.useRealTimers();
+
     });
 });

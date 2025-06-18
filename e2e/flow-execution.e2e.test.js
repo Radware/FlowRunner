@@ -432,9 +432,14 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
 
     await page.evaluate(() => { window.__copied = null; });
     const extractedVal = await step1ResultLocator.locator('.result-extracted-values li span.extracted-value').first().textContent();
-    await step1ResultLocator.locator('.result-extracted-values .copy-btn').first().click();
+    const varCopyBtn = step1ResultLocator.locator('.result-extracted-values .copy-btn').first();
+    await varCopyBtn.click();
     const copiedVar = await page.evaluate(() => window.__copied);
     expect(copiedVar).toBe(extractedVal);
+    await expect(varCopyBtn).toHaveText('Copied!');
+    await page.waitForTimeout(1100);
+    await expect(varCopyBtn).toHaveText('Copy');
+
 
     await page.fill('#results-search', 'userAgent');
     await page.waitForTimeout(200);
