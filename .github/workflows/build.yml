@@ -14,10 +14,10 @@ jobs:
 
     steps:
       - name: Check out git repository
-        uses: actions/checkout@v4 # Also a good practice to update this to v4
+        uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4 # And this one too
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
@@ -26,10 +26,11 @@ jobs:
         run: npm install
 
       - name: Build application
-        run: npm run dist
+        # This is the line that has been changed to fix the error
+        run: npm run dist -- --no-publish
         
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4 # The required fix is here
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-build
           path: dist/
