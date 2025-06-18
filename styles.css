@@ -988,6 +988,10 @@ button:disabled {
 .result-extracted-values li:last-child {
     margin-bottom: 0;
 }
+.result-extracted-values li .copy-btn {
+    margin-top: 4px;
+    float: right;
+}
 .result-extracted-values code {
     background-color: #dbeafe;
     padding: 1px 4px;
