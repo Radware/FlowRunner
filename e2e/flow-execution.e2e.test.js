@@ -425,10 +425,21 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
 
     const expectedRaw = await step1ResultLocator.locator('.result-body pre').textContent();
 
-    await step1ResultLocator.locator('.copy-btn').click();
+    await step1ResultLocator.locator('.result-body .copy-btn').click();
 
     const copied = await page.evaluate(() => window.__copied);
     expect(copied).toBe(expectedRaw);
+
+    await page.evaluate(() => { window.__copied = null; });
+    const extractedVal = await step1ResultLocator.locator('.result-extracted-values li span.extracted-value').first().textContent();
+    await step1ResultLocator.locator('.result-extracted-values .copy-btn').first().click();
+    const copiedVar = await page.evaluate(() => window.__copied);
+    expect(copiedVar).toBe(extractedVal);
+
+    await page.fill('#results-search', 'userAgent');
+    await page.waitForTimeout(200);
+    await expect(step1ResultLocator).toBeVisible();
+    await page.fill('#results-search', '');
 
     const step3Failures = page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-extraction-failures');
     await expect(step3Failures).toBeVisible();

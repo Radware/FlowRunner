@@ -46,4 +46,24 @@ describe('renderResultItemContent', () => {
         btn.dispatchEvent(new Event('click'));
         expect(writeMock).toHaveBeenCalledWith('hello');
     });
+
+    test('copy button for extracted value writes to clipboard', () => {
+        const writeMock = jest.fn();
+        Object.assign(navigator, { clipboard: { writeText: writeMock } });
+        const li = document.createElement('li');
+        const data = {
+            stepName: 'Req1',
+            stepId: 'r1',
+            status: 'success',
+            output: null,
+            error: null,
+            extractionFailures: [],
+            extractedValues: { token: 'abc' }
+        };
+        renderResultItemContent(li, data);
+        const btn = li.querySelector('.result-extracted-values .copy-btn');
+        expect(btn).not.toBeNull();
+        btn.dispatchEvent(new Event('click'));
+        expect(writeMock).toHaveBeenCalledWith('abc');
+    });
 });
