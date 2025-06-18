@@ -1,9 +1,4 @@
-# ------------------------------------
-# SAFE TO CHANGE
-# This is just the display name for your workflow in GitHub.
-# Change it to whatever you like. "FlowRunner Build" is a great option.
 name: FlowRunner Build
-# ------------------------------------
 
 on:
   push:
@@ -11,48 +6,30 @@ on:
 
 jobs:
   build:
-    # This part should not be changed. It tells GitHub to run the job
-    # on the operating systems listed in the "matrix" below.
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        # This part should not be changed. It defines the three
-        # operating systems the job will run on.
         os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
-      # Each step below has a "name". These are also just labels that
-      # appear in the build logs. You can change them if you want,
-      # but the default ones are clear and descriptive.
-
       - name: Check out git repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Also a good practice to update this to v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # And this one too
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
-        # This command MUST match the script in your package.json
         run: npm install
 
       - name: Build application
-        # This command MUST match the script in your package.json
         run: npm run dist
         
-      # ------------------------------------
-      # IMPORTANT: KEEP THIS NAME
-      # This step uploads your final installer files.
-      # The name here dynamically creates a unique label for each build, like:
-      # - "windows-latest-build"
-      # - "macos-latest-build"
-      # It's best to leave this as is.
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # The required fix is here
         with:
           name: ${{ matrix.os }}-build
           path: dist/
-      # ------------------------------------
