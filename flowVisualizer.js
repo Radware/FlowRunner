@@ -766,13 +766,12 @@ export class FlowVisualizer {
     /** Calculates the absolute position of a conceptual port on a node. */
     _getPortPosition(nodeData, portType) {
         if (!nodeData) return { x: NaN, y: NaN };
-        const zoom = this.zoomLevel || 1;
-
         let x, y;
         // If this node is currently being dragged, use its style position for accurate connector drawing during drag
         if (this.isDraggingNode && this.draggedNode && this.draggedNode.dataset.stepId === nodeData.id) {
-            x = parseFloat(this.draggedNode.style.left || '0') * (1/zoom);
-            y = parseFloat(this.draggedNode.style.top  || '0') * (1/zoom);
+            // style.left/top already store logical coordinates, so do not scale
+            x = parseFloat(this.draggedNode.style.left || '0');
+            y = parseFloat(this.draggedNode.style.top  || '0');
         } else {
             // Otherwise, use the stored layout coordinates
             x = nodeData.x;
