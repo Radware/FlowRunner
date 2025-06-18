@@ -6,7 +6,7 @@ import { showMessage, clearListViewHighlights, highlightStepInList, updateDefine
 import { findStepById, escapeHTML } from './flowCore.js'; // findStepById needed for result rendering
 import { logger } from './logger.js';
 
-function computeSearchText(stepName, output, error) {
+function computeSearchText(stepName, output, error, extractedValues) {
     const parts = [stepName];
     if (output !== null && output !== undefined) {
         try {
@@ -15,6 +15,16 @@ function computeSearchText(stepName, output, error) {
     }
     if (error) {
         parts.push(typeof error === 'string' ? error : error.message || '');
+    }
+    if (extractedValues && Object.keys(extractedValues).length > 0) {
+        for (const [name, val] of Object.entries(extractedValues)) {
+            parts.push(name);
+            try {
+                parts.push(typeof val === 'string' ? val : JSON.stringify(val));
+            } catch (_) {
+                parts.push(String(val));
+            }
+        }
     }
     return parts.join(' ').toLowerCase();
 }
@@ -361,7 +371,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
     li.dataset.resultIndex = resultIndex;
 
     logger.debug(`[DOM UPDATE] addResultEntry: Adding li for stepId=${stepId}, status=${status}, index=${resultIndex}`);
-    const searchText = computeSearchText(step.name || 'Unnamed Step', output, error);
+    const searchText = computeSearchText(step.name || 'Unnamed Step', output, error, extractedValues);
     const resultData = {
         stepId: stepId,
         stepName: step.name || 'Unnamed Step',
@@ -399,7 +409,7 @@ export function updateResultEntry(index, status, output, error, extractionFailur
     resultData.error = error;
     resultData.extractionFailures = extractionFailures || [];
     resultData.extractedValues = extractedValues || {};
-    resultData.searchText = computeSearchText(resultData.stepName, output, error);
+    resultData.searchText = computeSearchText(resultData.stepName, output, error, extractedValues);
 
     const li = domRefs.runnerResultsList.querySelector(`li.result-item[data-result-index="${index}"]`);
     if (!li) {
@@ -468,7 +478,8 @@ export function renderResultItemContent(listItem, resultData) {
             } catch (e) {
                 valString = String(val);
             }
-            return `<li><code>${escapeHTML(name)}</code>: ${escapeHTML(valString)}</li>`;
+            const escapedVal = escapeHTML(valString);
+            return `<li><code>${escapeHTML(name)}</code>: <span class="extracted-value">${escapedVal}</span> <button class="copy-btn btn btn-sm" data-copy-value="${escapedVal}" title="Copy value" aria-label="Copy value">Copy</button></li>`;
         }).join('');
         extractedValuesHtml = `
             <div class="result-extracted-values">
@@ -510,4 +521,18 @@ export function renderResultItemContent(listItem, resultData) {
             resultBody.appendChild(copyBtn);
         }
     }
+
+    const valueCopyBtns = listItem.querySelectorAll('.result-extracted-values .copy-btn');
+    valueCopyBtns.forEach(btn => {
+        const val = btn.getAttribute('data-copy-value') || '';
+        btn.addEventListener('click', () => {
+            try {
+                navigator.clipboard.writeText(val);
+                btn.textContent = 'Copied!';
+                setTimeout(() => { btn.textContent = 'Copy'; }, 1000);
+            } catch (err) {
+                logger.error('Failed to copy extracted value:', err);
+            }
+        });
+    });
 }
