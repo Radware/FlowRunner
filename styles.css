@@ -985,14 +985,14 @@ button:disabled {
     margin-bottom: 4px;
     overflow-wrap: anywhere;
     display: flex;
-    align-items: center;
+    flex-direction: column;
 }
 .result-extracted-values li:last-child {
     margin-bottom: 0;
 }
 .result-extracted-values li .copy-btn {
     margin-top: 4px;
-    float: right;
+    align-self: flex-end;
 }
 .result-extracted-values code {
     background-color: #dbeafe;

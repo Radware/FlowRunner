@@ -531,7 +531,6 @@ export function renderResultItemContent(listItem, resultData) {
                 navigator.clipboard.writeText(val);
                 btn.textContent = 'Copied!';
                 setTimeout(() => { btn.textContent = 'Copy'; }, 1000);
-
             } catch (err) {
                 logger.error('Failed to copy extracted value:', err);
             }
