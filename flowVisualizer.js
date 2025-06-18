@@ -1475,14 +1475,13 @@ export class FlowVisualizer {
 
     _addMiniRect(x, y, w, h) {
         const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        r.classList.add('minimap-node-frame');          // NEW — for CSS styling
         r.setAttribute('x', x);
         r.setAttribute('y', y);
-        r.setAttribute('width', Math.max(2, w));   // avoid 0-size artefacts
+        r.setAttribute('width', Math.max(2, w));        // avoid 0-size artefacts
         r.setAttribute('height', Math.max(2, h));
-        r.setAttribute('fill', 'none');
-        r.setAttribute('stroke', '#2563eb');       // blue-500 – easy to see
-        r.setAttribute('stroke-width', '1.25');
-        r.setAttribute('vector-effect','non-scaling-stroke');
+        r.setAttribute('fill', 'none');                  // appearance now in CSS
+        r.setAttribute('vector-effect', 'non-scaling-stroke');
         return r;
     }
 
