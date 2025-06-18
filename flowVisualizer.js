@@ -766,13 +766,12 @@ export class FlowVisualizer {
     /** Calculates the absolute position of a conceptual port on a node. */
     _getPortPosition(nodeData, portType) {
         if (!nodeData) return { x: NaN, y: NaN };
-        const zoom = this.zoomLevel || 1;
-
         let x, y;
         // If this node is currently being dragged, use its style position for accurate connector drawing during drag
         if (this.isDraggingNode && this.draggedNode && this.draggedNode.dataset.stepId === nodeData.id) {
-            x = parseFloat(this.draggedNode.style.left || '0') * (1/zoom);
-            y = parseFloat(this.draggedNode.style.top  || '0') * (1/zoom);
+            // style.left/top already store logical coordinates, so do not scale
+            x = parseFloat(this.draggedNode.style.left || '0');
+            y = parseFloat(this.draggedNode.style.top  || '0');
         } else {
             // Otherwise, use the stored layout coordinates
             x = nodeData.x;
@@ -794,8 +793,10 @@ export class FlowVisualizer {
         }
     }
 
-    /** Decide automatically which side of the source/target boxes to use.
-     *  Returns { start: <port>, end: <port> } */
+    /* --------------------------------------------------------------- *
+     *  === Smart‑port selection  ==================================== *
+     *  Picks the two ports that produce the shortest Manhattan path.  *
+     * --------------------------------------------------------------- */
     _autoSelectPorts(src, dst) {
         const srcCx = src.x + src.width  / 2;
         const srcCy = src.y + src.height / 2;
@@ -803,42 +804,57 @@ export class FlowVisualizer {
         const dstCy = dst.y + dst.height / 2;
         const dx = dstCx - srcCx, dy = dstCy - srcCy;
 
-        if (Math.abs(dx) >= Math.abs(dy)) {
-            return {
-                start: dx > 0 ? 'output' : 'input',
-                end:   dx > 0 ? 'input'  : 'output'
-            };
+        // Most of the time a purely horizontal or vertical hop is clearer.
+        // If the delta on one axis is ≥ 1.2 × bigger than the other, prefer that axis.
+        const bias = 1.2;
+        if (Math.abs(dx) > Math.abs(dy) * bias) {
+            return { start: dx > 0 ? 'output' : 'input',
+                     end:   dx > 0 ? 'input'  : 'output' };
+        } else if (Math.abs(dy) > Math.abs(dx) * bias) {
+            return { start: dy > 0 ? 'bottom' : 'top',
+                     end:   dy > 0 ? 'top'    : 'bottom' };
         }
-        return {
-            start: dy > 0 ? 'bottom' : 'top',
-            end:   dy > 0 ? 'top'    : 'bottom'
-        };
+        // Similar deltas → pick the quadrant that keeps the first segment short
+        return { start: dx >= 0 ? 'output' : 'input',
+                 end:   dy >= 0 ? 'top'    : 'bottom' };
     }
 
-    _buildOrthogonalPath({ x: xs, y: ys }, { x: xe, y: ye }) {
+    /* --------------------------------------------------------------- *
+     *  === Manhattan router  ======================================== *
+     *  • keeps a constant 14‑px elbow gap *in screen pixels*          *
+     *  • adapts whether we start with a horiz or vert segment         *
+     * --------------------------------------------------------------- */
+    _buildOrthogonalPath(start, end) {
+        const { x: xs, y: ys } = start;
+        const { x: xe, y: ye } = end;
         if ([xs, ys, xe, ye].some(v => Number.isNaN(v))) return '';
-        const m = 16;
-        const vertical = Math.abs(ys - ye) > Math.abs(xs - xe);
-        const pts = [];
-        pts.push([xs, ys]);
-        if (vertical) {
-            const midY = ys + (ys < ye ? m : -m);
-            pts.push([xs, midY], [xe, midY]);
-        } else {
+
+        // keep the visual gap ~14 px regardless of zoom
+        const m = 14 / (this.zoomLevel || 1);
+        const horizontalFirst = Math.abs(xs - xe) > Math.abs(ys - ye);
+
+        const pts = [[xs, ys]];
+        if (horizontalFirst) {
             const midX = xs + (xs < xe ? m : -m);
             pts.push([midX, ys], [midX, ye]);
+        } else {
+            const midY = ys + (ys < ye ? m : -m);
+            pts.push([xs, midY], [xe, midY]);
         }
         pts.push([xe, ye]);
-        return 'M ' + pts.map(p => p.join(' ')).join(' L ');
+        return 'M ' + pts.map(([x, y]) => `${x} ${y}`).join(' L ');
     }
 
-    /** Draw one connector (caller may pass 'auto' for either port). */
-    _drawConnector(startNodeData, endNodeData, startPortType = 'auto', endPortType = 'auto') {
-        if (startPortType === 'auto' || endPortType === 'auto') {
-            const chosen = this._autoSelectPorts(startNodeData, endNodeData);
-            if (startPortType === 'auto') startPortType = chosen.start;
-            if (endPortType   === 'auto') endPortType   = chosen.end;
-        }
+    /*  === Central draw routine ==================================== *
+     *  All internal callers used to pass literal 'output','input'.    *
+     *  We now *always* re‑route them through _autoSelectPorts, so     *
+     *  you don’t have to hunt every call‑site.                     */
+    _drawConnector(startNodeData, endNodeData,
+                   startPortType = 'output', endPortType = 'input') {
+        // Let the smart router override default L/R if a better pair exists
+        const chosen = this._autoSelectPorts(startNodeData, endNodeData);
+        startPortType = chosen.start;
+        endPortType   = chosen.end;
         if (!startNodeData || !endNodeData) {
             logger.warn("Skipping connector draw: Missing start or end node data.");
             return;
