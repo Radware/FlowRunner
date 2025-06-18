@@ -5,9 +5,9 @@
   "main": "main.js",
   "type": "module",
   "scripts": {
-    "start": "electron-forge start",
-    "package": "electron-forge package",
-    "make": "electron-forge make",
+    "start": "electron .",
+    "package": "electron-builder --dir",
+    "make": "electron-builder",
     "lint": "echo \"Error: no lint script specified\" && exit 0",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "e2e": "NODE_ENV=test xvfb-run -a -s \"-screen 0 1280x720x24\" playwright test"
@@ -34,12 +34,8 @@
   "devDependencies": {
     "@babel/core": "^7.26.10",
     "@babel/preset-env": "^7.26.9",
-    "@electron-forge/cli": "^7.4.0",
-    "@electron-forge/maker-dmg": "^7.4.0",
-    "@electron-forge/maker-squirrel": "^7.4.0",
-    "@electron-forge/maker-zip": "^7.4.0",
     "@playwright/test": "^1.52.0",
-    "@rabbitholesyndrome/electron-forge-maker-portable": "^0.2.0",
+    "electron-builder": "^24.13.2",
     "@testing-library/jest-dom": "^6.4.2",
     "@types/jest": "^29.5.14",
     "babel-jest": "^29.7.0",
@@ -54,59 +50,20 @@
   "overrides": {
     "app-builder-lib": "24.13.2"
   },
-  "config": {
-    "forge": {
-      "packagerConfig": {
-        "asar": true,
-        "icon": "assets/icon",
-        "executableName": "FlowRunner",
-        "appCopyright": "Copyright (c) 2024 Radware ASE Team",
-        "win32metadata": {
-          "CompanyName": "Radware",
-          "ProductName": "FlowRunner",
-          "FileDescription": "API Flow Creation and Visualization Tool",
-          "OriginalFilename": "FlowRunner.exe"
-        }
-      },
-      "rebuildConfig": {},
-      "makers": [
-        {
-          "name": "@electron-forge/maker-squirrel",
-          "platforms": [
-            "win32"
-          ],
-          "config": {
-            "name": "FlowRunner",
-            "authors": "Radware ASE Team",
-            "description": "API Flow Creation and Visualization Tool",
-            "setupIcon": "assets/icon.ico"
-          }
-        },
-        {
-          "name": "@rabbitholesyndrome/electron-forge-maker-portable",
-          "platforms": [
-            "win32"
-          ],
-          "config": {}
-        },
-        {
-          "name": "@electron-forge/maker-dmg",
-          "platforms": [
-            "darwin"
-          ],
-          "config": {
-            "icon": "assets/icon.icns",
-            "format": "ULFO",
-            "title": "FlowRunner Installer"
-          }
-        },
-        {
-          "name": "@electron-forge/maker-zip",
-          "platforms": [
-            "darwin"
-          ]
-        }
-      ]
+  "build": {
+    "appId": "com.radware.flowrunner",
+    "productName": "FlowRunner",
+    "asar": true,
+    "files": [
+      "**/*"
+    ],
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
     }
   }
 }
