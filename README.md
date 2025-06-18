@@ -349,6 +349,10 @@ npm run e2e  # runs with E2E=true
 ```
 
 These npm scripts automatically set the required environment variables.
+## Building Packages
+
+Run `build_all.sh` to install dependencies, test, and create distributables for macOS and Windows. Set `ZSCALER_CA` to your root CA if required.
+
 
 
 <div align="center" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
