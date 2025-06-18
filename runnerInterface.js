@@ -480,6 +480,7 @@ export function renderResultItemContent(listItem, resultData) {
             }
             const escapedVal = escapeHTML(valString);
             return `<li><div><code>${escapeHTML(name)}</code>: <span class="extracted-value">${escapedVal}</span></div><button class="copy-btn btn btn-sm" data-copy-value="${escapedVal}" title="Copy value" aria-label="Copy value">Copy</button></li>`;
+
         }).join('');
         extractedValuesHtml = `
             <div class="result-extracted-values">
