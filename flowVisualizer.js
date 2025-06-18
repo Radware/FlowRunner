@@ -1655,3 +1655,8 @@ export class FlowVisualizer {
         return this.minimapVisible;
     }
 }
+
+// tiny helper so external code (tests, Cypress, etc.) can force a minimap redraw
+FlowVisualizer.prototype.__forceMinimapRefresh = function () {
+    this._updateMinimap();
+};
