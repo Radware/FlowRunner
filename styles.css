@@ -1670,3 +1670,16 @@ body.flow-step-dragging { cursor: grabbing !important; }
     margin-top: 15px;
     text-decoration: none;
 }
+
+/* --- FlowVisualizer minimap enhancements --- */
+.visualizer-minimap rect {
+    shape-rendering: crispEdges;            /* pixel-perfect hairlines       */
+}
+
+.visualizer-minimap rect:hover {
+    stroke-width: 2;                        /* hint the user can click / pan */
+}
+
+.visualizer-canvas.nodes-dragging {
+    cursor: grabbing !important;            /* keep hand cursor on drag      */
+}
