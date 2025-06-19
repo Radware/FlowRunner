@@ -25,4 +25,21 @@ describe('substituteVariables encoding', () => {
         const encoded = substituteVariables(url, context, { encode: true });
         expect(encoded).toBe('http://example/?v=a%26b');
     });
+
+    test('encodes special characters in URLs via FlowRunner option', () => {
+        const runner = new FlowRunner({ encodeUrlVars: true });
+        const step = {
+            id: '1',
+            type: 'request',
+            name: 'login',
+            url: '/api/auth/login?username={{u}}&password={{p}}'
+        };
+        const { processedStep } = substituteVariablesInStep.call(runner, step, {
+            u: 'KevinHarris',
+            p: 'KevinPass10&'
+        });
+        expect(processedStep.url).toBe(
+            '/api/auth/login?username=KevinHarris&password=KevinPass10%26'
+        );
+    });
 });
