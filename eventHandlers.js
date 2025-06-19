@@ -7,8 +7,12 @@ import {
     handleCancelFlow, handleCloseFlow
 } from './fileOperations.js';
 import {
-    handleRunFlow, handleStepFlow, handleStopFlow,
-    handleClearResults, handleDelayChange
+    handleRunFlow,
+    handleStepFlow,
+    handleStopFlow,
+    handleClearResults,
+    handleDelayChange,
+    handleEncodeUrlVarsChange
 } from './runnerInterface.js';
 import {
     showAppStepTypeDialog, initializeStepTypeDialogListeners,
@@ -71,6 +75,7 @@ export function initializeEventListeners() {
     domRefs.stopFlowBtn?.addEventListener('click', handleStopFlow);
     domRefs.clearResultsBtn?.addEventListener('click', handleClearResults);
     domRefs.requestDelayInput?.addEventListener('change', handleDelayChange);
+    domRefs.encodeUrlVarsCheckbox?.addEventListener('change', handleEncodeUrlVarsChange);
     // Listener for continuous run checkbox needs to be handled carefully due to state management
     domRefs.continuousRunCheckbox?.addEventListener('change', (event) => {
         // The checkbox state is now just a UI preference.

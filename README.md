@@ -245,7 +245,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
 
 *   **Definition:** Variables are defined statically in the Flow Info overlay or dynamically via the 'Extract' tab in Request steps. Loop steps also introduce an item variable.
 *   **Substitution:** Use `{{variableName}}` syntax in fields that support it (URL, Header values, Request Body, Condition Value, Loop Source). The runner replaces this with the variable's current value during execution.
-*   **URL Encoding:** When using the `FlowRunner` class programmatically, pass `{ encodeUrlVars: true }` to automatically URL-encode variable values inserted into URLs. Values that already contain percent-encoded sequences are left as-is so they are not encoded twice.
+*   **URL Encoding:** When using the `FlowRunner` class programmatically, pass `{ encodeUrlVars: true }` to automatically URL-encode variable values inserted into URLs. Values that already contain percent-encoded sequences are left as-is so they are not encoded twice. The Runner panel exposes an **Encode URL Vars** checkbox to toggle this at runtime.
 *   **Extraction Paths:** Use dot notation (`object.property`) and array indexing (`array[index]`) to access values within JSON response bodies. Special paths include `.status`, `headers.Header-Name`, and `body`.
 *   **Insertion Helper:** Click the **`{{…}}`** button next to an input field to open a searchable dropdown of currently defined variables. Clicking a variable name inserts `{{variableName}}` into the input field.
 *   **Variables Panel:** View all variables defined by the flow structure (Static, Extract, Loop). Click **"Show/Hide Variables"** in the workspace header to toggle this panel. *Note: This panel shows where variables are defined, not their live values during execution.*
@@ -257,6 +257,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
 *   **Step:** Executes only the *next* logical step in the flow. Allows you to inspect results and context between steps. Click "Step" repeatedly to advance through the flow.
 *   **Stop:** Immediately requests the flow execution to halt. If a network request is in progress, it will attempt to abort it. The step where execution stopped will be highlighted (often orange/warning).
 *   **Delay (ms):** Sets the pause duration (in milliseconds) between steps when using **Run** and between full runs when **Continuous Run** is enabled. Does not affect **"Step"** mode.
+*   **Encode URL Vars:** When checked, variable values inserted into URLs are automatically percent-encoded if needed.
 *   **Results Panel:** Shows a log of each step executed:
     *   **Step Name & Type:** Identifies the step.
     *   **Status:** `RUNNING`, `SUCCESS`, `ERROR`, `SKIPPED`, `STOPPED`.

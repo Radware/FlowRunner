@@ -70,6 +70,7 @@ export function initializeDOMReferences() {
         stopFlowBtn: document.getElementById('stop-flow-btn'),
         clearResultsBtn: document.getElementById('clear-results-btn'),
         requestDelayInput: document.getElementById('request-delay'),
+        encodeUrlVarsCheckbox: document.getElementById('encode-url-vars-checkbox'),
         resultsSearchInput: document.getElementById('results-search'),
         resultsStatusFilter: document.getElementById('results-status-filter'),
         runnerResultsList: document.getElementById('runner-results'),
@@ -97,6 +98,7 @@ export function initializeDOMReferences() {
 
     // Check for new/critical elements
     if (!domRefs.continuousRunCheckbox) logger.warn("Required checkbox #continuous-run-checkbox not found in HTML.");
+    if (!domRefs.encodeUrlVarsCheckbox) logger.warn("Required checkbox #encode-url-vars-checkbox not found in HTML.");
 
     // Check for overlay close buttons
     if (!domRefs.actualVariablesPanelCloseBtn) logger.warn("Required button #actual-close-variables-btn not found in HTML.");
