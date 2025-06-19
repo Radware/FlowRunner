@@ -171,6 +171,9 @@ export function substituteVariables(text, context, opts = {}) {
 
     function safeEncode(value) {
         if (!encode) return value;
+        if (/^https?:\/\//i.test(value)) {
+            return value;
+        }
         try {
             return encodeURIComponent(decodeURIComponent(value));
         } catch {

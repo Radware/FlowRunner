@@ -42,4 +42,13 @@ describe('substituteVariables encoding', () => {
             '/api/auth/login?username=KevinHarris&password=KevinPass10%26'
         );
     });
+
+    test('does not encode absolute URLs', () => {
+        const runner = new FlowRunner({ encodeUrlVars: true });
+        const step = { id: '2', type: 'request', name: 'abs', url: '{{base}}/x' };
+        const { processedStep } = substituteVariablesInStep.call(runner, step, {
+            base: 'https://api.example.com'
+        });
+        expect(processedStep.url).toBe('https://api.example.com/x');
+    });
 });

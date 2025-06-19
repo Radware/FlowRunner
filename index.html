@@ -177,15 +177,13 @@
                     <div class="control-group">
                         <input type="checkbox" id="continuous-run-checkbox" style="margin-right: 5px; accent-color: var(--primary-color);" disabled>
                         <label for="continuous-run-checkbox" style="margin-right: 10px; cursor:pointer;" title="Run the flow repeatedly. The 'Delay (ms)' setting will be used as the delay between each full flow run.">Continuous Run</label>
+                        <input type="checkbox" id="encode-url-vars-checkbox" style="margin-right: 5px; accent-color: var(--primary-color);">
+                        <label for="encode-url-vars-checkbox" style="margin-right: 10px; cursor:pointer;" title="URL-encode variable values inserted into URLs">Encode URL Vars</label>
                     </div>
                     <div class="control-group delay-group">
                         <label for="request-delay">Delay (ms):</label>
                         <input type="number" id="request-delay" value="500" min="0" step="100"
                             title="Delay between steps during 'Run' mode, and between full runs in 'Continuous Run' mode">
-                    </div>
-                    <div class="control-group">
-                        <input type="checkbox" id="encode-url-vars-checkbox" style="margin-right: 5px; accent-color: var(--primary-color);">
-                        <label for="encode-url-vars-checkbox" style="margin-right: 10px; cursor:pointer;" title="URL-encode variable values inserted into URLs">Encode URL Vars</label>
                     </div>
                 </div>
 
