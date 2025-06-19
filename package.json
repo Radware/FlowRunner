@@ -52,6 +52,7 @@
     "copyright": "Copyright © 2024 Radware ASE Team",
     "files": [
       "main.js",
+      "logger.js",
       "index.html",
       "renderer.js",
       "preload.js",
