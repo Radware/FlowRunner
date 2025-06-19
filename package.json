@@ -52,13 +52,20 @@
     "copyright": "Copyright © 2024 Radware ASE Team",
     "files": [
       "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
       "logger.js",
       "config.js",
-      "index.html",
-      "renderer.js",
-      "preload.js",
+      "state.js",
+      "runnerInterface.js",
+      "styles.css",
+      "help-styles.css",
+      "package.json",
       "assets/**/*",
-      "package.json"
+      "js/**/*",
+      "model/**/*",
+      "utils/**/*"
     ],
     "mac": {
       "icon": "assets/icon.icns",
