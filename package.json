@@ -57,6 +57,7 @@
       "index.html",
       "logger.js",
       "config.js",
+      "app.js",
       "state.js",
       "runnerInterface.js",
       "styles.css",
