@@ -105,6 +105,10 @@ export class FlowRunner {
         this.delay = Math.max(0, delayMs);
     }
 
+    setEncodeUrlVars(flag) {
+        this.encodeUrlVars = !!flag;
+    }
+
     // [Modified Code] - Abort fetch controller on stop
     stop() {
         if (this.state.isRunning || this.state.isStepping || this.isContinuousModeActive) {

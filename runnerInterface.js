@@ -37,6 +37,10 @@ export function getRequestDelay() {
     return isNaN(delayValue) || delayValue < 0 ? 0 : delayValue;
 }
 
+export function getEncodeUrlVars() {
+    return !!domRefs.encodeUrlVarsCheckbox?.checked;
+}
+
 export function updateRunnerUI() {
     const flowLoaded = !!appState.currentFlowModel;
     // Check the *app's* continuous flag for disabling/enabling UI elements
@@ -67,6 +71,9 @@ export function updateRunnerUI() {
     if(domRefs.requestDelayInput) {
         domRefs.requestDelayInput.disabled = controlsDisabled;
     }
+    if(domRefs.encodeUrlVarsCheckbox) {
+        domRefs.encodeUrlVarsCheckbox.disabled = controlsDisabled;
+    }
     if(domRefs.clearResultsBtn) {
         domRefs.clearResultsBtn.disabled = controlsDisabled;
     }
@@ -84,6 +91,12 @@ export function updateRunnerUI() {
 export function handleDelayChange() {
     if (appState.runner) {
         appState.runner.setDelay(getRequestDelay());
+    }
+}
+
+export function handleEncodeUrlVarsChange() {
+    if (appState.runner) {
+        appState.runner.setEncodeUrlVars(getEncodeUrlVars());
     }
 }
 

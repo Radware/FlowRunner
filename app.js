@@ -64,7 +64,8 @@ import {
     handleRunnerFlowComplete,
     handleRunnerFlowStopped,
     handleRunnerError,
-    handleRunnerContextUpdate
+    handleRunnerContextUpdate,
+    getEncodeUrlVars
 } from './runnerInterface.js';
 import { createFlowRunner, substituteVariablesInStep, evaluateCondition } from './executionHelpers.js';
 
@@ -221,6 +222,7 @@ function initializeRunner() {
         substituteVariablesFn: substituteVariablesInStep,
         evaluateConditionFn: evaluateCondition,
         evaluatePathFn: evaluatePath,
+        encodeUrlVars: getEncodeUrlVars(),
     });
     logger.info("FlowRunner engine initialized successfully");
 }
