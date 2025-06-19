@@ -18,7 +18,22 @@
 ## Release Notes / Changelog
 
 ### v1.1.1 (June 2025)
-- Documentation updates and minor improvements.
+- **Visual Editor Enhancements:**
+  - Added minimap for better navigation of large flows.
+  - Added zoom in and zoom out functionality for improved visibility.
+- **Info Section Improvements:**
+  - Fixed issue where global headers were not being applied to requests.
+  - Added variable type selection for global variables (string, number, boolean, JSON).
+- **Variable Handling:**
+  - Improved URL encoding handling for variables in request URLs.
+- **Response Processing:**
+  - Fixed handling of 204 No Content responses.
+- **Execution Results:**
+  - Added extracted variable display with copy-to-clipboard functionality.
+  - Added search functionality for filtering execution results.
+- **Recent Flows Management:**
+  - Fixed issue where selected flow would jump to top of recent flows list.
+  - Added drag-and-drop functionality to reorder flows in recent list.
 
 ### v1.1.0 (May 2025)
 - **Continuous Flow Runner:**

@@ -53,6 +53,7 @@
     "files": [
       "main.js",
       "logger.js",
+      "config.js",
       "index.html",
       "renderer.js",
       "preload.js",
