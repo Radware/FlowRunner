@@ -169,6 +169,15 @@ export function substituteVariables(text, context, opts = {}) {
     if (typeof text !== 'string') return text; // Only process strings
     const encode = opts.encode === true;
 
+    function safeEncode(value) {
+        if (!encode) return value;
+        try {
+            return encodeURIComponent(decodeURIComponent(value));
+        } catch {
+            return encodeURIComponent(value);
+        }
+    }
+
     // Regex to find {{variable.path}} placeholders
     return text.replace(/\{\{([^}]+)\}\}/g, (match, varRef) => {
         // Evaluate the variable reference (e.g., "variable.path")
@@ -193,7 +202,7 @@ export function substituteVariables(text, context, opts = {}) {
             stringValue = String(evaluatedValue);
         }
 
-        return encode ? encodeURIComponent(stringValue) : stringValue;
+        return encode ? safeEncode(stringValue) : stringValue;
     });
 }
 
