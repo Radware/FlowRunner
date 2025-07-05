@@ -281,7 +281,7 @@ FlowRunner configuration happens primarily through the user interface:
 *   **Runner Settings:**
     *   **Location:** Runner Panel (right sidebar).
     *   **Settings:** Execution Delay (ms).
-    *   **Persistence:** Delay value is not saved per-flow; it resets to the default (500ms) when the application starts.
+    *   **Persistence:** Delay value is not saved per-flow; it resets to the default (1000ms) when the application starts.
 *   **UI State:**
     *   **Location:** Internal (`localStorage`).
     *   **Settings:** Collapsed state of the Sidebar and Runner Panel.
