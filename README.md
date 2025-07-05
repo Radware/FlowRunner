@@ -217,6 +217,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
             *   `body.user.id` -> Value of `id` within the `user` object in the JSON body.
             *   `body.items[0].name` -> Value of `name` in the first element of the `items` array in the JSON body.
             *   `body` -> The entire response body.
+              Use this to capture the full JSON object (or text) returned by that request step.
     *   **Options Tab:**
         *   **On Failure:** Choose whether the flow should `Stop` (default) or `Continue` if the request fails (network error or status code >= 300). If set to `Continue`, the step result is still logged (often as 'error' status in runner if network issue, or 'success' but with non-2xx output status), but the flow proceeds to the next step.
 *   **Condition (If/Else):**
