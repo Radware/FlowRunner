@@ -58,7 +58,7 @@ export function hideAppStepTypeDialog(selectedType) {
 
 
 // --- Variable Dropdown (Managed by App) ---
-let currentVarDropdown = { button: null, targetInput: null, handler: null };
+let currentVarDropdown = { button: null, targetInput: null, targetId: null, handler: null };
 
 export function initializeVarDropdownListeners() {
     // Listener for the dropdown itself
@@ -149,7 +149,7 @@ export function showVarDropdown(button, targetInput, availableVarNames) {
         return;
     }
 
-    currentVarDropdown = { button, targetInput };
+    currentVarDropdown = { button, targetInput, targetId: targetInput?.id };
     const varList = domRefs.varDropdown.querySelector('.var-list');
     const searchInput = domRefs.varDropdown.querySelector('.var-search');
     const noResultsMsg = domRefs.varDropdown.querySelector('.no-results-msg');
@@ -223,12 +223,17 @@ export function hideVarDropdown() {
         // Clean up listener
         document.removeEventListener('click', currentVarDropdown.handler, { capture: true });
     }
-    currentVarDropdown = { button: null, targetInput: null, handler: null };
+    currentVarDropdown = { button: null, targetInput: null, targetId: null, handler: null };
 }
 
 // --- [Modified Code] in app.js ---
 export function insertVariableIntoInput(varName) {
-    const targetInput = currentVarDropdown.targetInput;
+    let targetInput = currentVarDropdown.targetInput;
+    if (!targetInput && currentVarDropdown.targetId) {
+        // Attempt to re-query the element if it was re-rendered
+        targetInput = document.getElementById(currentVarDropdown.targetId);
+        currentVarDropdown.targetInput = targetInput;
+    }
     // --- CRITICAL: Add checks ---
     if (!targetInput) {
         console.error("Cannot insert variable: Target input is null or undefined.");
