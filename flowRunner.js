@@ -14,7 +14,7 @@ const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export class FlowRunner {
     constructor(options = {}) {
-        this.delay = options.delay ?? 500; // Delay between steps in ms
+        this.delay = options.delay ?? 1000; // Delay between steps in ms
         this.onStepStart = options.onStepStart || (() => {}); // (step, executionPath) => resultIndex
         this.onStepComplete = options.onStepComplete || (() => {}); // (resultIndex, step, result, context, executionPath) => {}
         this.onFlowComplete = options.onFlowComplete || (() => {}); // (finalContext, results) => {}
