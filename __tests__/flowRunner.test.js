@@ -561,27 +561,22 @@ describe('FlowRunner', () => {
         let specificMockOnContextUpdate;
         beforeEach(() => {
             specificMockEvaluatePathFn = jest.fn((data, path) => {
-                if (!data || typeof path !== 'string') return undefined;
-                const keys = path.split('.');
-                let C = data;
-                for (const k of keys) {
-                    if (C && typeof C === 'object' && Object.prototype.hasOwnProperty.call(C, k)) {
-                        C = C[k];
-                    } else {
-                        const arrM = k.match(/^(.+)\[(\d+)]$/);
-                        if (arrM && C && typeof C === 'object' && Object.prototype.hasOwnProperty.call(C, arrM[1])) {
-                            const arr = C[arrM[1]];
-                            if (Array.isArray(arr)) {
-                                C = arr[parseInt(arrM[2], 10)];
-                            } else {
-                                return undefined;
-                            }
-                        } else {
-                            return undefined;
-                        }
-                    }
+                if (data == null || typeof path !== 'string') return undefined;
+                if (path === '.status') return data.status;
+                if (path === 'body') return Object.prototype.hasOwnProperty.call(data, 'body') ? data.body : data;
+                if (path.startsWith('body.')) {
+                    const p = path.slice(5);
+                    const root = Object.prototype.hasOwnProperty.call(data, 'body') ? data.body : undefined;
+                    return p.split('.').reduce((o, k) => (o == null ? undefined : o[k]), root);
                 }
-                return C;
+                if (path === 'headers') return data.headers;
+                if (path.startsWith('headers.')) {
+                    const p = path.slice(8);
+                    const root = data.headers;
+                    return p.split('.').reduce((o, k) => (o == null ? undefined : o[k]), root);
+                }
+                const root = Object.prototype.hasOwnProperty.call(data, 'body') ? data.body : data;
+                return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), root);
             });
             specificMockOnContextUpdate = jest.fn();
             specificRunner = new FlowRunner({
@@ -599,9 +594,19 @@ describe('FlowRunner', () => {
             expect(c.eB).toBe(2);
             expect(res.failures).toEqual([]);
             expect(res.extractedValues).toEqual({ eF: 1, eB: 2 });
-            expect(specificMockEvaluatePathFn).toHaveBeenCalledWith(rO.body, 'foo');
-            expect(specificMockEvaluatePathFn).toHaveBeenCalledWith(rO.body, 'nested.bar');
+            expect(specificMockEvaluatePathFn).toHaveBeenCalledWith(rO, 'foo');
+            expect(specificMockEvaluatePathFn).toHaveBeenCalledWith(rO, 'nested.bar');
             expect(specificMockOnContextUpdate).toHaveBeenCalledWith({ eF: 1, eB: 2 });
+        });
+        it('should extract the entire body when path is "body"', () => {
+            const eC = { all: 'body' };
+            const rO = { status: 200, headers: { token: 'abc' }, body: { foo: 1 } };
+            const c = {};
+            const res = specificRunner._updateContextFromExtraction(eC, rO, c);
+            expect(c.all).toEqual(rO.body);
+            expect(res.failures).toEqual([]);
+            expect(res.extractedValues).toEqual({ all: rO.body });
+            expect(specificMockEvaluatePathFn).toHaveBeenCalledWith(rO, 'body');
         });
         it('should report failures for missing paths', () => {
             const eC = { eF: 'foo', mV: 'nonexistent.path' };

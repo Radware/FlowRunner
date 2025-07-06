@@ -1,6 +1,6 @@
 # FlowRunner 
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)
 <!-- Optional: Add build status/license badges here if desired -->
 <!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
@@ -16,6 +16,10 @@
 ---
 
 ## Release Notes / Changelog
+
+### v1.1.2 (July 2025)
+- **Priority One Fixes:** Resolved variable insertion issues in loops, improved full response body extraction, and fixed unsaved changes warning when deleting steps.
+- **Execution Delay:** Default delay between steps is now 1000ms.
 
 ### v1.1.1 (June 2025)
 - **Visual Editor Enhancements:**
@@ -108,17 +112,17 @@ This tool is particularly useful for:
 ## Prerequisites
 
 *   Windows (x64) or macOS (Apple Silicon / arm64).
-*   The appropriate FlowRunner installer package downloaded from the [v1.1.1 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.1) (or latest release).
+*   The appropriate FlowRunner installer package downloaded from the [v1.1.2 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.2) (or latest release).
 *   Network access is required *only* when executing flows that contain 'API Request' steps which need to reach external endpoints. Flow authoring, saving, loading, and visualization can be done offline.
 
 ## Installation
 
 1.  **Download the Correct Installer:**
     *   Go to the [FlowRunner Releases Page](https://github.com/Radware/FlowRunner/releases) on GitHub.
-    *   Find the latest release (e.g., v1.1.1).
+    *   Find the latest release (e.g., v1.1.2).
     *   Under **Assets**:
-        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.1.zip`. Unzip the file to find the `Setup.exe`.
-        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.1.dmg`.
+        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.2.zip`. Unzip the file to find the `Setup.exe`.
+        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.2.dmg`.
 2.  **Install on Windows:**
     *   Double-click the extracted `Setup.exe` file.
     *   The installation will proceed silently in the background (using Squirrel.Windows). It typically installs to your `AppData\Local\FlowRunner` folder.
@@ -217,6 +221,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
             *   `body.user.id` -> Value of `id` within the `user` object in the JSON body.
             *   `body.items[0].name` -> Value of `name` in the first element of the `items` array in the JSON body.
             *   `body` -> The entire response body.
+              Use this to capture the full JSON object (or text) returned by that request step.
     *   **Options Tab:**
         *   **On Failure:** Choose whether the flow should `Stop` (default) or `Continue` if the request fails (network error or status code >= 300). If set to `Continue`, the step result is still logged (often as 'error' status in runner if network issue, or 'success' but with non-2xx output status), but the flow proceeds to the next step.
 *   **Condition (If/Else):**
@@ -280,7 +285,7 @@ FlowRunner configuration happens primarily through the user interface:
 *   **Runner Settings:**
     *   **Location:** Runner Panel (right sidebar).
     *   **Settings:** Execution Delay (ms).
-    *   **Persistence:** Delay value is not saved per-flow; it resets to the default (500ms) when the application starts.
+    *   **Persistence:** Delay value is not saved per-flow; it resets to the default (1000ms) when the application starts.
 *   **UI State:**
     *   **Location:** Internal (`localStorage`).
     *   **Settings:** Collapsed state of the Sidebar and Runner Panel.

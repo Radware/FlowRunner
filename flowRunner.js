@@ -14,7 +14,7 @@ const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 export class FlowRunner {
     constructor(options = {}) {
-        this.delay = options.delay ?? 500; // Delay between steps in ms
+        this.delay = options.delay ?? 1000; // Delay between steps in ms
         this.onStepStart = options.onStepStart || (() => {}); // (step, executionPath) => resultIndex
         this.onStepComplete = options.onStepComplete || (() => {}); // (resultIndex, step, result, context, executionPath) => {}
         this.onFlowComplete = options.onFlowComplete || (() => {}); // (finalContext, results) => {}
@@ -1024,36 +1024,14 @@ export class FlowRunner {
                     }
                     logger.info(`[Extraction] Path "${path}" evaluated to:`, extractedValue);
                 } else {
-                    // Standard path evaluation (Assume body first, then try response if prefixed)
-                    let valueFromBody = undefined;
-                    let valueFromResponse = undefined;
+                    // Standard path evaluation on the full response object
                     try {
-                        valueFromBody = evaluatePath(responseOutput.body, path);
-                        logger.info(`[Extraction] Path "${path}" on BODY evaluated to:`, valueFromBody);
+                        extractedValue = evaluatePath(responseOutput, path);
+                        logger.info(`[Extraction] Path "${path}" evaluated to:`, extractedValue);
                     } catch (evalError) {
-                        // --- MODIFICATION: Capture eval error for failure reason ---
-                        extractionError = `Path evaluation error on body: ${evalError.message}`;
-                        logger.warn(`[Extraction] Path "${path}" on BODY failed: ${evalError.message}`);
-                        valueFromBody = undefined;
-                        // --- END MODIFICATION ---
-                    }
-
-                    if (valueFromBody !== undefined) {
-                        extractedValue = valueFromBody;
-                    }
-                    else if (path.startsWith('response.')) { // Only try response if explicitly prefixed AND body yielded undefined
-                        try {
-                            const responsePath = path.substring('response.'.length);
-                            valueFromResponse = evaluatePath(responseOutput, responsePath);
-                            logger.info(`[Extraction] Path "${path}" on RESPONSE evaluated to:`, valueFromResponse);
-                            if (valueFromResponse !== undefined) extractedValue = valueFromResponse;
-                        } catch (evalError) {
-                            // --- MODIFICATION: Capture eval error for failure reason ---
-                            extractionError = `Path evaluation error on response: ${evalError.message}`;
-                            logger.warn(`[Extraction] Path "${path}" on RESPONSE failed: ${evalError.message}`);
-                            valueFromResponse = undefined; // Ensure undefined on error
-                            // --- END MODIFICATION ---
-                        }
+                        extractionError = `Path evaluation error: ${evalError.message}`;
+                        logger.warn(`[Extraction] Path "${path}" failed: ${evalError.message}`);
+                        extractedValue = undefined;
                     }
                 }
                 // --- End path evaluation logic ---
