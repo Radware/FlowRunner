@@ -1,8 +1,8 @@
-# FlowRunner v1.1.1 - Enhanced Visual Editor with Minimap & Improved Variable Management
+# FlowRunner v1.1.2 - Enhanced Visual Editor with Minimap & Improved Variable Management
 
-FlowRunner v1.1.1 delivers significant enhancements to the visual editing experience, introduces powerful navigation tools for large flows, and provides better variable handling capabilities. This release focuses on making complex flow creation and debugging more intuitive and efficient.
+FlowRunner v1.1.2 delivers significant enhancements to the visual editing experience, introduces powerful navigation tools for large flows, and provides better variable handling capabilities. This release focuses on making complex flow creation and debugging more intuitive and efficient. It also resolves all Priority&nbsp;1 issues from the `todo.md` list and sets the default delay between steps to **1000&nbsp;ms**.
 
-## ✨ Key New Features in v1.1.1
+## ✨ Key New Features in v1.1.2
 
 ### 🗺️ **Minimap & Enhanced Navigation**
 *   **Interactive Minimap:** Navigate large flows effortlessly with the new minimap in Node-Graph view
@@ -72,21 +72,21 @@ FlowRunner v1.1.1 delivers significant enhancements to the visual editing experi
 
 Download the appropriate installer for your operating system:
 
-*   **Windows (x64):** `FlowRunnerSetup-x64-win-1.1.1.zip` (Contains `Setup.exe`)
-*   **macOS (Apple Silicon / arm64):** `FlowRunnerSetup-arm64-mac-1.1.1.dmg`
+*   **Windows (x64):** `FlowRunnerSetup-x64-win-1.1.2.zip` (Contains `Setup.exe`)
+*   **macOS (Apple Silicon / arm64):** `FlowRunnerSetup-arm64-mac-1.1.2.dmg`
 
 ## ⚠️ Installation Notes & Troubleshooting
 
 These builds remain unsigned. Please follow the same installation procedures as previous versions:
 
 ### **Windows Installation:**
-1. Download and extract `FlowRunnerSetup-x64-win-1.1.1.zip`
+1. Download and extract `FlowRunnerSetup-x64-win-1.1.2.zip`
 2. Run `Setup.exe` 
 3. If Windows SmartScreen appears, click "More info" → "Run anyway"
 4. The installer runs silently and launches the app automatically
 
 ### **macOS Installation:**
-1. Download `FlowRunnerSetup-arm64-mac-1.1.1.dmg`
+1. Download `FlowRunnerSetup-arm64-mac-1.1.2.dmg`
 2. Open the DMG and drag FlowRunner to Applications
 3. If you see "FlowRunner is damaged" error, run in Terminal:
    ```bash
@@ -103,7 +103,7 @@ These builds remain unsigned. Please follow the same installation procedures as 
 
 ## 🔄 Upgrade Notes
 
-Flows created in v1.1.0 are fully compatible with v1.1.1. The new variable typing system is optional - existing flows will continue to work exactly as before, with all variables treated as strings unless you explicitly change their types.
+Flows created in v1.1.0 are fully compatible with v1.1.2. The new variable typing system is optional - existing flows will continue to work exactly as before, with all variables treated as strings unless you explicitly change their types.
 
 ## 🚀 What's Next?
 

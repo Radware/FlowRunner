@@ -48,7 +48,7 @@ This document breaks down the features and improvements planned in the roadmap i
 
 ---
 
-## v1.1.1 Tasks: Quality, Testing & Refinement
+## v1.1.2 Tasks: Quality, Testing & Refinement
 
 *   **Recent Files Management:**
     *   [x] Design UI interaction for removing a recent file (e.g., 'X' button, right-click context menu).
