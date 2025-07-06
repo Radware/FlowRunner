@@ -1,6 +1,6 @@
 # FlowRunner 
 
-![Version](https://img.shields.io/badge/version-1.1.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.2-blue.svg)
 <!-- Optional: Add build status/license badges here if desired -->
 <!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
