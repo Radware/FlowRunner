@@ -228,27 +228,31 @@ export function hideVarDropdown() {
 
 // --- [Modified Code] in app.js ---
 export function insertVariableIntoInput(varName) {
-    let targetInput = currentVarDropdown.targetInput;
-    if (!targetInput || !targetInput.isConnected) {
-        // Attempt to re-query the element if it was re-rendered
-        if (currentVarDropdown.targetId) {
-            targetInput = document.getElementById(currentVarDropdown.targetId);
-        }
-        // Fallback: search near the button if still not found
-        if (!targetInput && currentVarDropdown.button) {
-            const btn = currentVarDropdown.button;
-            const container = btn.closest('.input-with-vars, .header-row, .global-header-row, .flow-var-row, .key-value-row');
-            if (container) {
-                targetInput = container.querySelector('input[type="text"], input:not([type]), textarea');
-            } else {
-                targetInput = btn.previousElementSibling;
-                if (!targetInput || (targetInput.tagName !== 'INPUT' && targetInput.tagName !== 'TEXTAREA')) {
-                    targetInput = btn.parentElement?.querySelector('input[type="text"], input:not([type]), textarea');
-                }
+    let targetInput = null;
+
+    // --- Recompute target each time in case of re-renders ---
+    const btn = currentVarDropdown.button;
+    const targetId = btn?.dataset.targetInput || currentVarDropdown.targetId;
+
+    if (targetId) {
+        // Try scoped query first, then global
+        targetInput = btn?.closest('.step-editor, .flow-info-overlay, .key-value-editor')?.querySelector(`#${targetId}`)
+            || document.getElementById(targetId);
+    }
+
+    if (!targetInput && btn) {
+        const container = btn.closest('.input-with-vars, .header-row, .global-header-row, .flow-var-row, .key-value-row');
+        if (container) {
+            targetInput = container.querySelector('input[type="text"], input:not([type]), textarea');
+        } else {
+            targetInput = btn.previousElementSibling;
+            if (!targetInput || (targetInput.tagName !== 'INPUT' && targetInput.tagName !== 'TEXTAREA')) {
+                targetInput = btn.parentElement?.querySelector('input[type="text"], input:not([type]), textarea');
             }
         }
-        currentVarDropdown.targetInput = targetInput;
     }
+
+    currentVarDropdown.targetInput = targetInput;
     // --- CRITICAL: Add checks ---
     if (!targetInput) {
         console.error("Cannot insert variable: Target input is null or undefined.");
