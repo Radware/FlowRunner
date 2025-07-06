@@ -229,9 +229,24 @@ export function hideVarDropdown() {
 // --- [Modified Code] in app.js ---
 export function insertVariableIntoInput(varName) {
     let targetInput = currentVarDropdown.targetInput;
-    if (!targetInput && currentVarDropdown.targetId) {
+    if (!targetInput || !targetInput.isConnected) {
         // Attempt to re-query the element if it was re-rendered
-        targetInput = document.getElementById(currentVarDropdown.targetId);
+        if (currentVarDropdown.targetId) {
+            targetInput = document.getElementById(currentVarDropdown.targetId);
+        }
+        // Fallback: search near the button if still not found
+        if (!targetInput && currentVarDropdown.button) {
+            const btn = currentVarDropdown.button;
+            const container = btn.closest('.input-with-vars, .header-row, .global-header-row, .flow-var-row, .key-value-row');
+            if (container) {
+                targetInput = container.querySelector('input[type="text"], input:not([type]), textarea');
+            } else {
+                targetInput = btn.previousElementSibling;
+                if (!targetInput || (targetInput.tagName !== 'INPUT' && targetInput.tagName !== 'TEXTAREA')) {
+                    targetInput = btn.parentElement?.querySelector('input[type="text"], input:not([type]), textarea');
+                }
+            }
+        }
         currentVarDropdown.targetInput = targetInput;
     }
     // --- CRITICAL: Add checks ---
