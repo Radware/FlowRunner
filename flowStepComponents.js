@@ -730,10 +730,8 @@ function createLoopEditor(container, options) {
     const varInput = container.querySelector(`#loop-variable-${localStep.id}`);
     const varError = container.querySelector('.loop-var-validation-error');
 
-    // --- MODIFICATION START: Add immediate dirty listeners ---
-    varInput.addEventListener('input', () => {
-        const name = varInput.value.trim();
-        localStep.loopVariable = name;
+    // --- MODIFICATION START: Validation helper & listeners ---
+    function validateVarInput(name) {
         if (!name) {
             varError.textContent = 'Item variable name is required.';
             varError.style.display = 'block';
@@ -746,10 +744,16 @@ function createLoopEditor(container, options) {
             varError.style.display = 'none';
             varInput.style.borderColor = '';
         }
+    }
+
+    varInput.addEventListener('input', () => {
+        const name = varInput.value.trim();
+        localStep.loopVariable = name;
+        validateVarInput(name);
         setDirtyState(true); /* Immediate dirty */
     });
-    // Initial validation (doesn't mark dirty)
-    setTimeout(() => varInput.dispatchEvent(new Event('input')), 0);
+    // Initial validation without triggering dirty state
+    validateVarInput(varInput.value.trim());
 
     sourceInput.addEventListener('input', () => { localStep.source = sourceInput.value; setDirtyState(true); /* Immediate dirty */ });
     // --- MODIFICATION END ---
