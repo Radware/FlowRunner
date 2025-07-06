@@ -56,37 +56,49 @@ export function hideAppStepTypeDialog(selectedType) {
     }
 }
 
-
+function handleVarDropdownListClick(e) {
+    const varItem = e.target.closest('.var-item');
+    if (varItem && varItem.dataset.var) {
+        insertVariableIntoInput(varItem.dataset.var);
+        hideVarDropdown();
+    }
+}
 // --- Variable Dropdown (Managed by App) ---
 let currentVarDropdown = { button: null, targetInput: null, targetId: null, handler: null };
 
 export function initializeVarDropdownListeners() {
-    // Listener for the dropdown itself
     if (!domRefs.varDropdown) return;
     const searchInput = domRefs.varDropdown.querySelector('.var-search');
     const varList = domRefs.varDropdown.querySelector('.var-list');
     const closeBtn = domRefs.varDropdown.querySelector('.var-close');
     const noResultsMsg = domRefs.varDropdown.querySelector('.no-results-msg');
 
-    searchInput?.addEventListener('input', () => {
-        const filter = searchInput.value.toLowerCase();
-        let hasVisibleItems = false;
-        varList?.querySelectorAll('.var-item').forEach(item => {
-            const varName = item.dataset.var?.toLowerCase() || '';
-            const isVisible = varName.includes(filter);
-            item.style.display = isVisible ? '' : 'none';
-            if (isVisible) hasVisibleItems = true;
-        });
-        if (noResultsMsg) noResultsMsg.style.display = hasVisibleItems ? 'none' : 'block';
-    });
-    closeBtn?.addEventListener('click', () => hideVarDropdown());
-    varList?.addEventListener('click', (e) => {
-        const varItem = e.target.closest('.var-item');
-        if (varItem && varItem.dataset.var) {
-            insertVariableIntoInput(varItem.dataset.var);
-            hideVarDropdown();
-        }
-    });
+    // These listeners are safe to re-add, but we can make them idempotent too for safety.
+    if (searchInput) {
+        searchInput.oninput = () => { // Using oninput overwrites previous, which is safe here
+            const filter = searchInput.value.toLowerCase();
+            let hasVisibleItems = false;
+            varList?.querySelectorAll('.var-item').forEach(item => {
+                const varName = item.dataset.var?.toLowerCase() || '';
+                const isVisible = varName.includes(filter);
+                item.style.display = isVisible ? '' : 'none';
+                if (isVisible) hasVisibleItems = true;
+            });
+            if (noResultsMsg) noResultsMsg.style.display = hasVisibleItems ? 'none' : 'block';
+        };
+    }
+    if (closeBtn) {
+        closeBtn.onclick = () => hideVarDropdown(); // Using onclick is also safe
+    }
+    
+    // --- THIS IS THE CRITICAL FIX ---
+    // The varList listener must be managed carefully to prevent duplicates.
+    if (varList) {
+        // 1. Remove the previously attached listener using its named function reference.
+        varList.removeEventListener('click', handleVarDropdownListClick);
+        // 2. Add the listener back, ensuring there is now only one.
+        varList.addEventListener('click', handleVarDropdownListClick);
+    }
 }
 
 // --- [Modified Code] in app.js ---
@@ -226,34 +238,11 @@ export function hideVarDropdown() {
     currentVarDropdown = { button: null, targetInput: null, targetId: null, handler: null };
 }
 
-// --- [Modified Code] in app.js ---
 export function insertVariableIntoInput(varName) {
-    let targetInput = null;
+    // Get the target input directly from the state object captured when the dropdown opened.
+    const targetInput = currentVarDropdown.targetInput;
 
-    // --- Recompute target each time in case of re-renders ---
-    const btn = currentVarDropdown.button;
-    const targetId = btn?.dataset.targetInput || currentVarDropdown.targetId;
-
-    if (targetId) {
-        // Try scoped query first, then global
-        targetInput = btn?.closest('.step-editor, .flow-info-overlay, .key-value-editor')?.querySelector(`#${targetId}`)
-            || document.getElementById(targetId);
-    }
-
-    if (!targetInput && btn) {
-        const container = btn.closest('.input-with-vars, .header-row, .global-header-row, .flow-var-row, .key-value-row');
-        if (container) {
-            targetInput = container.querySelector('input[type="text"], input:not([type]), textarea');
-        } else {
-            targetInput = btn.previousElementSibling;
-            if (!targetInput || (targetInput.tagName !== 'INPUT' && targetInput.tagName !== 'TEXTAREA')) {
-                targetInput = btn.parentElement?.querySelector('input[type="text"], input:not([type]), textarea');
-            }
-        }
-    }
-
-    currentVarDropdown.targetInput = targetInput;
-    // --- CRITICAL: Add checks ---
+    // CRITICAL: Check if the target is still valid.
     if (!targetInput) {
         console.error("Cannot insert variable: Target input is null or undefined.");
         showMessage("Insertion target lost.", "error");
@@ -270,39 +259,29 @@ export function insertVariableIntoInput(varName) {
         return;
     }
 
-    try { // Wrap DOM manipulation
+    try {
         const textToInsert = `{{${varName}}}`;
         const currentVal = targetInput.value;
         const selectionStart = targetInput.selectionStart;
         const selectionEnd = targetInput.selectionEnd;
 
-        // Insert text, replacing selection if any
         targetInput.value = currentVal.substring(0, selectionStart) + textToInsert + currentVal.substring(selectionEnd);
 
-        // Update cursor position to end of inserted text
         const newCursorPos = selectionStart + textToInsert.length;
         targetInput.selectionStart = newCursorPos;
         targetInput.selectionEnd = newCursorPos;
 
-        // Trigger input event for frameworks/listeners and focus
         targetInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         targetInput.focus();
 
-        // Trigger change event as well, sometimes needed
-
-         // --- CRITICAL: Mark editor dirty if appropriate ---
-         // Check if the target input is within the step editor managed by the builder component
+         // Mark editor dirty if appropriate
          const editorPanel = targetInput.closest('.step-editor-panel .step-editor');
          if (appState.builderComponent && editorPanel) {
-              // Directly mark editor as dirty
               handleBuilderEditorDirtyChange(true);
          } else {
-              // Check if input is part of flow info overlay (headers, static vars)
                const infoOverlay = targetInput.closest('.flow-info-overlay');
                if (infoOverlay) {
-                   // These changes directly modify the flow model via their own input listeners,
-                   // which already call setDirty(true) via the appState.isDirty flag. No extra call needed here.
-                   // We just rely on the existing 'input' or 'change' event listeners on those fields.
+                   // No extra call needed; existing input listeners on these fields handle the dirty state.
                }
          }
     } catch (error) {
