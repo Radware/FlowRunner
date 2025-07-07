@@ -1,6 +1,6 @@
 # FlowRunner v1.1.2 - Enhanced Visual Editor with Minimap & Improved Variable Management
 
-FlowRunner v1.1.2 delivers significant enhancements to the visual editing experience, introduces powerful navigation tools for large flows, and provides better variable handling capabilities. This release focuses on making complex flow creation and debugging more intuitive and efficient. It also resolves all Priority&nbsp;1 issues from the `todo.md` list and sets the default delay between steps to **1000&nbsp;ms**.
+FlowRunner v1.1.2 delivers significant enhancements to the visual editing experience, introduces powerful navigation tools for large flows, and provides better variable handling capabilities. This release focuses on making complex flow creation and debugging more intuitive and efficient. It sets the default delay between steps to **1000 ms**.
 
 ## ✨ Key New Features in v1.1.2
 

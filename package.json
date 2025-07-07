@@ -4,6 +4,9 @@
   "description": "API Flow Creation and Visualization Tool",
   "main": "main.js",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",

@@ -18,7 +18,7 @@
 ## Release Notes / Changelog
 
 ### v1.1.2 (July 2025)
-- **Priority One Fixes:** Resolved variable insertion issues in loops, improved full response body extraction, and fixed unsaved changes warning when deleting steps.
+- **Bug Fixes:** Resolved variable insertion issues in loops, improved full response body extraction, and fixed unsaved changes warning when deleting steps.
 - **Execution Delay:** Default delay between steps is now 1000ms.
 
 ### v1.1.1 (June 2025)
