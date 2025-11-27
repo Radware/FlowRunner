@@ -513,6 +513,45 @@ describe('FlowRunner', () => {
             expect(fetchArgs[1].headers['Content-Type']).toMatch(/application\/json/i);
         });
 
+        it('should not duplicate Content-Type header when merging global and step headers', async () => {
+            const bodyRunner = new FlowRunner({
+                onStepStart: jest.fn(() => 0),
+                onStepComplete: jest.fn(),
+                onFlowComplete: jest.fn(),
+                onFlowStopped: jest.fn(),
+                onMessage: jest.fn(),
+                onError: jest.fn(),
+                onContextUpdate: jest.fn(),
+                substituteVariablesFn: substituteVariablesInStep,
+                evaluateConditionFn: jest.fn(),
+                evaluatePathFn: mockEvaluatePathFn,
+                updateRunnerUICallback: jest.fn(),
+                onIterationStart: jest.fn(),
+                delay: 0,
+            });
+
+            bodyRunner.globalHeaders = { 'Content-Type': 'application/json;charset=utf-8' };
+            const flow = createTemplateFlow();
+            flow.steps = [{
+                ...createNewStep('request'),
+                id: 'login',
+                method: 'POST',
+                url: 'https://dummyjson.com/auth/login',
+                headers: { 'Content-type': 'application/json;charset=utf-8' }, // different casing
+                body: '{"username":"elijahs","password":"elijahspass"}',
+                rawBodyWithMarkers: null
+            }];
+
+            await bodyRunner.run(flow);
+            await processAsyncOps();
+
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            const fetchArgs = global.fetch.mock.calls[0];
+            expect(fetchArgs[1].headers['Content-Type']).toBe('application/json;charset=utf-8');
+            // Ensure no accidental comma-separated duplication
+            expect(fetchArgs[1].headers['Content-Type']).not.toMatch(/,/);
+        });
+
         /*
         // Temporarily commenting out the problematic delay test
         it('should respect the configured delay between steps during run', async () => {

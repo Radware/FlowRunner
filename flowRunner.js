@@ -577,9 +577,23 @@ export class FlowRunner {
         // Initialize timeoutId here so it's accessible in finally
         let timeoutId = null;
 
+        // Merge and normalize headers (dedupe Content-Type)
+        const mergedHeaders = {};
+        const mergeHeaders = (source) => {
+            if (!source) return;
+            for (const key in source) {
+                if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+                const lower = key.toLowerCase();
+                const targetKey = lower === 'content-type' ? 'Content-Type' : key;
+                mergedHeaders[targetKey] = source[key]; // Step headers override globals
+            }
+        };
+        mergeHeaders(this.globalHeaders);
+        mergeHeaders(headers);
+
         const fetchOptions = {
             method: method || 'GET',
-            headers: { ...this.globalHeaders, ...(headers || {}) },
+            headers: mergedHeaders,
             signal: controller.signal, // Use the controller's signal
         };
 
