@@ -76,7 +76,7 @@ async function checkUnsavedChanges() {
 // --- Application Information ---
 const appName = 'FlowRunner';
 // Try reading version from package.json
-let appVersion = '1.1.2'; // Default version (Ensure this matches your actual package.json)
+let appVersion = '1.1.3'; // Default version (Ensure this matches your actual package.json)
 try {
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJsonContent = await fs.readFile(packageJsonPath, 'utf-8');

@@ -2,6 +2,7 @@
 import { jest, describe, beforeEach, afterEach, test, expect } from '@jest/globals';
 import { FlowRunner } from '../flowRunner.js';
 import { createTemplateFlow, createNewStep } from '../flowCore.js';
+import { substituteVariablesInStep } from '../executionHelpers.js';
 
 const processAsyncOps = async (count = 1) => {
     for (let i = 0; i < count; i++) {
@@ -471,6 +472,45 @@ describe('FlowRunner', () => {
             await processAsyncOps();
             expect(reqD[0]).toEqual({ u: 'l', a: 'a', b: { f: 42 } });
             runner._executeRequestStep = origExec;
+        });
+
+        it('should send POST body even when rawBodyWithMarkers is null but body text exists', async () => {
+            const bodyRunnerOnStepStart = jest.fn(() => 0);
+            const bodyRunner = new FlowRunner({
+                onStepStart: bodyRunnerOnStepStart,
+                onStepComplete: jest.fn(),
+                onFlowComplete: jest.fn(),
+                onFlowStopped: jest.fn(),
+                onMessage: jest.fn(),
+                onError: jest.fn(),
+                onContextUpdate: jest.fn(),
+                substituteVariablesFn: substituteVariablesInStep,
+                evaluateConditionFn: jest.fn(),
+                evaluatePathFn: mockEvaluatePathFn,
+                updateRunnerUICallback: jest.fn(),
+                onIterationStart: jest.fn(),
+                delay: 0,
+            });
+
+            const flow = createTemplateFlow();
+            flow.steps = [{
+                ...createNewStep('request'),
+                id: 'login',
+                method: 'POST',
+                url: 'https://dummyjson.com/auth/login',
+                headers: { 'Accept': 'application/json' },
+                body: '{"username":"elijahs","password":"elijahspass"}',
+                rawBodyWithMarkers: null
+            }];
+
+            await bodyRunner.run(flow);
+            await processAsyncOps();
+
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            const fetchArgs = global.fetch.mock.calls[0];
+            expect(fetchArgs[1]).toBeDefined();
+            expect(JSON.parse(fetchArgs[1].body)).toEqual({ username: 'elijahs', password: 'elijahspass' });
+            expect(fetchArgs[1].headers['Content-Type']).toMatch(/application\/json/i);
         });
 
         /*

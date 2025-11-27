@@ -102,28 +102,42 @@ export function substituteVariablesInStep(step, context) {
 
         // 3. Substitute Body using ##VAR## markers via rawBodyWithMarkers
         processedStepData.body = null; // Initialize processed body
-        if (step.type === 'request' && step.rawBodyWithMarkers !== undefined && step.rawBodyWithMarkers !== null) {
-             // console.log(`[Sub Body ${step.id}] Attempting marker substitution for body using rawBodyWithMarkers:`, step.rawBodyWithMarkers);
-             // Deep copy rawBodyWithMarkers before substitution to avoid modifying the original model
-             const rawBodyCopy = JSON.parse(JSON.stringify(step.rawBodyWithMarkers));
-             // Use the dedicated marker substitution function
-             processedStepData.body = substituteBodyMarkersRecursive(rawBodyCopy);
-             // console.log(`[Sub Body ${step.id}] Final substituted body (with potential placeholders):`, processedStepData.body);
-             // console.log(`[Sub Body ${step.id}] Unquoted placeholders generated:`, unquotedPlaceholders);
-        } else if (step.type === 'request' && step.body){
-             // Fallback: If rawBodyWithMarkers is explicitly undefined (not just null),
-             // perhaps try standard substitution on step.body as a legacy behavior? Risky.
-             // Only do this if rawBodyWithMarkers is strictly undefined.
-             if (step.rawBodyWithMarkers === undefined) {
-                 console.warn(`[Sub Body ${step.id}] Step ${step.id}: rawBodyWithMarkers is missing. Body substitution using markers will be skipped. Attempting standard substitution on step.body as fallback.`);
-                 processedStepData.body = substituteVariables(step.body, context); // Substitute standard vars just in case
-                 // console.log(`[Sub Body ${step.id}] Result of standard substitution on step.body:`, processedStepData.body);
-             } else {
-                  // rawBodyWithMarkers exists but is null, so no body content intended.
-                  // console.log(`[Sub Body ${step.id}] rawBodyWithMarkers is null, processed body remains null.`);
-             }
-        } else {
-             // console.log(`[Sub Body ${step.id}] Not a request step or no body/rawBodyWithMarkers defined. Processed body remains null.`);
+        if (step.type === 'request') {
+            const hasRawMarkers = step.rawBodyWithMarkers !== undefined && step.rawBodyWithMarkers !== null;
+            const hasBodyValue = step.body !== undefined && step.body !== null && String(step.body).trim() !== '';
+
+            if (hasRawMarkers) {
+                // console.log(`[Sub Body ${step.id}] Attempting marker substitution for body using rawBodyWithMarkers:`, step.rawBodyWithMarkers);
+                // Deep copy rawBodyWithMarkers before substitution to avoid modifying the original model
+                const rawBodyCopy = JSON.parse(JSON.stringify(step.rawBodyWithMarkers));
+                // Use the dedicated marker substitution function
+                processedStepData.body = substituteBodyMarkersRecursive(rawBodyCopy);
+                // console.log(`[Sub Body ${step.id}] Final substituted body (with potential placeholders):`, processedStepData.body);
+                // console.log(`[Sub Body ${step.id}] Unquoted placeholders generated:`, unquotedPlaceholders);
+            } else if (hasBodyValue) {
+                // Fallback: When markers are missing (undefined or null), use the textual body
+                if (step.rawBodyWithMarkers === undefined) {
+                    console.warn(`[Sub Body ${step.id}] Step ${step.id}: rawBodyWithMarkers is missing. Body substitution using markers will be skipped. Attempting standard substitution on step.body as fallback.`);
+                }
+
+                if (typeof step.body === 'string') {
+                    // Perform standard substitution for string bodies
+                    const substituted = substituteVariables(step.body, context);
+                    // Try to preserve JSON semantics by parsing if possible
+                    try {
+                        processedStepData.body = JSON.parse(substituted);
+                    } catch (parseErr) {
+                        // If parsing fails, keep the substituted string
+                        processedStepData.body = substituted;
+                    }
+                } else {
+                    // Non-string body provided without markers; use as-is
+                    processedStepData.body = step.body;
+                }
+            } else {
+                // rawBodyWithMarkers is null/undefined and body is empty => no payload intended
+                processedStepData.body = null;
+            }
         }
 
 
