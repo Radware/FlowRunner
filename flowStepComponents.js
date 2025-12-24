@@ -567,7 +567,7 @@ function createRequestEditor(container, options) {
             </div>
 
             <div class="tab-content active" id="tab-headers-${localStep.id}">
-                <div class="headers-editor"><div class="headers-list"></div><button class="btn-add-header" style="margin-top:10px;">+ Add Header</button></div>
+                <div class="headers-editor"><div class="headers-list"></div><button class="btn-add-header" style="margin-top:10px;">+ Add Header</button><p class="form-hint">Header values support variables (e.g., <code>{{varName}}</code>) and the special <code>{{RANDOM_IP}}</code> variable which generates a random public IP address once per flow run.</p></div>
             </div>
             <div class="tab-content" id="tab-body-${localStep.id}">
                 <div class="form-group"><label for="request-body-${localStep.id}">Request Body (JSON)</label><textarea id="request-body-${localStep.id}" rows="10" placeholder='e.g.,\n{\n "key": "value",\n "id": {{var}}\n}'>${escapeHTML(localStep.body || '')}</textarea><div class="form-hint">Use "{{var}}" for strings, {{var}} for numbers/booleans.</div><div class="body-actions"><button class="btn-format-json">Format</button><button class="btn-insert-var" data-target-input="request-body-${localStep.id}">Insert Var</button></div><div class="json-validation-error" style="color:red;margin-top:5px;font-size:0.9em;display:none;"></div></div>

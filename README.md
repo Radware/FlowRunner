@@ -187,7 +187,7 @@ Click the **"Info ▼"** button in the workspace header to open the Flow Info ov
 
 *   **Flow Name:** A descriptive name for your flow.
 *   **Description:** Optional details about the flow's purpose.
-*   **Global Headers:** Define HTTP headers (Key-Value pairs) that will be automatically added to *all* 'API Request' steps in this flow. Headers defined within individual steps will override global headers with the same key.
+*   **Global Headers:** Define HTTP headers (Key-Value pairs) that will be automatically added to *all* 'API Request' steps in this flow. Headers defined within individual steps will override global headers with the same key. Header values support variable substitution using `{{variableName}}` syntax, including the special `{{RANDOM_IP}}` variable for generating random public IP addresses.
 *   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. Each variable can be typed as String, Number, Boolean, or JSON. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`). Values may contain JSON arrays or objects for loops or complex data.
 
 Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info ▲"** button again.
@@ -253,6 +253,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
 
 *   **Definition:** Variables are defined statically in the Flow Info overlay or dynamically via the 'Extract' tab in Request steps. Loop steps also introduce an item variable.
 *   **Substitution:** Use `{{variableName}}` syntax in fields that support it (URL, Header values, Request Body, Condition Value, Loop Source). The runner replaces this with the variable's current value during execution.
+*   **Special Variables:** The special `{{RANDOM_IP}}` variable generates a random public IPv4 address (from IANA routable public IP ranges) once per flow run. This IP remains consistent throughout all steps in a single flow execution, making it ideal for headers like `X-Forwarded-For` or `X-Real-IP`. The IP is regenerated for each new flow run.
 *   **URL Encoding:** When using the `FlowRunner` class programmatically, pass `{ encodeUrlVars: true }` to automatically URL-encode variable values inserted into URLs. Values that already contain percent-encoded sequences, or values that start with `http://` or `https://`, are left unchanged so they are not encoded twice and base URLs remain intact. The Runner panel exposes an **Encode URL Vars** checkbox to toggle this at runtime.
 *   **Extraction Paths:** Use dot notation (`object.property`) and array indexing (`array[index]`) to access values within JSON response bodies. Special paths include `.status`, `headers.Header-Name`, and `body`.
 *   **Insertion Helper:** Click the **`{{…}}`** button next to an input field to open a searchable dropdown of currently defined variables. Clicking a variable name inserts `{{variableName}}` into the input field.

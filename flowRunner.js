@@ -67,7 +67,8 @@ export class FlowRunner {
             context: { ...initialContext },
             results: [],
             currentResultIndex: null,
-            currentFetchController: null
+            currentFetchController: null,
+            randomIP: null  // Store random IP for this flow run (generated once per run)
         };
 
         // Only clear continuous run state if not preparing for next iteration

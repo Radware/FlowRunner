@@ -2,6 +2,7 @@
 import { evaluatePath } from './flowCore.js';
 import { FlowRunner } from './flowRunner.js'; // <<< ADDED IMPORT
 import { logger } from './logger.js';
+import { generateRandomPublicIP } from './utils.js';
 
 // Helper function for escaping regex characters (needed for substituteVariablesInStep)
 const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -75,7 +76,8 @@ export function substituteVariablesInStep(step, context) {
         const originalUrl = step.url || '';
         // console.log(`[Sub URL ${step.id}] Attempting standard substitution for URL: "${originalUrl}"`);
         const encodeUrlVars = this instanceof FlowRunner ? this.encodeUrlVars : false;
-        processedStepData.url = substituteVariables(originalUrl, context, { encode: encodeUrlVars });
+        const runnerState = this instanceof FlowRunner ? this.state : null;
+        processedStepData.url = substituteVariables(originalUrl, context, { encode: encodeUrlVars, runnerState });
         // console.log(`[Sub URL ${step.id}] Substituted URL: "${processedStepData.url}"`);
 
 
@@ -89,7 +91,7 @@ export function substituteVariablesInStep(step, context) {
                 // Substitute {{variables}} in the header *value* only
                 if (typeof originalValue === 'string') {
                     // console.log(`[Sub Header ${step.id}] Substituting value for key "${key}": "${originalValue}"`);
-                    substitutedHeaders[key] = substituteVariables(originalValue, context);
+                    substitutedHeaders[key] = substituteVariables(originalValue, context, { runnerState });
                     // console.log(`[Sub Header ${step.id}] Substituted value for key "${key}": "${substitutedHeaders[key]}"`);
                 } else {
                     // console.log(`[Sub Header ${step.id}] Keeping non-string value for key "${key}":`, originalValue);
@@ -145,13 +147,13 @@ export function substituteVariablesInStep(step, context) {
         if (processedStepData.type === 'condition' && step.conditionData?.value && typeof step.conditionData.value === 'string') {
             const originalCondValue = step.conditionData.value;
             // console.log(`[Sub Cond ${step.id}] Attempting standard substitution for condition value: "${originalCondValue}"`);
-            processedStepData.conditionData = { ...step.conditionData, value: substituteVariables(originalCondValue, context) };
+            processedStepData.conditionData = { ...step.conditionData, value: substituteVariables(originalCondValue, context, { runnerState }) };
             // console.log(`[Sub Cond ${step.id}] Substituted condition value: "${processedStepData.conditionData.value}"`);
         }
         if (processedStepData.type === 'loop' && step.source && typeof step.source === 'string') {
              const originalLoopSource = step.source;
              // console.log(`[Sub Loop ${step.id}] Attempting standard substitution for loop source: "${originalLoopSource}"`);
-             processedStepData.source = substituteVariables(originalLoopSource, context);
+             processedStepData.source = substituteVariables(originalLoopSource, context, { runnerState });
              // console.log(`[Sub Loop ${step.id}] Substituted loop source: "${processedStepData.source}"`);
         }
         // Optionally substitute name - generally not needed for execution, but could be for logging
@@ -177,11 +179,13 @@ export function substituteVariablesInStep(step, context) {
  * but primarily designed for top-level replacement.
  * @param {string} text - Input string.
  * @param {Object} context - Execution context.
+ * @param {Object} opts - Options { encode: boolean, runnerState: Object }
  * @return {string} String with variables replaced.
  */
 export function substituteVariables(text, context, opts = {}) {
     if (typeof text !== 'string') return text; // Only process strings
     const encode = opts.encode === true;
+    const runnerState = opts.runnerState; // Access to runner state for special variables
 
     function safeEncode(value) {
         if (!encode) return value;
@@ -197,6 +201,23 @@ export function substituteVariables(text, context, opts = {}) {
 
     // Regex to find {{variable.path}} placeholders
     return text.replace(/\{\{([^}]+)\}\}/g, (match, varRef) => {
+        const trimmedRef = varRef.trim();
+        
+        // Handle special reserved variable: RANDOM_IP
+        if (trimmedRef === 'RANDOM_IP') {
+            if (runnerState) {
+                // Generate random IP once per flow run and cache it
+                if (!runnerState.randomIP) {
+                    runnerState.randomIP = generateRandomPublicIP();
+                    logger.info(`[Variable Substitution] Generated random IP for flow run: ${runnerState.randomIP}`);
+                }
+                return runnerState.randomIP;
+            } else {
+                console.warn('RANDOM_IP variable used but runner state not available');
+                return match; // Return placeholder if no runner state
+            }
+        }
+        
         // Evaluate the variable reference (e.g., "variable.path")
         const evaluatedValue = evaluateVariable(match, context); // Pass the full {{var}}
 

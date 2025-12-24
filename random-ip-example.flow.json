@@ -1,0 +1,52 @@
+{
+  "name": "Random IP Example",
+  "description": "Demonstrates the {{RANDOM_IP}} special variable for generating random public IP addresses in headers",
+  "steps": [
+    {
+      "id": "step_1",
+      "name": "Request with Random IP Header",
+      "type": "request",
+      "method": "GET",
+      "url": "https://httpbin.org/headers",
+      "headers": {
+        "X-Forwarded-For": "{{RANDOM_IP}}",
+        "X-Real-IP": "{{RANDOM_IP}}"
+      },
+      "body": null,
+      "rawBodyWithMarkers": null,
+      "extract": {
+        "echoedForwardedFor": "body.headers.X-Forwarded-For",
+        "echoedRealIP": "body.headers.X-Real-Ip"
+      },
+      "onFailure": "stop"
+    },
+    {
+      "id": "step_2",
+      "name": "Verify Same IP Used",
+      "type": "request",
+      "method": "GET",
+      "url": "https://httpbin.org/get?ip={{RANDOM_IP}}",
+      "headers": {},
+      "body": null,
+      "rawBodyWithMarkers": null,
+      "extract": {
+        "ipInUrl": "body.args.ip"
+      },
+      "onFailure": "stop"
+    }
+  ],
+  "staticVars": {},
+  "headers": {
+    "User-Agent": "FlowRunner-RandomIP-Test"
+  },
+  "visualLayout": {
+    "step_1": {
+      "x": 100,
+      "y": 100
+    },
+    "step_2": {
+      "x": 100,
+      "y": 250
+    }
+  }
+}
