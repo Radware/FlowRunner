@@ -21,6 +21,7 @@
 - **Step execution control:** Stop now halts step-by-step runs and clears queued steps.
 - **Visual navigation:** Auto Arrange in Node-Graph view and step search with jump to list or graph.
 - **Results export:** Export execution results to JSON or CSV.
+- **New step type:** Transform steps run ordered operations (base64/JWT/JSON set, math, conversions) to compute or update variables without scripting.
 - **Copy cURL improvements:** Resolves static variables, runtime values (when available), and special random variables; unknown placeholders remain readable.
 - **New special variables:** Added `RANDOM_INT` and `RANDOM_STRING`.
 - **UI fixes:** Corrected the previous/next label in the step editor and widened the insert-variable button to prevent overflow.
@@ -238,6 +239,10 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
               Use this to capture the full JSON object (or text) returned by that request step.
     *   **Options Tab:**
         *   **On Failure:** Choose whether the flow should `Stop` (default) or `Continue` if the request fails (network error or status code >= 300). If set to `Continue`, the step result is still logged (often as 'error' status in runner if network issue, or 'success' but with non-2xx output status), but the flow proceeds to the next step.
+*   **Transform:**
+    *   **Purpose:** Run ordered operations to compute or update variables without custom scripts.
+    *   **Operations:** Base64 encode/decode, JWT decode/encode (optional signing), JSON Set path updates, math (add/subtract/multiply/divide), type conversions (to number/string/boolean), and boolean not.
+    *   **Inputs:** Accept literals, JSON values, or variable references like `{{varName}}`. Each operation writes to an output variable, and later operations can reference earlier outputs.
 *   **Condition (If/Else):**
     *   **Variable:** Select the variable from the context whose value you want to check (e.g., `extractedStatusCode`, `previousStepOutput.body.isValid`).
     *   **Operator:** Choose the comparison operator (e.g., `equals`, `contains`, `greater_than`, `exists`).

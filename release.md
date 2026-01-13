@@ -5,6 +5,7 @@ FlowRunner v1.2.0 delivers smoother execution control, stronger navigation for l
 ## Key Additions
 - Auto Arrange layout for the Node-Graph view.
 - Step search with jump to list or graph focus.
+- New Transform step type for ordered operations (base64/JWT, JSON set, math, conversions) without custom scripts.
 - Export execution results to JSON or CSV.
 - Copy cURL resolves static variables, runtime values (when available), and special random variables; unresolved placeholders remain readable.
 - New special variables: `{{RANDOM_INT(1,1000)}}` and `{{RANDOM_STRING(16)}}`.
