@@ -474,6 +474,21 @@ describe('FlowRunner', () => {
             runner._executeRequestStep = origExec;
         });
 
+        it('should substitute RANDOM_IP in global headers', async () => {
+            const f = createTemplateFlow();
+            f.headers = { 'x-rdwr-lab-ip': '{{RANDOM_IP}}' };
+            f.steps = [{ ...createNewStep('request'), id: 's1', name: 'Request' }];
+
+            await runner.run(f);
+            await processAsyncOps();
+
+            const requestOptions = global.fetch.mock.calls[0][1];
+            const headerValue = requestOptions.headers['x-rdwr-lab-ip'];
+            expect(headerValue).toBeTruthy();
+            expect(headerValue).not.toContain('{{');
+            expect(headerValue).toMatch(/^\d{1,3}(?:\.\d{1,3}){3}$/);
+        });
+
         it('should send POST body even when rawBodyWithMarkers is null but body text exists', async () => {
             const bodyRunnerOnStepStart = jest.fn(() => 0);
             const bodyRunner = new FlowRunner({
@@ -707,6 +722,28 @@ describe('FlowRunner', () => {
             expect(res.failures).toEqual([]);
             expect(res.extractedValues).toEqual({});
             expect(specificMockOnContextUpdate).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('Transform steps', () => {
+        it('should execute transform ops and update context', async () => {
+            const flow = createTemplateFlow();
+            flow.staticVars = { payload: { exp: 100 } };
+            flow.steps = [{
+                id: 't1',
+                name: 'Transform',
+                type: 'transform',
+                ops: [
+                    { op: 'math_add', set: 'sum', args: [1, 2] },
+                    { op: 'json_set', set: 'payload', args: [{ ref: 'payload' }, 'exp', 110] }
+                ]
+            }];
+
+            await runner.run(flow);
+
+            const lastContext = mockOnContextUpdate.mock.calls.at(-1)?.[0] || {};
+            expect(lastContext.sum).toBe(3);
+            expect(lastContext.payload.exp).toBe(110);
         });
     });
 

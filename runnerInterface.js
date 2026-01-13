@@ -29,6 +29,105 @@ function computeSearchText(stepName, output, error, extractedValues) {
     return parts.join(' ').toLowerCase();
 }
 
+function normalizeOutput(value) {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    try {
+        return JSON.stringify(value);
+    } catch (_) {
+        return String(value);
+    }
+}
+
+function toCsvValue(value) {
+    const raw = normalizeOutput(value);
+    if (raw === '') return '';
+    const needsQuotes = /[",\n]/.test(raw);
+    const escaped = raw.replace(/"/g, '""');
+    return needsQuotes ? `"${escaped}"` : escaped;
+}
+
+function buildResultsCsv(results) {
+    const headers = ['stepName', 'stepId', 'status', 'error', 'output', 'extractedValues', 'extractionFailures'];
+    const lines = [headers.join(',')];
+    results.forEach(result => {
+        const row = [
+            toCsvValue(result.stepName),
+            toCsvValue(result.stepId),
+            toCsvValue(result.status),
+            toCsvValue(result.error),
+            toCsvValue(result.output),
+            toCsvValue(result.extractedValues),
+            toCsvValue(result.extractionFailures)
+        ];
+        lines.push(row.join(','));
+    });
+    return lines.join('\n');
+}
+
+async function exportResults(format) {
+    if (!appState.executionResults || appState.executionResults.length === 0) {
+        showMessage('No results to export yet.', 'warning', domRefs.runnerStatusMessages);
+        return;
+    }
+    if (!window.electronAPI || typeof window.electronAPI.showSaveFile !== 'function' || typeof window.electronAPI.writeFile !== 'function') {
+        showMessage('Export is unavailable in this environment.', 'error', domRefs.runnerStatusMessages);
+        return;
+    }
+
+    const extension = format === 'csv' ? 'csv' : 'json';
+    const suggestedName = `flow-results.${extension}`;
+    const saveResult = await window.electronAPI.showSaveFile(suggestedName);
+    if (!saveResult || !saveResult.success) {
+        const errorMessage = saveResult?.error || 'Unable to open save dialog.';
+        showMessage(errorMessage, 'error', domRefs.runnerStatusMessages);
+        return;
+    }
+    if (saveResult.cancelled || !saveResult.filePath) return;
+
+    const payload = {
+        exportedAt: new Date().toISOString(),
+        flowName: appState.currentFlowModel?.name || '',
+        results: appState.executionResults.map(result => ({
+            stepId: result.stepId,
+            stepName: result.stepName,
+            status: result.status,
+            output: result.output,
+            error: result.error,
+            extractedValues: result.extractedValues,
+            extractionFailures: result.extractionFailures,
+            executionPath: result.executionPath
+        }))
+    };
+    let content;
+    if (format === 'csv') {
+        content = buildResultsCsv(payload.results);
+    } else {
+        try {
+            content = JSON.stringify(payload, null, 2);
+        } catch (error) {
+            showMessage(`Failed to serialize results: ${error.message}`, 'error', domRefs.runnerStatusMessages);
+            return;
+        }
+    }
+
+    const writeResult = await window.electronAPI.writeFile(saveResult.filePath, content);
+    if (!writeResult || !writeResult.success) {
+        const errorMessage = writeResult?.error || 'Failed to write export file.';
+        showMessage(errorMessage, 'error', domRefs.runnerStatusMessages);
+        return;
+    }
+    showMessage(`Results exported to ${writeResult.path}`, 'success', domRefs.runnerStatusMessages);
+}
+
+export async function handleExportResultsJson() {
+    await exportResults('json');
+}
+
+export async function handleExportResultsCsv() {
+    await exportResults('csv');
+}
+
 // --- Runner Panel Logic & Callbacks ---
 
 export function getRequestDelay() {
@@ -48,6 +147,7 @@ export function updateRunnerUI() {
     // Check the *runner's* internal state for whether it's currently executing steps
     const isRunnerActuallyExecutingSteps = appState.runner?.isRunning() || false;
     const isStepping = appState.runner?.isStepping() || false;
+    const hasPendingSteps = appState.runner?.hasPendingSteps?.() || false;
 
     // Disable Run/Step if a continuous session is marked as active in the app state,
     // OR if the runner is internally busy (isRunning or isStepping),
@@ -61,7 +161,7 @@ export function updateRunnerUI() {
     }
 
     // Enable Stop if a continuous session is active OR the runner is internally busy.
-    const canStop = flowLoaded && (isContinuousSessionActive || isRunnerActuallyExecutingSteps || isStepping) && !appState.isLoading;
+    const canStop = flowLoaded && (isContinuousSessionActive || isRunnerActuallyExecutingSteps || isStepping || hasPendingSteps) && !appState.isLoading;
      if(domRefs.stopFlowBtn) {
         domRefs.stopFlowBtn.disabled = !canStop;
     }
@@ -81,6 +181,14 @@ export function updateRunnerUI() {
         domRefs.continuousRunCheckbox.disabled = !flowLoaded || controlsDisabled;
         // Reflect the app's state, not the runner's internal flag (which might be briefly false between iterations)
         domRefs.continuousRunCheckbox.checked = appState.isContinuousRunActive;
+    }
+    const hasResults = appState.executionResults.length > 0;
+    const exportDisabled = controlsDisabled || !hasResults;
+    if (domRefs.exportResultsJsonBtn) {
+        domRefs.exportResultsJsonBtn.disabled = exportDisabled;
+    }
+    if (domRefs.exportResultsCsvBtn) {
+        domRefs.exportResultsCsvBtn.disabled = exportDisabled;
     }
     // Hide Step Into button (not implemented)
     if(domRefs.stepIntoFlowBtn) {
@@ -103,6 +211,7 @@ export function handleEncodeUrlVarsChange() {
 export function handleClearResults() {
     // 1. Clear App State results array
     appState.executionResults = [];
+    appState.lastRuntimeContext = null;
 
     // 2. Clear Results List UI
     if(domRefs.runnerResultsList) {
@@ -214,7 +323,8 @@ export async function handleStepFlow() {
 // }
 
 export function handleStopFlow() {
-    if (appState.runner && (appState.runner.isRunning() || appState.runner.isStepping() || appState.isContinuousRunActive)) {
+    const hasPendingSteps = appState.runner?.hasPendingSteps?.() || false;
+    if (appState.runner && (appState.runner.isRunning() || appState.runner.isStepping() || appState.isContinuousRunActive || hasPendingSteps)) {
         // Update app state FIRST to prevent race conditions with UI updates/callbacks
         appState.isContinuousRunActive = false; // Clear the app's continuous flag immediately
         appState.runner.stop(); // This triggers internal state changes and eventually onFlowStopped
@@ -363,6 +473,7 @@ export function handleRunnerFlowComplete(finalContext, results) {
 }
 
 export function handleRunnerContextUpdate(newContext) {
+    appState.lastRuntimeContext = newContext || null;
     // Update the variables panel based on the latest runtime context
     updateDefinedVariables(newContext);
 }

@@ -34,6 +34,7 @@ export function initializeDOMReferences() {
         zoomOutBtn: document.getElementById('zoom-out-btn'),
         zoomInBtn: document.getElementById('zoom-in-btn'),
         zoomResetBtn: document.getElementById('zoom-reset-btn'),
+        autoLayoutBtn: document.getElementById('auto-layout-btn'),
         toggleMinimapBtn: document.getElementById('toggle-minimap-btn'),
 
         // Panels relative to Workspace
@@ -69,6 +70,8 @@ export function initializeDOMReferences() {
         stepIntoFlowBtn: document.getElementById('step-into-flow-btn'),
         stopFlowBtn: document.getElementById('stop-flow-btn'),
         clearResultsBtn: document.getElementById('clear-results-btn'),
+        exportResultsJsonBtn: document.getElementById('export-results-json-btn'),
+        exportResultsCsvBtn: document.getElementById('export-results-csv-btn'),
         requestDelayInput: document.getElementById('request-delay'),
         encodeUrlVarsCheckbox: document.getElementById('encode-url-vars-checkbox'),
         resultsSearchInput: document.getElementById('results-search'),
@@ -108,5 +111,8 @@ export function initializeDOMReferences() {
     if (!domRefs.runnerStatusMessages) logger.warn("Required element #runner-status-messages not found in HTML.");
     if (!domRefs.resultsSearchInput) logger.warn("Required input #results-search not found in HTML.");
     if (!domRefs.resultsStatusFilter) logger.warn("Required select #results-status-filter not found in HTML.");
+    if (!domRefs.exportResultsJsonBtn) logger.warn("Required button #export-results-json-btn not found in HTML.");
+    if (!domRefs.exportResultsCsvBtn) logger.warn("Required button #export-results-csv-btn not found in HTML.");
+    if (!domRefs.autoLayoutBtn) logger.warn("Required button #auto-layout-btn not found in HTML.");
 
 }

@@ -8,6 +8,8 @@
 // import { evaluatePath } from './flowCore.js'; // Needs to be defined/imported
 
 import { logger } from './logger.js';
+import { executeTransformOps } from './transformOps.js';
+import { resolveSpecialVariable } from './utils.js';
 
 // Helper function for escaping regex characters
 const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -68,7 +70,8 @@ export class FlowRunner {
             results: [],
             currentResultIndex: null,
             currentFetchController: null,
-            randomIP: null  // Store random IP for this flow run (generated once per run)
+            randomIP: null,  // Store random IP for this flow run (generated once per run)
+            randomCache: {}  // Cache random values per run for special variables
         };
 
         // Only clear continuous run state if not preparing for next iteration
@@ -93,6 +96,10 @@ export class FlowRunner {
         return this.state.isStepping;
     }
 
+    hasPendingSteps() {
+        return this.state.executionPath.length > 0;
+    }
+
     isStartOfFlow() {
         return this.state.executionPath.length === 0 || (this.state.executionPath.length === 1 && this.state.executionPath[0].index === 0);
     }
@@ -112,6 +119,7 @@ export class FlowRunner {
 
     // [Modified Code] - Abort fetch controller on stop
     stop() {
+        const hasPendingSteps = this.hasPendingSteps();
         if (this.state.isRunning || this.state.isStepping || this.isContinuousModeActive) {
             logger.info("[FlowRunner] Stop requested.");
             this.state.stopRequested = true;
@@ -134,6 +142,15 @@ export class FlowRunner {
                     logger.error("[FlowRunner] Error aborting fetch controller:", e);
                 }
             }
+        } else if (hasPendingSteps) {
+            logger.info("[FlowRunner] Stop requested during step pause. Clearing pending steps.");
+            this.state.stopRequested = true;
+            this.state.executionPath = [];
+            this.state.isStepping = false;
+            this.state.isRunning = false;
+            this.state.stopRequested = false;
+            this.onFlowStopped(this.state.context, this.state.results);
+            this.updateRunnerUICallback?.();
         }
     }
 
@@ -244,8 +261,6 @@ export class FlowRunner {
             throw new Error("Invalid flow model provided.");
         }
 
-        this.state.stopRequested = false;
-
         // (re)initialise execution stack on first ever step
         if (this.state.executionPath.length === 0) {
             this.reset(flowModel.staticVars || {});
@@ -258,6 +273,12 @@ export class FlowRunner {
 
         try {
             await this._executeNextStep();
+            if (this.state.stopRequested) {
+                this.state.executionPath = [];
+                this.state.stopRequested = false;
+                this.onFlowStopped(this.state.context, this.state.results);
+                return;
+            }
             if (this.state.executionPath.length === 0 && !this.state.stopRequested) {
                 this.onFlowComplete(this.state.context, this.state.results);
             }
@@ -431,7 +452,7 @@ export class FlowRunner {
 
             switch (processedStep.type) {
                 case 'request':
-                    result = await this._executeRequestStep(processedStep, unquotedPlaceholders);
+                    result = await this._executeRequestStep(processedStep, unquotedPlaceholders, stepContext);
                     if (result.status === 'success' && processedStep.extract) {
                         const { failures, extractedValues } = this._updateContextFromExtraction(processedStep.extract, result.output, stepContext);
                         result.extractionFailures = failures;
@@ -443,6 +464,9 @@ export class FlowRunner {
                     break;
                 case 'loop':
                     result = await this._executeLoopStep(processedStep, stepContext);
+                    break;
+                case 'transform':
+                    result = await this._executeTransformStep(processedStep, stepContext);
                     break;
                 default:
                     throw new Error(`Unknown step type: ${processedStep.type}`);
@@ -489,6 +513,16 @@ export class FlowRunner {
         } else {
             // If pushing an empty level, log it as skipped?
             this.onMessage(`Skipping empty branch/loop body (${type}).`, 'info');
+        }
+    }
+
+    async _executeTransformStep(step, context) {
+        try {
+            const ops = Array.isArray(step.ops) ? step.ops : [];
+            const output = await executeTransformOps(ops, context, { evaluatePath: this.evaluatePathFn });
+            return { status: 'success', output: output, error: null };
+        } catch (error) {
+            return { status: 'error', output: null, error: error.message || 'Transform step failed' };
         }
     }
 
@@ -566,7 +600,48 @@ export class FlowRunner {
     // --- Step Execution Implementations ---
 
     // --- [Modified Code] --- Store and clear AbortController in request step
-    async _executeRequestStep(step, unquotedPlaceholders) {
+    _resolveGlobalHeaders(context) {
+        if (!this.globalHeaders || Object.keys(this.globalHeaders).length === 0) return {};
+        const resolved = {};
+        for (const key in this.globalHeaders) {
+            if (!Object.prototype.hasOwnProperty.call(this.globalHeaders, key)) continue;
+            resolved[key] = this._substituteHeaderValue(this.globalHeaders[key], context);
+        }
+        return resolved;
+    }
+
+    _substituteHeaderValue(value, context) {
+        if (typeof value !== 'string') return value;
+        const safeContext = context || this.state.context || {};
+        return value.replace(/\{\{([^}]+)\}\}/g, (match, varRef) => {
+            const trimmedRef = varRef.trim();
+            if (!trimmedRef) return match;
+            const specialValue = resolveSpecialVariable(trimmedRef, this.state);
+            if (specialValue !== undefined) {
+                return specialValue;
+            }
+            if (!this.evaluatePathFn) return match;
+            let evaluatedValue;
+            try {
+                evaluatedValue = this.evaluatePathFn(safeContext, trimmedRef);
+            } catch (error) {
+                logger.warn(`[Variable Substitution] Failed to resolve header variable "${trimmedRef}": ${error.message}`);
+                return match;
+            }
+            if (evaluatedValue === undefined) return match;
+            if (typeof evaluatedValue === 'object' && evaluatedValue !== null) {
+                try {
+                    return JSON.stringify(evaluatedValue);
+                } catch (error) {
+                    logger.warn(`[Variable Substitution] Failed to stringify header value for "${trimmedRef}": ${error.message}`);
+                    return match;
+                }
+            }
+            return String(evaluatedValue);
+        });
+    }
+
+    async _executeRequestStep(step, unquotedPlaceholders, context = null) {
         const { method, url, headers, body, onFailure } = step; // Destructure onFailure
         const effectiveOnFailure = onFailure || 'stop'; // Default to 'stop' if missing
 
@@ -589,7 +664,8 @@ export class FlowRunner {
                 mergedHeaders[targetKey] = source[key]; // Step headers override globals
             }
         };
-        mergeHeaders(this.globalHeaders);
+        const resolvedGlobalHeaders = this._resolveGlobalHeaders(context);
+        mergeHeaders(resolvedGlobalHeaders);
         mergeHeaders(headers);
 
         const fetchOptions = {

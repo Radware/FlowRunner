@@ -23,6 +23,8 @@ import {
 } from './flowCore.js'; // <--- Ensure this path is correct
 
 import { logger } from './logger.js';
+import { TRANSFORM_OP_DEFS, TRANSFORM_OP_NAMES, createTransformOp, normalizeTransformOp } from './transformOps.js';
+import { substituteVariables } from './executionHelpers.js';
 
 /**
  * Render a flow step element for the steps list view.
@@ -130,6 +132,9 @@ export function renderStep(step, options) {
       case 'loop':
           // Pass nestedOptions down to loop renderer
           renderLoopStepContent(content, step, options.variables, nestedOptions);
+          break;
+      case 'transform':
+          renderTransformStepContent(content, step, options.variables);
           break;
       default:
           content.innerHTML = `Unknown step type: ${escapeHTML(step.type)}`;
@@ -242,6 +247,22 @@ function renderLoopStepContent(container, step, variables, options) {
            } else { logger.error("App's step type dialog function not found."); }
       } else { logger.error("Cannot add loop step: Missing onUpdate or parentId (loop ID)."); }
    });
+}
+
+function renderTransformStepContent(container, step, variables) {
+   const ops = Array.isArray(step.ops) ? step.ops : [];
+   const outputs = ops.map(op => op && typeof op.set === 'string' ? op.set.trim() : '').filter(Boolean);
+   const outputLabels = outputs.slice(0, 4).map(name => `<span class="extraction-badge">${escapeHTML(name)}</span>`).join('');
+   const moreCount = outputs.length > 4 ? outputs.length - 4 : 0;
+   container.innerHTML = `
+        <div class="request-info">
+            <span class="request-method TRANSFORM">Transform</span>
+            <span class="request-url">Ops: ${ops.length}</span>
+        </div>
+        <div class="request-details">
+            ${outputs.length > 0 ? `<div class="request-extractions"><span>Outputs:</span> ${outputLabels}${moreCount ? `<span class="extraction-badge">+${moreCount}</span>` : ''}</div>` : ''}
+        </div>
+   `;
 }
 
 // --- Drag and Drop Setup ---
@@ -366,6 +387,9 @@ function setupDragAndDrop(stepEl, options) {
  * @param {Object} options - Editor options.
  * @param {Object} [options.variables={}] - Available variables map.
  * @param {Function} options.onChange - Callback triggered on Save: onChange(updatedStepData).
+ * @param {Object} [options.flowHeaders={}] - Global headers to include in request tooling.
+ * @param {Object} [options.flowVars={}] - Static flow variables.
+ * @param {Object | Function | null} [options.runtimeContext=null] - Runtime context (or getter) from last execution.
  * @param {Function} [options.onDirtyChange] - Callback for dirty state changes: onDirtyChange(isDirty).
  * @return {HTMLElement} The editor form element.
  */
@@ -379,7 +403,7 @@ export function createStepEditor(step, options) {
       return errorEl;
   }
 
-  const { variables = {}, onChange, onDirtyChange } = options || {};
+  const { variables = {}, onChange, onDirtyChange, flowHeaders = {}, flowVars = {}, runtimeContext = null } = options || {};
 
   let localStep; // Local copy for editing
   let originalStep; // Store for cancellation
@@ -425,12 +449,13 @@ export function createStepEditor(step, options) {
 
   // --- Populate Type-Specific Editor ---
   // Pass setDirtyState down
-  const editorOptions = { variables, localStep, setDirtyState };
+  const editorOptions = { variables, localStep, setDirtyState, flowHeaders, flowVars, runtimeContext };
   try { // Wrap sub-editor creation
        switch (localStep.type) {
           case 'request': createRequestEditor(typeContentContainer, editorOptions); break;
           case 'condition': createConditionEditor(typeContentContainer, editorOptions); break;
           case 'loop': createLoopEditor(typeContentContainer, editorOptions); break;
+          case 'transform': createTransformEditor(typeContentContainer, editorOptions); break;
           default: typeContentContainer.textContent = `Editor not available for type: ${localStep.type}`;
        }
   } catch (subEditorError) {
@@ -523,6 +548,7 @@ export function createStepEditor(step, options) {
               case 'request': createRequestEditor(typeContentContainer, revertOptions); break;
               case 'condition': createConditionEditor(typeContentContainer, revertOptions); break;
               case 'loop': createLoopEditor(typeContentContainer, revertOptions); break;
+              case 'transform': createTransformEditor(typeContentContainer, revertOptions); break;
               default: typeContentContainer.textContent = `Editor not available for type: ${localStep.type}`;
            }
       } catch (revertError) {
@@ -548,15 +574,92 @@ export function createStepEditor(step, options) {
 
 // --- Type-Specific Editor Creation Functions ---
 
+function shellQuote(value) {
+    const text = String(value ?? '');
+    if (text.length === 0) return "''";
+    return `'${text.replace(/'/g, "'\"'\"'")}'`;
+}
+
+function copyTextToClipboard(text) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const success = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (success) resolve();
+        else reject(new Error('Copy command failed'));
+    });
+}
+
+function replaceUnresolvedPlaceholders(text) {
+    if (typeof text !== 'string') return text;
+    return text.replace(/\{\{([^}]+)\}\}/g, (_, varRef) => varRef.trim());
+}
+
+function resolveCurlText(value, context, runnerState) {
+    if (value === undefined || value === null) return '';
+    if (typeof value !== 'string') {
+        try {
+            return JSON.stringify(value);
+        } catch (error) {
+            return String(value);
+        }
+    }
+    const substituted = substituteVariables(value, context, { runnerState });
+    return replaceUnresolvedPlaceholders(substituted);
+}
+
+function buildCurlCommand(step, flowHeaders = {}, flowVars = {}, runtimeContext = null) {
+    const method = (step.method || 'GET').toUpperCase();
+    const runnerState = { randomIP: null, randomCache: {} };
+    const context = { ...(flowVars || {}) };
+    const runtimeValue = typeof runtimeContext === 'function' ? runtimeContext() : runtimeContext;
+    if (runtimeValue && typeof runtimeValue === 'object') {
+        Object.assign(context, runtimeValue);
+    }
+    const url = resolveCurlText(step.url || '', context, runnerState);
+    const headers = { ...(flowHeaders || {}), ...(step.headers || {}) };
+    const parts = ['curl'];
+
+    parts.push('-X', method);
+    parts.push(shellQuote(url));
+
+    Object.entries(headers).forEach(([key, value]) => {
+        if (value === undefined || value === null || String(value).trim() === '') return;
+        const resolvedValue = resolveCurlText(value, context, runnerState);
+        parts.push('-H', shellQuote(`${key}: ${resolvedValue}`));
+    });
+
+    const hasContentType = Object.keys(headers).some(key => key.toLowerCase() === 'content-type');
+    const bodyValue = step.body;
+    if (bodyValue !== undefined && bodyValue !== null && String(bodyValue).trim() !== '') {
+        let bodyString = resolveCurlText(bodyValue, context, runnerState);
+        if (!hasContentType) {
+            parts.push('-H', shellQuote('Content-Type: application/json'));
+        }
+        parts.push('--data-raw', shellQuote(bodyString));
+    }
+
+    return parts.join(' ');
+}
+
 // --- [Modified Code] --- in createRequestEditor
 function createRequestEditor(container, options) {
-    const { localStep, variables, setDirtyState } = options; // Get setDirtyState callback
+    const { localStep, variables, setDirtyState, flowHeaders, flowVars, runtimeContext } = options; // Get setDirtyState callback
     const availableVarNames = Object.keys(variables);
 
     // --- MODIFICATION START: Add onFailure HTML ---
     container.innerHTML = `
         <div class="form-group"> <label for="request-method-${localStep.id}">Method</label> <select id="request-method-${localStep.id}">${getHttpMethods().map(m => `<option value="${m}" ${localStep.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select> </div>
-        <div class="form-group"> <label for="request-url-${localStep.id}">URL</label> <div class="input-with-vars"> <input type="text" id="request-url-${localStep.id}" value="${escapeHTML(localStep.url || '')}" placeholder="e.g., https://api.example.com/users/{{userId}}"> <button class="btn-insert-var" data-target-input="request-url-${localStep.id}">{{…}}</button> </div> </div>
+        <div class="form-group"> <label for="request-url-${localStep.id}">URL</label> <div class="input-with-vars"> <input type="text" id="request-url-${localStep.id}" value="${escapeHTML(localStep.url || '')}" placeholder="e.g., https://api.example.com/users/{{userId}}"> <button class="btn-insert-var" data-target-input="request-url-${localStep.id}">{{…}}</button> <button class="btn btn-secondary btn-copy-curl" type="button" title="Copy request as cURL">Copy cURL</button> </div> </div>
 
         <div class="form-tabs">
             <div class="tab-buttons">
@@ -567,7 +670,7 @@ function createRequestEditor(container, options) {
             </div>
 
             <div class="tab-content active" id="tab-headers-${localStep.id}">
-                <div class="headers-editor"><div class="headers-list"></div><button class="btn-add-header" style="margin-top:10px;">+ Add Header</button><p class="form-hint">Header values support variables (e.g., <code>{{varName}}</code>) and the special <code>{{RANDOM_IP}}</code> variable which generates a random public IP address once per flow run.</p></div>
+                <div class="headers-editor"><div class="headers-list"></div><button class="btn-add-header" style="margin-top:10px;">+ Add Header</button><p class="form-hint">Header values support variables (e.g., <code>{{varName}}</code>) and special variables like <code>{{RANDOM_IP}}</code>, <code>{{RANDOM_INT(1,1000)}}</code>, or <code>{{RANDOM_STRING(16)}}</code>.</p></div>
             </div>
             <div class="tab-content" id="tab-body-${localStep.id}">
                 <div class="form-group"><label for="request-body-${localStep.id}">Request Body (JSON)</label><textarea id="request-body-${localStep.id}" rows="10" placeholder='e.g.,\n{\n "key": "value",\n "id": {{var}}\n}'>${escapeHTML(localStep.body || '')}</textarea><div class="form-hint">Use "{{var}}" for strings, {{var}} for numbers/booleans.</div><div class="body-actions"><button class="btn-format-json">Format</button><button class="btn-insert-var" data-target-input="request-body-${localStep.id}">Insert Var</button></div><div class="json-validation-error" style="color:red;margin-top:5px;font-size:0.9em;display:none;"></div></div>
@@ -592,6 +695,7 @@ function createRequestEditor(container, options) {
     const urlInput = container.querySelector(`#request-url-${localStep.id}`);
     const bodyTextarea = container.querySelector(`#request-body-${localStep.id}`);
     const formatBtn = container.querySelector('.btn-format-json');
+    const copyCurlBtn = container.querySelector('.btn-copy-curl');
     const bodyError = container.querySelector('.json-validation-error');
     const headersTabBtn = container.querySelector('[data-tab="headers"]');
     const extractTabBtn = container.querySelector('[data-tab="extract"]');
@@ -608,6 +712,20 @@ function createRequestEditor(container, options) {
         localStep.onFailure = onFailureSelect.value;
         setDirtyState(true); // Mark dirty when failure behavior changes
     });
+    if (copyCurlBtn) {
+        copyCurlBtn.addEventListener('click', () => {
+            const curlCommand = buildCurlCommand(localStep, flowHeaders, flowVars, runtimeContext);
+            copyTextToClipboard(curlCommand)
+                .then(() => {
+                    const originalText = copyCurlBtn.textContent;
+                    copyCurlBtn.textContent = 'Copied';
+                    setTimeout(() => { copyCurlBtn.textContent = originalText; }, 1200);
+                })
+                .catch((error) => {
+                    logger.error('Failed to copy cURL command:', error);
+                });
+        });
+    }
     // --- MODIFICATION END ---
 
     // ... (rest of formatBtn listener, setupHeadersEditor, setupExtractEditor, tab switching, etc. remain the same) ...
@@ -762,6 +880,197 @@ function createLoopEditor(container, options) {
     setupVariableInsertButton(container.querySelector(`#loop-source-${localStep.id}`).closest('.input-with-vars').querySelector('.btn-insert-var'), sourceInput, availableVarNames);
 }
 
+function createTransformEditor(container, options) {
+    const { localStep, variables, setDirtyState } = options;
+    const availableVarNames = Object.keys(variables);
+
+    if (!Array.isArray(localStep.ops)) {
+        localStep.ops = [];
+    }
+
+    container.innerHTML = `
+        <div class="form-group">
+            <label>Operations</label>
+            <div class="transform-ops-list"></div>
+            <button class="btn-add-transform-op">+ Add Operation</button>
+            <p class="form-hint">Operations run in order. Use <code>{{var}}</code> in inputs to reference variables. JSON values are accepted.</p>
+        </div>
+    `;
+
+    const listEl = container.querySelector('.transform-ops-list');
+    const addBtn = container.querySelector('.btn-add-transform-op');
+
+    function renderOps() {
+        listEl.innerHTML = '';
+        if (localStep.ops.length === 0) {
+            listEl.innerHTML = '<div class="empty-branch">(no operations)</div>';
+            return;
+        }
+        localStep.ops.forEach((op, index) => {
+            const normalized = normalizeTransformOp(op);
+            localStep.ops[index] = normalized;
+            const opDef = TRANSFORM_OP_DEFS[normalized.op];
+            const row = document.createElement('div');
+            row.className = 'transform-op-row';
+            row.dataset.opIndex = String(index);
+            row.innerHTML = `
+                <div class="transform-op-header">
+                    <span class="transform-op-index">#${index + 1}</span>
+                    <select class="transform-op-type">
+                        ${TRANSFORM_OP_NAMES.map(name => `<option value="${name}" ${name === normalized.op ? 'selected' : ''}>${escapeHTML(TRANSFORM_OP_DEFS[name].label)}</option>`).join('')}
+                    </select>
+                    <div class="transform-op-actions">
+                        <button class="btn-op-up" title="Move up">▲</button>
+                        <button class="btn-op-down" title="Move down">▼</button>
+                        <button class="btn-op-delete" title="Delete">✕</button>
+                    </div>
+                </div>
+                <div class="transform-op-body">
+                    <div class="form-group">
+                        <label>Set Variable</label>
+                        <input type="text" class="transform-op-set" value="${escapeHTML(normalized.set || '')}" placeholder="e.g., jwtPayload">
+                    </div>
+                    <div class="transform-op-args"></div>
+                    <div class="transform-op-options"></div>
+                </div>
+            `;
+            listEl.appendChild(row);
+
+            const argsContainer = row.querySelector('.transform-op-args');
+            const optionsContainer = row.querySelector('.transform-op-options');
+            const setInput = row.querySelector('.transform-op-set');
+            const typeSelect = row.querySelector('.transform-op-type');
+
+            if (Array.isArray(opDef.args)) {
+                opDef.args.forEach((argDef, argIndex) => {
+                    const inputId = `transform-op-${localStep.id}-${index}-${argIndex}`;
+                    const valueString = formatTransformValue(normalized.args[argIndex]);
+                    const argRow = document.createElement('div');
+                    argRow.className = 'form-group';
+                    argRow.innerHTML = `
+                        <label for="${inputId}">${escapeHTML(argDef.label)}</label>
+                        <div class="input-with-vars">
+                            <input type="text" id="${inputId}" value="${escapeHTML(valueString)}" placeholder="value or {{var}}">
+                            <button class="btn-insert-var" data-target-input="${inputId}">{{…}}</button>
+                        </div>
+                    `;
+                    argsContainer.appendChild(argRow);
+
+                    const inputEl = argRow.querySelector('input');
+                    inputEl.addEventListener('input', () => {
+                        normalized.args[argIndex] = parseTransformValue(inputEl.value);
+                        localStep.ops[index] = normalized;
+                        setDirtyState(true);
+                    });
+                    setupVariableInsertButton(argRow.querySelector('.btn-insert-var'), inputEl, availableVarNames);
+                });
+            }
+
+            if (Array.isArray(opDef.options) && opDef.options.length > 0) {
+                opDef.options.forEach(optDef => {
+                    const shouldShow = shouldShowTransformOption(normalized.options, optDef);
+                    const optRow = document.createElement('div');
+                    optRow.className = 'form-group';
+                    optRow.style.display = shouldShow ? '' : 'none';
+                    if (optDef.values) {
+                        optRow.innerHTML = `
+                            <label>${escapeHTML(optDef.label)}</label>
+                            <select class="transform-op-option" data-option-key="${escapeHTML(optDef.key)}">
+                                ${optDef.values.map(val => `<option value="${val}" ${String(normalized.options?.[optDef.key]) === val ? 'selected' : ''}>${val}</option>`).join('')}
+                            </select>
+                        `;
+                    } else {
+                        const inputId = `transform-op-${localStep.id}-${index}-opt-${optDef.key}`;
+                        const optValue = formatTransformValue(normalized.options?.[optDef.key]);
+                        optRow.innerHTML = `
+                            <label for="${inputId}">${escapeHTML(optDef.label)}</label>
+                            <div class="input-with-vars">
+                                <input type="text" id="${inputId}" value="${escapeHTML(optValue)}" placeholder="value or {{var}}">
+                                <button class="btn-insert-var" data-target-input="${inputId}">{{…}}</button>
+                            </div>
+                        `;
+                    }
+                    optionsContainer.appendChild(optRow);
+                    const optionSelect = optRow.querySelector('select');
+                    if (optionSelect) {
+                        optionSelect.addEventListener('change', () => {
+                            normalized.options[optDef.key] = optionSelect.value;
+                            localStep.ops[index] = normalized;
+                            setDirtyState(true);
+                            renderOps();
+                        });
+                    }
+                    const optionInput = optRow.querySelector('input');
+                    if (optionInput) {
+                        optionInput.addEventListener('input', () => {
+                            normalized.options[optDef.key] = parseTransformValue(optionInput.value);
+                            localStep.ops[index] = normalized;
+                            setDirtyState(true);
+                        });
+                        const insertBtn = optRow.querySelector('.btn-insert-var');
+                        if (insertBtn) setupVariableInsertButton(insertBtn, optionInput, availableVarNames);
+                    }
+                });
+            }
+
+            setInput.addEventListener('input', () => {
+                normalized.set = setInput.value;
+                localStep.ops[index] = normalized;
+                setDirtyState(true);
+            });
+
+            typeSelect.addEventListener('change', () => {
+                const newType = typeSelect.value;
+                const nextOp = createTransformOp(newType);
+                nextOp.set = normalized.set;
+                localStep.ops[index] = nextOp;
+                setDirtyState(true);
+                renderOps();
+            });
+
+            const upBtn = row.querySelector('.btn-op-up');
+            const downBtn = row.querySelector('.btn-op-down');
+            const delBtn = row.querySelector('.btn-op-delete');
+
+            upBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (index === 0) return;
+                const temp = localStep.ops[index - 1];
+                localStep.ops[index - 1] = localStep.ops[index];
+                localStep.ops[index] = temp;
+                setDirtyState(true);
+                renderOps();
+            });
+
+            downBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (index >= localStep.ops.length - 1) return;
+                const temp = localStep.ops[index + 1];
+                localStep.ops[index + 1] = localStep.ops[index];
+                localStep.ops[index] = temp;
+                setDirtyState(true);
+                renderOps();
+            });
+
+            delBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                localStep.ops.splice(index, 1);
+                setDirtyState(true);
+                renderOps();
+            });
+        });
+    }
+
+    addBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        localStep.ops.push(createTransformOp());
+        setDirtyState(true);
+        renderOps();
+    });
+
+    renderOps();
+}
+
 
 // ----- KeyValue Editor Helpers -----
 
@@ -890,6 +1199,42 @@ function setupExtractEditor(container, initialExtracts, onChange) {
     setupKeyValueEditor(container, initialExtracts, [], onChange, { listSelector: '.extracts-list', addBtnSelector: '.btn-add-extract', itemClass: 'extract-row', keyClass: 'extract-var-name', valueClass: 'extract-path', removeBtnClass: 'btn-remove-extract', noItemsMsg: 'No extractions defined', keyPlaceholder: 'Variable Name', valuePlaceholder: 'JSON Path (e.g., body.id)', includeVarInsert: false });
 }
 
+function parseTransformValue(raw) {
+    const trimmed = String(raw ?? '').trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('{{') && trimmed.endsWith('}}')) {
+        const ref = trimmed.slice(2, -2).trim();
+        return ref ? { ref: ref } : '';
+    }
+    try {
+        return JSON.parse(trimmed);
+    } catch (error) {
+        return trimmed;
+    }
+}
+
+function formatTransformValue(value) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const keys = Object.keys(value);
+        if (keys.length === 1 && keys[0] === 'ref') {
+            return `{{${value.ref}}}`;
+        }
+    }
+    if (value == null) return '';
+    if (typeof value === 'string') return value;
+    try {
+        return JSON.stringify(value);
+    } catch (error) {
+        return String(value);
+    }
+}
+
+function shouldShowTransformOption(options, optionDef) {
+    if (!optionDef.dependsOn) return true;
+    const currentValue = options?.[optionDef.dependsOn.key];
+    return optionDef.dependsOn.values.includes(String(currentValue));
+}
+
 
 // ----- Utility Helpers -----
 
@@ -942,6 +1287,7 @@ export function getStepTypeIcon(type) {
     case 'request': return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg>';
     case 'condition': return '<svg viewBox="0 0 24 24" fill="currentColor"><path transform="translate(12,12) scale(1.4) translate(-12,-12)"d="M7 10l5-5 5 5h-3v4h3l-5 5-5-5h3v-4H7z"/></svg>';
     case 'loop': return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/></svg>';
+    case 'transform': return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 6l-4 4 4 4V11h7v-2H7V6zm10 4V7h-7v2h7v3l4-4-4-4v3zM7 18v-3h7v-2H7v-3l-4 4 4 4zm10-4v3l4-4-4-4v3h-7v2h7z"/></svg>';
     default: return '';
   }
 }
@@ -951,6 +1297,7 @@ function getStepTypeLabel(type) {
     case 'request': return 'API Request';
     case 'condition': return 'Condition';
     case 'loop': return 'Loop';
+    case 'transform': return 'Transform';
     default: return 'Step';
   }
 }

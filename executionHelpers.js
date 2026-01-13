@@ -2,7 +2,7 @@
 import { evaluatePath } from './flowCore.js';
 import { FlowRunner } from './flowRunner.js'; // <<< ADDED IMPORT
 import { logger } from './logger.js';
-import { generateRandomPublicIP } from './utils.js';
+import { resolveSpecialVariable } from './utils.js';
 
 // Helper function for escaping regex characters (needed for substituteVariablesInStep)
 const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -203,19 +203,9 @@ export function substituteVariables(text, context, opts = {}) {
     return text.replace(/\{\{([^}]+)\}\}/g, (match, varRef) => {
         const trimmedRef = varRef.trim();
         
-        // Handle special reserved variable: RANDOM_IP
-        if (trimmedRef === 'RANDOM_IP') {
-            if (runnerState) {
-                // Generate random IP once per flow run and cache it
-                if (!runnerState.randomIP) {
-                    runnerState.randomIP = generateRandomPublicIP();
-                    logger.info(`[Variable Substitution] Generated random IP for flow run: ${runnerState.randomIP}`);
-                }
-                return runnerState.randomIP;
-            } else {
-                console.warn('RANDOM_IP variable used but runner state not available');
-                return match; // Return placeholder if no runner state
-            }
+        const specialValue = resolveSpecialVariable(trimmedRef, runnerState);
+        if (specialValue !== undefined) {
+            return specialValue;
         }
         
         // Evaluate the variable reference (e.g., "variable.path")

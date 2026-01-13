@@ -172,35 +172,42 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     const zoomInBtn = page.locator('#zoom-in-btn');
     const zoomOutBtn = page.locator('#zoom-out-btn');
 
-    const parseScale = (t) => {
-      const m = t.match(/scale\(([^)]+)\)/);
-      return m ? parseFloat(m[1]) : 1;
+    const parseTransform = (t) => {
+      const scaleMatch = t.match(/scale\(([^)]+)\)/);
+      const translateMatch = t.match(/translate\(([^p]+)px,\\s*([^)]+)px\\)/);
+      return {
+        scale: scaleMatch ? parseFloat(scaleMatch[1]) : 1,
+        translateX: translateMatch ? parseFloat(translateMatch[1]) : 0,
+        translateY: translateMatch ? parseFloat(translateMatch[2]) : 0,
+      };
     };
 
-    const initialScale = await canvas.evaluate(el => el.style.transform);
+    const initialTransform = await canvas.evaluate(el => el.style.transform);
+    const initialValues = parseTransform(initialTransform);
     await zoomInBtn.click();
     await page.waitForTimeout(100);
     const zoomedIn = await canvas.evaluate(el => el.style.transform);
-    const scaleIn = parseScale(zoomedIn);
-    expect(scaleIn).toBeGreaterThan(parseScale(initialScale));
+    const scaleIn = parseTransform(zoomedIn).scale;
+    expect(scaleIn).toBeGreaterThan(initialValues.scale);
     expect(scaleIn).toBeLessThanOrEqual(2);
 
     await zoomOutBtn.click();
     await page.waitForTimeout(100);
     const zoomedOut = await canvas.evaluate(el => el.style.transform);
-    const scaleOut = parseScale(zoomedOut);
+    const scaleOut = parseTransform(zoomedOut).scale;
     expect(scaleOut).toBeLessThanOrEqual(scaleIn);
     expect(scaleOut).toBeGreaterThanOrEqual(0.5);
 
-    const mount = page.locator('#flow-visualizer-mount');
-    const before = await mount.evaluate(el => ({ left: el.scrollLeft, top: el.scrollTop }));
+    const beforeTransform = await canvas.evaluate(el => el.style.transform);
+    const before = parseTransform(beforeTransform);
     const minimap = page.locator('.visualizer-minimap');
     const box = await minimap.boundingBox();
     await minimap.click({ position: { x: box.width - 5, y: box.height - 5 } });
     await page.waitForTimeout(200);
-    const after = await mount.evaluate(el => ({ left: el.scrollLeft, top: el.scrollTop }));
-    expect(after.left).not.toBe(before.left);
-    expect(after.top).not.toBe(before.top);
+    const afterTransform = await canvas.evaluate(el => el.style.transform);
+    const after = parseTransform(afterTransform);
+    expect(after.translateX).not.toBe(before.translateX);
+    expect(after.translateY).not.toBe(before.translateY);
   });
 
     test('Minimap stays fixed during pan', async () => {

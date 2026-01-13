@@ -40,9 +40,11 @@ import {
     handleBuilderStepUpdate,
     handleBuilderStepEdit,
     handleBuilderRequestAddStep,
+    handleBuilderRequestAddStepAfter,
     handleBuilderEditorDirtyChange,
     handleVisualizerNodeLayoutUpdate,
     handleVisualizerNodeMove,
+    handleVisualizerConnectionUpdate,
     // NOTE: handleToggleInfoOverlay & handleToggleVariablesPanel are still EXPORTED from eventHandlers.js
     // and are called by the consolidated listeners within initializeEventListeners
 } from './eventHandlers.js';
@@ -185,7 +187,11 @@ function initializeVisualizer() {
             // Callbacks handled by eventHandlers.js
             onNodeSelect: handleBuilderStepSelect,             // Selecting a node
             onNodeLayoutUpdate: handleVisualizerNodeLayoutUpdate, // Node moved/dropped
-            onDeleteStep: (stepId) => handleBuilderStepUpdate({ type: 'delete', stepId }) // Delete requested from node
+            onConnectionUpdate: handleVisualizerConnectionUpdate, // Connection edits
+            onDeleteStep: (stepId) => handleBuilderStepUpdate({ type: 'delete', stepId }), // Delete requested from node
+            onStepEdit: handleBuilderStepEdit, // Save in graph editor modal
+            onEditorDirtyChange: handleBuilderEditorDirtyChange, // Track dirty state in graph editor modal
+            onRequestAddStepAfter: handleBuilderRequestAddStepAfter // Add step after current node
             // Add other callbacks like onCloneStep if needed
         }
     );

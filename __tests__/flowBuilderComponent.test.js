@@ -68,7 +68,7 @@ describe('FlowBuilderComponent', () => {
             <div id="flow-visualizer-mount"></div>
             <div id="builder-messages"></div>
             <div id="runner-status-messages"></div>
-            <div id="step-type-dialog" style="display:none;"><button class="step-type-close"></button><div class="step-type-option" data-type="request"></div><div class="request-icon"></div><div class="condition-icon"></div><div class="loop-icon"></div></div>
+            <div id="step-type-dialog" style="display:none;"><button class="step-type-close"></button><div class="step-type-option" data-type="request"></div><div class="step-type-option" data-type="transform"></div><div class="request-icon"></div><div class="transform-icon"></div><div class="condition-icon"></div><div class="loop-icon"></div></div>
             <div id="var-dropdown" style="display:none;"><input class="var-search"/><div class="var-list"></div><button class="var-close"></button><div class="no-results-msg"></div></div>
             <div id="global-loading-overlay"></div>
             <div id="flow-list"></div>

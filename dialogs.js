@@ -32,6 +32,7 @@ export function showAppStepTypeDialog(onSelect) {
         try {
             // Populate icons dynamically
             domRefs.stepTypeDialog.querySelector('.request-icon').innerHTML = getStepTypeIcon('request');
+            domRefs.stepTypeDialog.querySelector('.transform-icon').innerHTML = getStepTypeIcon('transform');
             domRefs.stepTypeDialog.querySelector('.condition-icon').innerHTML = getStepTypeIcon('condition');
             domRefs.stepTypeDialog.querySelector('.loop-icon').innerHTML = getStepTypeIcon('loop');
             domRefs.stepTypeDialog.style.display = 'flex';
@@ -133,7 +134,8 @@ export function initializeVariableInsertionListener() {
                 if (targetInput && (targetInput.tagName === 'INPUT' || targetInput.tagName === 'TEXTAREA')) {
                     // Use cached defined variables
                     const currentVars = appState.definedVariables || {}; // Use cached variables
-                    const varNames = Object.keys(currentVars);
+                    const specialVars = ['RANDOM_IP', 'RANDOM_INT', 'RANDOM_STRING'];
+                    const varNames = Array.from(new Set([...Object.keys(currentVars), ...specialVars]));
                     showVarDropdown(insertButton, targetInput, varNames);
                 } else {
                     console.warn("Could not find target input/textarea for variable insertion button.", insertButton);

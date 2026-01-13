@@ -21,6 +21,7 @@ export let appState = {
     isSidebarCollapsed: false,
     isRunnerCollapsed: false,
     isContinuousRunActive: false, // Tracks if a continuous run session is active
+    lastRuntimeContext: null, // Stores runtime context from last execution for tooling (e.g., cURL)
 };
 
 // --- DOM Element References ---

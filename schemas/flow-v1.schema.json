@@ -38,7 +38,7 @@
       "properties": {
         "id": {"type": "string"},
         "name": {"type": "string"},
-        "type": {"enum": ["request", "condition", "loop"]},
+        "type": {"enum": ["request", "condition", "loop", "transform"]},
         "onFailure": {"enum": ["stop", "continue"]},
         "headers": {
           "type": "object",
@@ -73,6 +73,19 @@
         "loopSteps": {
           "type": "array",
           "items": {"$ref": "#/definitions/step"}
+        },
+        "ops": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["op", "set"],
+            "properties": {
+              "op": {"type": "string"},
+              "set": {"type": "string"},
+              "args": {"type": "array"},
+              "options": {"type": "object"}
+            }
+          }
         }
       }
     }

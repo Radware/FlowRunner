@@ -1,5 +1,9 @@
 // __tests__/setup.js
 import { jest } from '@jest/globals';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+global.Drawflow = require('../assets/vendor/drawflow/drawflow.min.js');
 import '@testing-library/jest-dom';
 
 // Mock SVG namespace (keep as is)
@@ -36,7 +40,7 @@ global.ResizeObserver = ResizeObserverMock;
 
 // Constants for fallback dimensions if not set (used in getBoundingClientRect and getComputedStyle)
 const NODE_MIN_HEIGHT = 160;
-const NODE_WIDTH = 240;
+const NODE_WIDTH = 260;
 
 
 // Mock getComputedStyle

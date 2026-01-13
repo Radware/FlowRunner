@@ -5,6 +5,7 @@
  */
 
 import { logger } from './logger.js';
+import { TRANSFORM_OP_DEFS, isTransformOpName, normalizeRefPath } from './transformOps.js';
 
 /**
  * Generate a unique ID for steps
@@ -113,6 +114,8 @@ export function flowModelToJson(flowModel) {
         jsonStep.source = step.source || '';
         jsonStep.loopVariable = step.loopVariable || 'item';
         jsonStep.steps = processSteps(step.loopSteps);
+      } else if (step.type === 'transform') {
+        jsonStep.ops = Array.isArray(step.ops) ? step.ops : [];
       }
 
       return jsonStep;
@@ -256,6 +259,8 @@ export function jsonToFlowModel(json) {
         step.source = jsonStep.source || '';
         step.loopVariable = jsonStep.loopVariable || 'item';
         step.loopSteps = processJsonSteps(jsonStep.steps);
+      } else if (jsonStep.type === 'transform') {
+        step.ops = Array.isArray(jsonStep.ops) ? jsonStep.ops : [];
       }
       return step;
     });
@@ -362,6 +367,18 @@ export function findDefinedVariables(flowModel, runtimeContext = null) {
         processSteps(step.loopSteps, `${currentPath} > Loop Body`, new Set(currentLoopVars));
         if (loopVar) currentLoopVars.delete(loopVar); // Goes out of scope
 
+      } else if (step.type === 'transform') {
+        const ops = Array.isArray(step.ops) ? step.ops : [];
+        ops.forEach(op => {
+          if (op && typeof op.set === 'string' && op.set.trim() && !variables[op.set]) {
+            variables[op.set] = {
+              origin: currentPath,
+              path: op.op || 'transform',
+              stepId: step.id,
+              type: 'transform'
+            };
+          }
+        });
       } else if (step.type === 'condition') {
         processSteps(step.thenSteps, `${currentPath} > Then`, new Set(currentLoopVars));
         processSteps(step.elseSteps, `${currentPath} > Else`, new Set(currentLoopVars));
@@ -866,6 +883,66 @@ export function validateFlow(flowModel) {
           break;
         }
 
+        /* ■■■ TRANSFORM ────────────────────────────────────────── */
+        case 'transform': {
+          if (!Array.isArray(step.ops)) {
+            result.valid = false;
+            result.errors.push(`${here}: Transform step requires an ops array.`);
+            break;
+          }
+
+          const opAvailableVars = new Set(availableVars);
+
+          step.ops.forEach((op, opIndex) => {
+            const opLabel = `${here}: Op ${opIndex + 1}`;
+            if (!op || typeof op !== 'object') {
+              result.valid = false;
+              result.errors.push(`${opLabel} is not a valid operation object.`);
+              return;
+            }
+
+            if (!isTransformOpName(op.op)) {
+              result.valid = false;
+              result.errors.push(`${opLabel}: Unsupported operation "${op.op}".`);
+            }
+
+            const def = TRANSFORM_OP_DEFS[op.op] || { args: [] };
+            if (!Array.isArray(op.args)) {
+              result.valid = false;
+              result.errors.push(`${opLabel}: args must be an array.`);
+            } else if (op.args.length < def.args.length) {
+              result.valid = false;
+              result.errors.push(`${opLabel}: Missing required arguments for "${op.op}".`);
+            }
+
+            if (op.options && typeof op.options !== 'object') {
+              result.valid = false;
+              result.errors.push(`${opLabel}: options must be an object.`);
+            }
+
+            if (!op.set?.trim() || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(op.set)) {
+              result.valid = false;
+              result.errors.push(`${opLabel}: Output variable name "${op.set}" is invalid.`);
+            } else {
+              varsDefinedHere.add(op.set);
+              opAvailableVars.add(op.set);
+            }
+
+            const refs = [];
+            collectTransformRefs(op.args, refs);
+            collectTransformRefs(op.options, refs);
+            refs.forEach(ref => {
+              const baseName = getBaseVarName(ref);
+              if (!baseName) return;
+              if (!opAvailableVars.has(baseName)) {
+                result.valid = false;
+                result.errors.push(`${opLabel}: references undefined variable "{{${ref}}}".`);
+              }
+            });
+          });
+          break;
+        }
+
         /* ■■■ UNKNOWN ─────────────────────────────────────────── */
         default:
           result.valid = false;
@@ -878,6 +955,39 @@ export function validateFlow(flowModel) {
 
   validateStepsRecursive(flowModel.steps, '', new Set(initialVarNames));
   return result;
+}
+
+function collectTransformRefs(value, refs) {
+  if (!value) return;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('{{') && trimmed.endsWith('}}')) {
+      const ref = normalizeRefPath(trimmed);
+      if (ref) refs.push(ref);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach(item => collectTransformRefs(item, refs));
+    return;
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 1 && keys[0] === 'ref') {
+      const ref = normalizeRefPath(value.ref);
+      if (ref) refs.push(ref);
+      return;
+    }
+    keys.forEach(key => collectTransformRefs(value[key], refs));
+  }
+}
+
+function getBaseVarName(path) {
+  if (!path || typeof path !== 'string') return '';
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+  const match = trimmed.match(/^[a-zA-Z_][a-zA-Z0-9_]*/);
+  return match ? match[0] : '';
 }
 
 
@@ -908,6 +1018,8 @@ export function createNewStep(type) {
       return { id, name: 'New Condition', type: 'condition', condition: '', conditionData: { variable: '', operator: '', value: '' }, thenSteps: [], elseSteps: [] };
     case 'loop':
       return { id, name: 'New Loop', type: 'loop', source: '', loopVariable: 'item', loopSteps: [] };
+    case 'transform':
+      return { id, name: 'New Transform', type: 'transform', ops: [] };
     default:
       throw new Error(`Unknown step type: ${type}`);
   }
@@ -1157,4 +1269,3 @@ export function escapeHTML(str) {
    if (str === null || str === undefined) return '';
    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
  }
-

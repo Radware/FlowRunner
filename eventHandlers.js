@@ -12,7 +12,9 @@ import {
     handleStopFlow,
     handleClearResults,
     handleDelayChange,
-    handleEncodeUrlVarsChange
+    handleEncodeUrlVarsChange,
+    handleExportResultsJson,
+    handleExportResultsCsv
 } from './runnerInterface.js';
 import {
     showAppStepTypeDialog, initializeStepTypeDialogListeners,
@@ -27,7 +29,7 @@ import {
 } from './uiUtils.js';
 import {
     addNestedStepToModel, deleteStepFromModel, moveStepInModel,
-    cloneStepInModel, findStepInfoRecursive
+    cloneStepInModel, findStepInfoRecursive, insertStepAfterInModel, moveStepToBranchStart
 } from './modelUtils.js';
 import { createNewStep, escapeHTML, findStepById } from './flowCore.js';
 import { logger } from './logger.js';
@@ -61,6 +63,7 @@ export function initializeEventListeners() {
     domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
     domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
     domRefs.zoomResetBtn?.addEventListener('click', () => appState.visualizerComponent?.resetZoom());
+    domRefs.autoLayoutBtn?.addEventListener('click', handleAutoArrangeLayout);
     domRefs.toggleMinimapBtn?.addEventListener('click', () => handleToggleMinimap());
 
     // Info Panel Close Button (Inside Panel) - Explicitly closes
@@ -74,6 +77,8 @@ export function initializeEventListeners() {
     domRefs.stepFlowBtn?.addEventListener('click', handleStepFlow);
     domRefs.stopFlowBtn?.addEventListener('click', handleStopFlow);
     domRefs.clearResultsBtn?.addEventListener('click', handleClearResults);
+    domRefs.exportResultsJsonBtn?.addEventListener('click', handleExportResultsJson);
+    domRefs.exportResultsCsvBtn?.addEventListener('click', handleExportResultsCsv);
     domRefs.requestDelayInput?.addEventListener('change', handleDelayChange);
     domRefs.encodeUrlVarsCheckbox?.addEventListener('change', handleEncodeUrlVarsChange);
     // Listener for continuous run checkbox needs to be handled carefully due to state management
@@ -204,6 +209,28 @@ export function handleToggleView() {
     // Ensure panels are closed when switching views to avoid overlap/confusion
     if (appState.isInfoOverlayOpen) handleToggleInfoOverlay(false);
     if (appState.isVariablesPanelVisible) handleToggleVariablesPanel(false);
+}
+
+export function handleAutoArrangeLayout() {
+    if (!appState.currentFlowModel || !appState.visualizerComponent) return;
+    const layout = appState.visualizerComponent.getAutoLayout?.() || {};
+    const layoutEntries = Object.entries(layout);
+    if (layoutEntries.length === 0) {
+        showMessage('No steps available to arrange.', 'warning');
+        return;
+    }
+
+    appState.currentFlowModel.visualLayout = layout;
+    appState.isDirty = true;
+    setDirty();
+    renderCurrentFlow();
+
+    const firstStepId = appState.currentFlowModel.steps?.[0]?.id;
+    if (firstStepId) {
+        requestAnimationFrame(() => {
+            appState.visualizerComponent?.focusNode(firstStepId);
+        });
+    }
 }
 
 export function handleToggleInfoOverlay(forceState = null) {
@@ -604,6 +631,36 @@ export function handleVisualizerNodeLayoutUpdate(stepId, x, y, options = {}) {
 }
 // --- END UPDATED handleVisualizerNodeLayoutUpdate ---
 
+export function handleVisualizerConnectionUpdate({ action, sourceStepId, targetStepId, outputRole }) {
+    if (!appState.currentFlowModel || !sourceStepId || !targetStepId) {
+        logger.warn('[HANDLER handleVisualizerConnectionUpdate] Missing flow model or step IDs.');
+        return false;
+    }
+
+    if (action === 'disconnect') {
+        showMessage('Disconnecting nodes is not supported yet.', 'warning');
+        renderCurrentFlow();
+        return false;
+    }
+
+    let modelChanged = false;
+    if (outputRole === 'main') {
+        modelChanged = moveStepInModel(targetStepId, sourceStepId, 'after');
+    } else if (outputRole === 'then' || outputRole === 'else' || outputRole === 'loop') {
+        modelChanged = moveStepToBranchStart(targetStepId, sourceStepId, outputRole);
+    }
+
+    if (modelChanged) {
+        appState.isDirty = true;
+        setDirty();
+        renderCurrentFlow();
+        return true;
+    }
+
+    renderCurrentFlow();
+    return false;
+}
+
 
 // --- Other Builder Callbacks ---
 
@@ -623,6 +680,33 @@ export function handleBuilderRequestAddStep() {
             });
         }
         // If type is null, the user cancelled the dialog, do nothing.
+    });
+}
+
+export function handleBuilderRequestAddStepAfter(stepId, options = {}) {
+    if (!appState.currentFlowModel || !stepId) return;
+
+    showAppStepTypeDialog((type) => {
+        if (!type) return;
+
+        const newStep = createNewStep(type);
+        const inserted = insertStepAfterInModel(stepId, newStep);
+        if (!inserted) {
+            showMessage('Failed to add step after the selected node.', 'error');
+            return;
+        }
+
+        const stepLabel = newStep.name || 'New Step';
+        appState.isDirty = true;
+        appState.selectedStepId = stepId;
+        setDirty();
+        updateDefinedVariables();
+        renderCurrentFlow();
+        showMessage(`Step "${escapeHTML(stepLabel)}" added.`, 'success');
+
+        if (typeof options.onAdded === 'function') {
+            options.onAdded(newStep.id);
+        }
     });
 }
 

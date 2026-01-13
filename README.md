@@ -1,6 +1,6 @@
 # FlowRunner 
 
-![Version](https://img.shields.io/badge/version-1.1.3-blue.svg)
+![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)
 <!-- Optional: Add build status/license badges here if desired -->
 <!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
@@ -16,6 +16,14 @@
 ---
 
 ## Release Notes / Changelog
+
+### v1.2.0 (August 2025)
+- **Step execution control:** Stop now halts step-by-step runs and clears queued steps.
+- **Visual navigation:** Auto Arrange in Node-Graph view and step search with jump to list or graph.
+- **Results export:** Export execution results to JSON or CSV.
+- **Copy cURL improvements:** Resolves static variables, runtime values (when available), and special random variables; unknown placeholders remain readable.
+- **New special variables:** Added `RANDOM_INT` and `RANDOM_STRING`.
+- **UI fixes:** Corrected the previous/next label in the step editor and widened the insert-variable button to prevent overflow.
 
 ### v1.1.3 (July 2025)
 - **Request body reliability:** Fixed a runner bug where POST requests could be sent without their body when `rawBodyWithMarkers` was null. Bodies now send correctly without needing a reload.
@@ -85,9 +93,10 @@ This tool is particularly useful for:
     *   **API Request:** Configure HTTP calls (Method, URL, Headers, JSON Body).
     *   **Condition:** Branch your flow based on data (If/Then/Else logic).
     *   **Loop:** Repeat steps for each item in an array.
+    *   **Transform:** Modify or compute variables between requests (base64, JWT, math, JSON updates).
 *   **Dual Views:** Work the way you prefer:
-    *   **List/Editor View:** A detailed list of steps with a dedicated panel for configuration and drag-and-drop reordering.
-    *   **Node-Graph View:** An interactive visual graph showing the flow structure and connections. Drag nodes to arrange the layout. Use zoom controls and an optional minimap for easier navigation of large flows.
+    *   **List/Editor View:** A detailed list of steps with a dedicated panel for configuration, drag-and-drop reordering, and step search with quick jump.
+    *   **Node-Graph View:** An interactive visual graph showing the flow structure and connections. Drag nodes to arrange the layout. Use zoom controls and an optional minimap for easier navigation of large flows, or Auto Arrange to tidy the layout.
 *   **Variable Management:** Handle dynamic data effectively:
     *   Define **Global Headers** and **Static Variables** for the entire flow. Variables can be typed as String, Number, Boolean, or JSON to better control how values are parsed and substituted.
     *   **Extract** data from API responses (like status code, headers, or values from the body using JSON paths) into variables.
@@ -100,6 +109,7 @@ This tool is particularly useful for:
     *   Configure a delay between steps during full runs for better observation.
     *   View **real-time highlighting** of the currently executing or completed step in both views.
     *   Monitor progress in the detailed **Results Panel**, showing each step's status, output, errors, and extraction warnings.
+    *   Export execution results to JSON or CSV for sharing.
     *   Use the search box and status filter to narrow displayed results, and copy any step's output to the clipboard.
 *   **Local Flow Management:** Work entirely offline:
     *   Create new flows from a template.
@@ -115,17 +125,17 @@ This tool is particularly useful for:
 ## Prerequisites
 
 *   Windows (x64) or macOS (Apple Silicon / arm64).
-*   The appropriate FlowRunner installer package downloaded from the [v1.1.3 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.1.3) (or latest release).
+*   The appropriate FlowRunner installer package downloaded from the [v1.2.0 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.2.0) (or latest release).
 *   Network access is required *only* when executing flows that contain 'API Request' steps which need to reach external endpoints. Flow authoring, saving, loading, and visualization can be done offline.
 
 ## Installation
 
 1.  **Download the Correct Installer:**
     *   Go to the [FlowRunner Releases Page](https://github.com/Radware/FlowRunner/releases) on GitHub.
-    *   Find the latest release (e.g., v1.1.3).
+    *   Find the latest release (e.g., v1.2.0).
     *   Under **Assets**:
-        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.1.3.zip`. Unzip the file to find the `Setup.exe`.
-        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.1.3.dmg`.
+        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.2.0.zip`. Unzip the file to find the `Setup.exe`.
+        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.2.0.dmg`.
 2.  **Install on Windows:**
     *   Double-click the extracted `Setup.exe` file.
     *   The installation will proceed silently in the background (using Squirrel.Windows). It typically installs to your `AppData\Local\FlowRunner` folder.
@@ -167,8 +177,8 @@ Congratulations! You've created and run your first API flow.
 
 ### Views
 
-*   **List/Editor View (Default):** Shows steps sequentially. Ideal for detailed configuration via the editor panel and reordering steps using drag-and-drop (☰ handle).
-*   **Node-Graph View:** Shows steps as connected nodes. Provides a better overview of the flow's structure, especially with conditions and loops. You can pan the view by dragging the background and rearrange nodes by dragging them (this updates the visual layout saved with the flow).
+*   **List/Editor View (Default):** Shows steps sequentially. Ideal for detailed configuration via the editor panel and reordering steps using drag-and-drop (☰ handle). Use the step search box to filter and jump to matching steps.
+*   **Node-Graph View:** Shows steps as connected nodes. Provides a better overview of the flow's structure, especially with conditions and loops. You can pan the view by dragging the background and rearrange nodes by dragging them (this updates the visual layout saved with the flow). Use Auto Arrange to tidy the layout.
 *   **Toggle Views:** Use the **"Visual View" / "Editor View"** button in the workspace header to switch between modes.
 
 ### Managing Flows (Local Files)
@@ -214,6 +224,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
 *   **API Request:**
     *   **Method:** HTTP method (GET, POST, PUT, PATCH, DELETE, etc.).
     *   **URL:** The target API endpoint URL. You can use `{{variableName}}` for substitutions.
+    *   **Copy cURL:** Generates a cURL command for the request. Static variables are resolved, runtime values are used when available, and unresolved placeholders remain readable.
     *   **Headers Tab:** Define request-specific headers. These override Global Headers. Supports variable substitution in values.
     *   **Body Tab:** Enter the request body, typically in JSON format. Supports `{{variableName}}` substitution. Use `"{{var}}"` for string substitution, and `{{var}}` (without quotes) for number/boolean/object substitution. Use the "Format" button to prettify JSON. Validation errors appear below the textarea.
     *   **Extract Tab:** Define rules to extract data from the response into variables for later steps.
@@ -253,7 +264,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
 
 *   **Definition:** Variables are defined statically in the Flow Info overlay or dynamically via the 'Extract' tab in Request steps. Loop steps also introduce an item variable.
 *   **Substitution:** Use `{{variableName}}` syntax in fields that support it (URL, Header values, Request Body, Condition Value, Loop Source). The runner replaces this with the variable's current value during execution.
-*   **Special Variables:** The special `{{RANDOM_IP}}` variable generates a random public IPv4 address (from IANA routable public IP ranges) once per flow run. This IP remains consistent throughout all steps in a single flow execution, making it ideal for headers like `X-Forwarded-For` or `X-Real-IP`. The IP is regenerated for each new flow run.
+*   **Special Variables:** `{{RANDOM_IP}}` generates a random public IPv4 address once per flow run. `{{RANDOM_INT(1,1000)}}` generates a random integer (default range is 0-1,000,000). `{{RANDOM_STRING(16)}}` generates a random alphanumeric string (default length is 12). Each value is generated once per run and reused across steps.
 *   **URL Encoding:** When using the `FlowRunner` class programmatically, pass `{ encodeUrlVars: true }` to automatically URL-encode variable values inserted into URLs. Values that already contain percent-encoded sequences, or values that start with `http://` or `https://`, are left unchanged so they are not encoded twice and base URLs remain intact. The Runner panel exposes an **Encode URL Vars** checkbox to toggle this at runtime.
 *   **Extraction Paths:** Use dot notation (`object.property`) and array indexing (`array[index]`) to access values within JSON response bodies. Special paths include `.status`, `headers.Header-Name`, and `body`.
 *   **Insertion Helper:** Click the **`{{…}}`** button next to an input field to open a searchable dropdown of currently defined variables. Clicking a variable name inserts `{{variableName}}` into the input field.
@@ -273,6 +284,7 @@ The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Ca
     *   **Output:** For successful requests, shows status, headers, and body. For conditions/loops, shows relevant info (branch taken, item count).
     *   **Error:** Displays error messages if a step failed.
     *   **Extraction Warnings:** If an 'Extract' rule failed (e.g., path not found), a warning appears here for the relevant Request step.
+    *   **Export:** Use the Export JSON/CSV buttons to save results.
 
 ## Configuration
 

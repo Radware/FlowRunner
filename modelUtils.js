@@ -31,6 +31,15 @@ export function addNestedStepToModel(stepData, parentId, branch) {
     return added;
 }
 
+export function insertStepAfterInModel(targetStepId, stepData) {
+    if (!appState.currentFlowModel?.steps || !targetStepId || !stepData) return false;
+    const targetInfo = findStepInfoRecursive(appState.currentFlowModel.steps, targetStepId);
+    if (!targetInfo) return false;
+
+    targetInfo.parentSteps.splice(targetInfo.index + 1, 0, stepData);
+    return true;
+}
+
 // --- [Modified Code] in app.js ---
 // Finds step info including the parent array and index (crucial for modification)
 export function findStepInfoRecursive(steps, idToFind, currentParentSteps = null, path = []) {
@@ -267,6 +276,59 @@ export function cloneStepInModel(originalStepRef, newStepData) {
      }
      // Do NOT call setDirty here, it's called by the caller (handleBuilderStepUpdate)
      return inserted;
+}
+
+export function moveStepToBranchStart(stepId, parentId, branch) {
+    if (!appState.currentFlowModel?.steps || !stepId || !parentId || !branch) return false;
+
+    const parentInfo = findStepInfoRecursive(appState.currentFlowModel.steps, parentId);
+    const targetInfo = findStepInfoRecursive(appState.currentFlowModel.steps, stepId);
+
+    if (!parentInfo || !targetInfo) {
+        showMessage('Move failed: step not found.', 'error');
+        return false;
+    }
+
+    if (stepId === parentId) {
+        showMessage('Invalid move: cannot nest a step inside itself.', 'error');
+        return false;
+    }
+
+    const parentPathIds = parentInfo.path.map(segment => segment.stepId);
+    if (parentPathIds.includes(stepId)) {
+        showMessage('Invalid move: cannot move a parent into its own child branch.', 'error');
+        return false;
+    }
+
+    const parentStep = parentInfo.step;
+    let branchSteps = null;
+
+    if (parentStep.type === 'condition') {
+        if (branch === 'then') {
+            parentStep.thenSteps = parentStep.thenSteps || [];
+            branchSteps = parentStep.thenSteps;
+        } else if (branch === 'else') {
+            parentStep.elseSteps = parentStep.elseSteps || [];
+            branchSteps = parentStep.elseSteps;
+        }
+    } else if (parentStep.type === 'loop' && branch === 'loop') {
+        parentStep.loopSteps = parentStep.loopSteps || [];
+        branchSteps = parentStep.loopSteps;
+    }
+
+    if (!branchSteps) {
+        showMessage('Invalid move: unsupported branch target.', 'error');
+        return false;
+    }
+
+    const [targetStep] = targetInfo.parentSteps.splice(targetInfo.index, 1);
+    if (!targetStep) {
+        showMessage('Move failed: could not remove target step.', 'error');
+        return false;
+    }
+
+    branchSteps.unshift(targetStep);
+    return true;
 }
 
 // Helper for cloning (remains the same, used internally by fileOperations)

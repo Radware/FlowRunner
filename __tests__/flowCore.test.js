@@ -78,6 +78,24 @@ describe('flowModelToJson and jsonToFlowModel', () => {
     // Should decode marker back to {{userId}}
     expect(roundTrip.steps[0].body).toContain('{{userId}}');
   });
+
+  it('should preserve transform ops in round-trip conversion', () => {
+    const model = {
+      id: 'flow3',
+      name: 'Transform Flow',
+      description: '',
+      headers: {},
+      staticVars: {},
+      visualLayout: {},
+      steps: [
+        { id: 't1', name: 'Transform', type: 'transform', ops: [{ op: 'math_add', set: 'sum', args: [1, 2] }] }
+      ]
+    };
+    const json = flowModelToJson(model);
+    expect(json.steps[0].ops).toEqual(model.steps[0].ops);
+    const roundTrip = jsonToFlowModel(json);
+    expect(roundTrip.steps[0].ops).toEqual(model.steps[0].ops);
+  });
 });
 
 describe('extractVariableReferences', () => {
@@ -335,6 +353,12 @@ describe('createNewStep', () => {
     expect(step.source).toBe('');
     expect(step.loopVariable).toBe('item');
     expect(step.loopSteps).toEqual([]);
+    expect(typeof step.id).toBe('string');
+  });
+  it('should create a new transform step with default fields', () => {
+    const step = createNewStep('transform');
+    expect(step.type).toBe('transform');
+    expect(step.ops).toEqual([]);
     expect(typeof step.id).toBe('string');
   });
   it('should throw on unknown step type', () => {

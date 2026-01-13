@@ -550,6 +550,7 @@ export function clearWorkspace(fullClear = true) {
        appState.isDirty = false;
        appState.stepEditorIsDirty = false;
        appState.definedVariables = {};
+       appState.lastRuntimeContext = null;
        updateWorkspaceTitle(); // Update title to default
        clearMessages(); // Clear any lingering messages
        appState.currentView = 'list-editor'; // Reset to default view
@@ -615,6 +616,7 @@ export function _updateVariablesPanelUI() { // Keep as internal helper
                     info.type === 'static' ? 'Static Value' :
                     info.type === 'loop' ? `Loop Item (from ${info.origin || 'Loop'})` :
                     info.type === 'extraction' ? (info.path || 'N/A') :
+                    info.type === 'transform' ? `Transform Output (${info.path || 'operation'})` :
                     info.type === 'runtime' ? 'Runtime Value' :
                     'Unknown'
                 )}
@@ -631,6 +633,7 @@ export function updateViewToggle() {
         if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = 'none';
         if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = 'none';
         if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = 'none';
+        if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = 'none';
         if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = 'none';
         return;
     }
@@ -638,6 +641,7 @@ export function updateViewToggle() {
     if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if (appState.currentView === 'list-editor') {
         domRefs.toggleViewBtn.textContent = 'Visual View';

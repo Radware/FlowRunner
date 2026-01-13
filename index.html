@@ -10,6 +10,7 @@
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: assets:; connect-src 'self' http: https:; ">
     <title>FlowRunner</title>
+    <link rel="stylesheet" href="assets/vendor/drawflow/drawflow.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 
@@ -75,6 +76,7 @@
                     <button id="zoom-out-btn" class="btn btn-sm" title="Zoom Out" style="display: none;">-</button>
                     <button id="zoom-in-btn" class="btn btn-sm" title="Zoom In" style="display: none;">+</button>
                     <button id="zoom-reset-btn" class="btn btn-sm" title="Reset Zoom" style="display: none;">100%</button>
+                    <button id="auto-layout-btn" class="btn btn-sm btn-secondary" title="Auto arrange nodes" style="display: none;">Auto Arrange</button>
                     <button id="toggle-minimap-btn" class="btn btn-sm" title="Show/Hide Minimap" style="display: none;">Hide Minimap</button>
                 </div>
             </div>
@@ -109,7 +111,7 @@
                                  <!-- Headers added dynamically -->
                             </div>
                             <button class="btn-add-global-header" data-ref="addGlobalHeaderBtn" style="margin-top: 10px;">+ Add Header</button>
-                            <p class="form-hint">Header values support variables (e.g., <code>{{varName}}</code>) and the special <code>{{RANDOM_IP}}</code> variable which generates a random public IP address once per flow run.</p>
+                            <p class="form-hint">Header values support variables (e.g., <code>{{varName}}</code>) and special variables like <code>{{RANDOM_IP}}</code>, <code>{{RANDOM_INT(1,1000)}}</code>, or <code>{{RANDOM_STRING(16)}}</code>.</p>
                         </div>
                     </div>
 
@@ -206,6 +208,10 @@
                             <option value="skipped">Skipped</option>
                             <option value="stopped">Stopped</option>
                         </select>
+                        <div class="results-actions">
+                            <button id="export-results-json-btn" class="btn btn-sm btn-secondary" title="Export results to JSON" disabled>Export JSON</button>
+                            <button id="export-results-csv-btn" class="btn btn-sm btn-secondary" title="Export results to CSV" disabled>Export CSV</button>
+                        </div>
                     </div>
                     <ul id="runner-results" class="runner-results-list">
                         <li class="no-results">Run a flow to see results here.</li>
@@ -227,6 +233,11 @@
                     <div class="type-icon request-icon"></div>
                     <h4>API Request</h4>
                     <p>Call an external API endpoint.</p>
+                </div>
+                <div class="step-type-option" data-type="transform" title="Transform data">
+                    <div class="type-icon transform-icon"></div>
+                    <h4>Transform</h4>
+                    <p>Modify or compute variables.</p>
                 </div>
                 <div class="step-type-option" data-type="condition" title="Branch based on a condition">
                     <div class="type-icon condition-icon"></div>
@@ -273,6 +284,7 @@
     </div>
     <!-- End Update Info Dialog -->
 
+    <script src="assets/vendor/drawflow/drawflow.min.js"></script>
     <script type="module" src="app.js"></script>
 </body>
 
