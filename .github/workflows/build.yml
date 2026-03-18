@@ -10,8 +10,7 @@ jobs:
 
     strategy:
       matrix:
-        # We have removed 'ubuntu-latest' to only build for macOS and Windows
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
 
     steps:
       - name: Check out git repository
@@ -28,9 +27,56 @@ jobs:
 
       - name: Build application
         run: npm run dist -- --publish never
-        
+
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}-build
-          path: dist/ 
+          path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v4
+
+      - name: Get version from package.json
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # macOS - extract DMG and rename
+          cp artifacts/macos-latest-build/FlowRunner-${VERSION}-arm64.dmg \
+             release/FlowRunnerSetup-arm64-mac-${VERSION}.dmg
+
+          # Windows - zip the portable app directory
+          cd artifacts/windows-latest-build/win-unpacked
+          zip -r ../../../release/FlowRunnerSetup-x64-win-${VERSION}.zip .
+          cd ../../..
+
+          # Linux - extract AppImage and rename
+          cp artifacts/ubuntu-latest-build/FlowRunner-${VERSION}.AppImage \
+             release/FlowRunnerSetup-x64-linux-${VERSION}.AppImage
+
+          ls -lh release/
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: FlowRunner v${{ steps.version.outputs.version }}
+          files: release/*
+          make_latest: true
