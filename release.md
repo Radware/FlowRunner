@@ -3,7 +3,7 @@
 FlowRunner v1.2.1 fixes a critical packaging issue that broke the application on Windows and Linux. The HAR exporter module (`harExporter.js`), introduced in v1.2.0, was not included in the build files list, causing the renderer to crash on startup and leaving all UI buttons non-functional.
 
 ## Key Fix
-- **Application startup on Windows and Linux:** Added the missing `harExporter.js` to the electron-builder file list in `package.json`. Without this file, the `app.js` import failed at load time, preventing all event listeners from being registered.
+- **Application startup on all platforms:** Added the missing `transformOps.js` and `harExporter.js` to the electron-builder file list in `package.json`. Without `transformOps.js`, the core modules (`flowCore.js`, `flowRunner.js`, `flowStepComponents.js`) failed to import at load time, preventing the renderer from initializing and leaving all UI buttons non-functional.
 
 ## Installation Assets
 

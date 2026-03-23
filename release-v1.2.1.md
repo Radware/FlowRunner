@@ -3,7 +3,7 @@
 FlowRunner v1.2.1 is a hotfix release that fixes a packaging bug preventing the application from functioning on Windows and Linux.
 
 ## Key Fix
-- **Application startup on Windows and Linux:** Fixed a packaging bug where `harExporter.js` (added in v1.2.0) was missing from the build files list in `package.json`. This caused the renderer process to crash on startup, making all buttons (Open, Save, Run, etc.) non-functional in packaged builds.
+- **Application startup on all platforms:** Fixed a packaging bug where `transformOps.js` and `harExporter.js` were missing from the build files list in `package.json`. The missing `transformOps.js` (imported by `flowCore.js`, `flowRunner.js`, and `flowStepComponents.js`) caused the renderer process to crash on startup, making all buttons (Open, Save, Run, etc.) non-functional in packaged builds.
 
 ## Installation
 

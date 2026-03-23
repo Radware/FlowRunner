@@ -75,6 +75,7 @@
       "runnerInterface.js",
       "state.js",
       "harExporter.js",
+      "transformOps.js",
       "uiUtils.js",
       "utils.js",
       "styles.css",

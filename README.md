@@ -18,7 +18,7 @@
 ## Release Notes / Changelog
 
 ### v1.2.1 (March 2026)
-- **Hotfix: Application startup on Windows and Linux.** Fixed a packaging bug where `harExporter.js` was missing from the build files list, causing the renderer process to fail on startup. All buttons (Open, Save, Run, etc.) were non-functional in packaged builds. Also adds HAR export support to the Linux AppImage variant.
+- **Hotfix: Application startup in packaged builds.** Fixed a packaging bug where `transformOps.js` and `harExporter.js` were missing from the build files list, causing the renderer process to fail on startup. All buttons (Open, Save, Run, etc.) were non-functional in packaged builds. Also adds HAR export support and Linux AppImage variant.
 
 ### v1.2.0 (August 2025)
 - **Step execution control:** Stop now halts step-by-step runs and clears queued steps.
