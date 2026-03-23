@@ -1,39 +1,30 @@
-# FlowRunner v1.2.0 - Visual Navigation and Execution Exports
+# FlowRunner v1.2.1 - Hotfix: Packaging Bug on Windows & Linux
 
-FlowRunner v1.2.0 delivers smoother execution control, stronger navigation for large flows, and better sharing of execution output. It adds Auto Arrange for the Node-Graph view, step search with jump, JSON/CSV export for results, and improved cURL generation that resolves variables when possible.
+FlowRunner v1.2.1 fixes a critical packaging issue that broke the application on Windows and Linux. The HAR exporter module (`harExporter.js`), introduced in v1.2.0, was not included in the build files list, causing the renderer to crash on startup and leaving all UI buttons non-functional.
 
-## Key Additions
-- Auto Arrange layout for the Node-Graph view.
-- Step search with jump to list or graph focus.
-- New Transform step type for ordered operations (base64/JWT, JSON set, math, conversions) without custom scripts.
-- Export execution results to JSON or CSV.
-- Copy cURL resolves static variables, runtime values (when available), and special random variables; unresolved placeholders remain readable.
-- New special variables: `{{RANDOM_INT(1,1000)}}` and `{{RANDOM_STRING(16)}}`.
-
-## Fixes
-- Stop now works during step-by-step runs and clears queued steps.
-- Corrected the Previous/Next label in the step editor when there is no next node.
-- Widened the Insert Variable button to prevent text overflow.
+## Key Fix
+- **Application startup on Windows and Linux:** Added the missing `harExporter.js` to the electron-builder file list in `package.json`. Without this file, the `app.js` import failed at load time, preventing all event listeners from being registered.
 
 ## Installation Assets
 
 Download the appropriate installer for your operating system:
 
-- **Windows (x64):** `FlowRunnerSetup-x64-win-1.2.0.zip` (Contains `Setup.exe`)
-- **macOS (Apple Silicon / arm64):** `FlowRunnerSetup-arm64-mac-1.2.0.dmg`
+- **Windows (x64):** `FlowRunnerSetup-x64-win-1.2.1.zip` (Contains `Setup.exe`)
+- **macOS (Apple Silicon / arm64):** `FlowRunnerSetup-arm64-mac-1.2.1.dmg`
+- **Linux (x64):** `FlowRunnerSetup-x64-linux-1.2.1.AppImage`
 
 ## Installation Notes & Troubleshooting
 
 These builds remain unsigned. Please follow the same installation procedures as previous versions:
 
 ### Windows Installation
-1. Download and extract `FlowRunnerSetup-x64-win-1.2.0.zip`
+1. Download and extract `FlowRunnerSetup-x64-win-1.2.1.zip`
 2. Run `Setup.exe`
 3. If Windows SmartScreen appears, click "More info" then "Run anyway"
 4. The installer runs silently and launches the app automatically
 
 ### macOS Installation
-1. Download `FlowRunnerSetup-arm64-mac-1.2.0.dmg`
+1. Download `FlowRunnerSetup-arm64-mac-1.2.1.dmg`
 2. Open the DMG and drag FlowRunner to Applications
 3. If you see "FlowRunner is damaged" error, run in Terminal:
    ```bash
@@ -41,8 +32,13 @@ These builds remain unsigned. Please follow the same installation procedures as 
    ```
 4. Right-click the app and select "Open" if needed
 
+### Linux Installation
+1. Download `FlowRunnerSetup-x64-linux-1.2.1.AppImage`
+2. Make the file executable: `chmod +x FlowRunnerSetup-x64-linux-1.2.1.AppImage`
+3. Run the AppImage directly
+
 ## Upgrade Notes
 
-Flows created in earlier versions remain fully compatible with v1.2.0.
+Flows created in earlier versions remain fully compatible with v1.2.1.
 
 Thank you for using FlowRunner! Report issues or suggest features on the [GitHub Issues page](https://github.com/Radware/FlowRunner/issues).

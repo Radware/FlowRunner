@@ -78,5 +78,6 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: FlowRunner v${{ steps.version.outputs.version }}
+          body_path: release.md
           files: release/*
           make_latest: true

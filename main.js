@@ -76,7 +76,7 @@ async function checkUnsavedChanges() {
 // --- Application Information ---
 const appName = 'FlowRunner';
 // Try reading version from package.json
-let appVersion = '1.2.0'; // Default version (Ensure this matches your actual package.json)
+let appVersion = '1.2.1'; // Default version (Ensure this matches your actual package.json)
 try {
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJsonContent = await fs.readFile(packageJsonPath, 'utf-8');
@@ -289,6 +289,25 @@ function createMenu() {
         },
         { type: 'separator' },
         {
+          label: 'Export HAR File...',
+          accelerator: 'CmdOrCtrl+Shift+H',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              logger.info('[Main] Triggering HAR export via IPC.');
+              mainWindow.webContents.send('trigger-har-export');
+            } else {
+                logger.info('[Main] Cannot export HAR, main window not available.');
+                 dialog.showMessageBox(null, {
+                    type: 'info',
+                    title: 'Export HAR File',
+                    message: 'Please open the main application window before exporting HAR file.',
+                    buttons: ['OK']
+                });
+            }
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Learn More (GitHub)',
           click: async () => {
             await shell.openExternal(appWebsite);
@@ -494,6 +513,49 @@ app.whenReady().then(async () => {
       }
   });
   // +++ END IPC LISTENER +++
+
+  // Handle request to export HAR file
+  ipcMain.handle('export:har', async (event, harData) => {
+      logger.info("[IPC Main] Handling 'export:har'");
+      if (!mainWindow) {
+          logger.error("[IPC Main] Error: Main window not available for export:har");
+          return { success: false, error: 'Main window not available' };
+      }
+      try {
+          // Generate suggested filename with timestamp
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
+          const suggestedName = `flow-export-${timestamp}.har`;
+
+          logger.debug("[IPC Main] Calling dialog.showSaveDialog for HAR export...");
+          const result = await dialog.showSaveDialog(mainWindow, {
+              title: 'Export HAR File',
+              defaultPath: suggestedName,
+              filters: [
+                  { name: 'HAR Files', extensions: ['har'] },
+                  { name: 'JSON Files', extensions: ['json'] },
+                  { name: 'All Files', extensions: ['*'] }
+              ]
+          });
+
+          if (!result || result.canceled || !result.filePath) {
+              logger.info("[IPC Main] HAR export dialog cancelled.");
+              return { success: true, cancelled: true };
+          }
+
+          const filePath = result.filePath;
+          logger.info("[IPC Main] Exporting HAR to:", filePath);
+
+          // Write HAR data with pretty printing
+          const harContent = JSON.stringify(harData, null, 2);
+          await fs.writeFile(filePath, harContent, 'utf-8');
+
+          logger.info("[IPC Main] HAR export successful");
+          return { success: true, cancelled: false, filePath: filePath };
+      } catch (error) {
+          logger.error('[IPC Main] Error in export:har handler:', error);
+          return { success: false, error: error.message || 'Failed to export HAR file' };
+      }
+  });
 
   // --- Create the main window and menu ---
   createWindow();

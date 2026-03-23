@@ -71,6 +71,20 @@ const electronAPI = {
         ipcRenderer.on('trigger-manual-update-check', (event, ...args) => callback(...args));
     },
 
+    // --- HAR Export Communication ---
+    // Invokes the main process handler to export HAR file
+    exportHAR: (harData) => {
+        logger.debug("[Preload] Invoking 'export:har'");
+        return ipcRenderer.invoke('export:har', harData);
+    },
+    // Sets up a listener for messages from the main process triggering HAR export
+    onHARExportTrigger: (callback) => {
+        logger.debug("[Preload] Setting up HAR export trigger listener");
+        ipcRenderer.removeAllListeners('trigger-har-export');
+        // When the main process sends 'trigger-har-export', execute the renderer callback
+        ipcRenderer.on('trigger-har-export', (event, ...args) => callback(...args));
+    },
+
     // --- External Links (NOW USES IPC) ---
     // This function is called by the renderer (uiUtils.js)
     // It sends a message to the main process, asking *it* to open the link.

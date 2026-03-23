@@ -32,6 +32,9 @@ import {
     confirmDiscardChanges
 } from './fileOperations.js';
 
+// --- HAR Export ---
+import { generateHAR } from './harExporter.js';
+
 // --- Event Handlers (Callbacks for Components) ---
 import {
     initializeEventListeners, // <-- This function now handles ALL primary button listeners
@@ -73,6 +76,69 @@ import { createFlowRunner, substituteVariablesInStep, evaluateCondition } from '
 
 // --- Core Logic ---
 import { evaluatePath, escapeHTML } from './flowCore.js';
+
+// --- HAR Export Handler ---
+async function handleHARExport() {
+    logger.info('[Renderer] HAR export triggered');
+
+    try {
+        // Check if execution results exist
+        if (!appState.executionResults || appState.executionResults.length === 0) {
+            logger.warn('[Renderer] No execution results found. Cannot export HAR.');
+            if (window.alert) {
+                alert('Please run a flow first before exporting HAR file.');
+            }
+            return;
+        }
+
+        // Check if current flow model exists
+        if (!appState.currentFlowModel || !appState.currentFlowModel.steps) {
+            logger.error('[Renderer] No flow model found. Cannot export HAR.');
+            if (window.alert) {
+                alert('No flow loaded. Please load or create a flow first.');
+            }
+            return;
+        }
+
+        // Generate HAR data
+        logger.debug('[Renderer] Generating HAR data from execution results...');
+        const harData = generateHAR(appState.executionResults, appState.currentFlowModel);
+
+        // Check if any request entries were found
+        if (!harData.log.entries || harData.log.entries.length === 0) {
+            logger.warn('[Renderer] No HTTP requests found in execution results.');
+            if (window.alert) {
+                alert('No HTTP requests found in the last flow execution. Only request steps are included in HAR export.');
+            }
+            return;
+        }
+
+        logger.info(`[Renderer] Generated HAR with ${harData.log.entries.length} entries`);
+
+        // Send to main process for file save dialog
+        if (!window.electronAPI || !window.electronAPI.exportHAR) {
+            throw new Error('HAR export API not available');
+        }
+
+        const result = await window.electronAPI.exportHAR(harData);
+
+        if (result && result.success && !result.cancelled) {
+            logger.info(`[Renderer] HAR file exported successfully to: ${result.filePath}`);
+            if (window.alert) {
+                alert(`HAR file exported successfully!\n\nLocation: ${result.filePath}`);
+            }
+        } else if (result && result.cancelled) {
+            logger.info('[Renderer] HAR export cancelled by user');
+        } else {
+            throw new Error(result?.error || 'Unknown error during HAR export');
+        }
+    } catch (error) {
+        logger.error('[Renderer] Error during HAR export:', error);
+        if (window.alert) {
+            alert(`Error exporting HAR file: ${error.message}`);
+        }
+    }
+}
 
 // --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -120,6 +186,17 @@ document.addEventListener('DOMContentLoaded', () => {
              });
         } else {
             logger.warn("[Renderer] IPC: onManualUpdateCheckTrigger function not available on electronAPI.");
+        }
+        // --- END NEW ---
+
+        // --- NEW: Listener for HAR export trigger ---
+        if (typeof window.electronAPI.onHARExportTrigger === 'function') {
+             window.electronAPI.onHARExportTrigger(() => {
+                 logger.debug('[Renderer] Received trigger-har-export via preload.');
+                 handleHARExport();
+             });
+        } else {
+            logger.warn("[Renderer] IPC: onHARExportTrigger function not available on electronAPI.");
         }
         // --- END NEW ---
 
