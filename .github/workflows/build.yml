@@ -62,10 +62,10 @@ jobs:
           cp artifacts/macos-latest-build/FlowRunner-${VERSION}-arm64.dmg \
              release/FlowRunnerSetup-arm64-mac-${VERSION}.dmg
 
-          # Windows - zip the portable app directory
-          cd artifacts/windows-latest-build/win-unpacked
-          zip -r ../../../release/FlowRunnerSetup-x64-win-${VERSION}.zip .
-          cd ../../..
+          # Windows - zip the NSIS installer
+          cd artifacts/windows-latest-build
+          zip ../release/FlowRunnerSetup-x64-win-${VERSION}.zip "FlowRunner Setup ${VERSION}.exe"
+          cd ../..
 
           # Linux - extract AppImage and rename
           cp artifacts/ubuntu-latest-build/FlowRunner-${VERSION}.AppImage \
