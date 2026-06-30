@@ -63,8 +63,9 @@ jobs:
              release/FlowRunnerSetup-arm64-mac-${VERSION}.dmg
 
           # Windows - zip the NSIS installer
+          ls -lh artifacts/windows-latest-build
           cd artifacts/windows-latest-build
-          zip ../release/FlowRunnerSetup-x64-win-${VERSION}.zip "FlowRunner Setup ${VERSION}.exe"
+          zip ../../release/FlowRunnerSetup-x64-win-${VERSION}.zip "FlowRunner Setup ${VERSION}.exe"
           cd ../..
 
           # Linux - extract AppImage and rename
