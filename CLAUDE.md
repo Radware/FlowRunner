@@ -1,130 +1,32 @@
-# FlowRunner - Project Guide
+# FlowRunner — Project Guide
 
-## Overview
+**FlowRunner** is an Electron desktop app (built by the Radware ASE Team) for visually creating, running, and debugging sequences of API calls ("API Flows"). Three processes — **main** (`main.js`), **preload** (`preload.js`, the `electronAPI` IPC bridge), **renderer** (`app.js` + ES modules: all UI + the execution engine). Targets Windows x64, macOS arm64, Linux x64. Current version: **1.2.1**. Repo: https://github.com/Radware/FlowRunner
 
-FlowRunner is an Electron desktop application for visually creating, managing, running, and debugging sequences of API calls ("API Flows"). Built by the Radware ASE Team. Targets Windows (x64), macOS (Apple Silicon/arm64), and Linux (x64).
+## The working bible — read on demand, don't load it all
 
-Repository: https://github.com/Radware/FlowRunner
+Detail lives in four focused files so context stays lean. **Load the one you need for the task at hand:**
 
-## Architecture
-
-### Process Model (Electron)
-
-- **Main process** (`main.js`): Window management, native dialogs (`dialog.showOpenDialog`, `dialog.showSaveDialog`), file system operations, IPC handler registration, application menu, and lifecycle events.
-- **Preload** (`preload.js`): Bridges main and renderer via `contextBridge.exposeInMainWorld('electronAPI', ...)`. Uses `ipcRenderer.invoke()` for request/response and `ipcRenderer.send()` for one-way messages.
-- **Renderer** (`app.js` + modules): All UI logic, flow authoring, execution engine. Loaded as ES modules (`"type": "module"` in package.json).
-
-### Key Renderer Modules
-
-| Module | Responsibility |
+| File | Read it when… |
 |---|---|
-| `app.js` | Entry point; DOMContentLoaded init, component wiring, overlay logic |
-| `state.js` | Centralized `appState` and `domRefs` objects |
-| `eventHandlers.js` | All UI event listener registration (buttons, keyboard shortcuts) |
-| `fileOperations.js` | Open/save/close/recent files; calls `electronAPI` for dialogs and fs |
-| `flowCore.js` | Flow model utilities, validation, template creation, JSON conversion |
-| `modelUtils.js` | Step CRUD operations on the flow model (add, delete, move, clone) |
-| `executionHelpers.js` | Flow runner engine, variable substitution, condition evaluation |
-| `runnerInterface.js` | Runner UI callbacks, result rendering, export to JSON/CSV |
-| `flowBuilderComponent.js` | List/editor view component |
-| `flowVisualizer.js` | Node-graph view component (canvas-based) |
-| `uiUtils.js` | DOM helpers: `setLoading`, `setDirty`, `showMessage`, `renderCurrentFlow` |
-| `domUtils.js` | `initializeDOMReferences()` — populates `domRefs` from DOM IDs |
-| `harExporter.js` | Generates HAR 1.2 format from execution results |
-| `appFeatures.js` | Sidebar/runner collapse, update checking |
-| `dialogs.js` | Step type selection dialog, variable dropdown, variable insertion |
-| `config.js` | Constants: `CURRENT_VERSION`, `GITHUB_RELEASES_API`, recent files config |
-| `logger.js` | Logging utility with configurable levels |
+| [architecture.md](architecture.md) | You need to know where something lives or how a subsystem works — modules, IPC, flow-file format, variables, execution semantics, build/release, testing. |
+| [gotchas.md](gotchas.md) | **Before touching any subsystem.** Traps and time-wasters, by blast radius. |
+| [changelog.md](changelog.md) | You need the *why* behind a decision, or you just landed a change (add an entry). |
+| [masterplan.md](masterplan.md) | You need the product vision, who it's for, or what's planned next. |
 
-### Data Flow for File Operations
+## Maintaining the bible (do this every session, where appropriate)
 
-```
-User clicks "Open" button
-  -> eventHandlers.js: handleOpenFile()
-  -> fileOperations.js: confirmDiscardChanges(), then window.electronAPI.showOpenFile()
-  -> preload.js: ipcRenderer.invoke('dialog:openFile')
-  -> main.js: ipcMain.handle('dialog:openFile') -> dialog.showOpenDialog(mainWindow, ...)
-  -> Returns filePath back through the chain
-  -> fileOperations.js: loadAndRenderFlow(filePath)
-  -> preload.js: ipcRenderer.invoke('fs:readFile', filePath)
-  -> main.js: fs.readFile(filePath)
-  -> Renderer parses JSON, updates appState, renders UI
-```
+- **Did something + why?** → add a top entry to [changelog.md](changelog.md) (it's our ADR — decision + rationale, not just the diff).
+- **Lost time to something non-obvious / hit a dead-end?** → log it in [gotchas.md](gotchas.md) (symptom → root cause → fix/lesson). This is the highest-value upkeep.
+- **Changed a component's role, added/removed a module, changed the flow format or IPC?** → update [architecture.md](architecture.md).
+- **Scope/roadmap shifted?** → update [masterplan.md](masterplan.md) (and record *why* in the changelog).
 
-## Version Management
+Keep all four concise and robustly clear. Prefer updating an existing entry over adding a near-duplicate.
 
-**When releasing a new version, ALL of these must be updated:**
+## Non-negotiables (the two that bite hardest)
 
-1. `package.json` — `"version"` field
-2. `config.js` — `CURRENT_VERSION` constant
-3. `main.js` — `appVersion` default value
-4. `help.html` — Application Version display text
-5. `harExporter.js` — HAR creator version
-6. `README.md` — Badge, changelog, prerequisites link, installation download links
-7. `release.md` — Detailed GitHub release body (used by CI workflow)
-8. `release-v{X.Y.Z}.md` — Short release notes file
+1. **`build.files` in `package.json`:** every JS module the app imports MUST be listed, or the *packaged* app crashes silently (never fails in `npm start`). The single most repeated mistake in this project — [gotchas.md](gotchas.md) #1.
+2. **Version bump = 8 files in sync:** `package.json`, `config.js`, `main.js`, `help.html`, `harExporter.js`, `README.md`, `release.md`, `release-v{X.Y.Z}.md`. Nothing enforces it — [architecture.md](architecture.md) §9.
 
-The CI workflow (`.github/workflows/build.yml`) reads the version from `package.json` and uses `release.md` as the GitHub release body.
+## Commands
 
-## Build & Packaging
-
-**electron-builder** config lives in `package.json` under `"build"`.
-
-### Critical: `build.files` Array
-
-Every JS module imported by the app MUST be listed in `build.files`. Missing files will cause the packaged app to crash silently (the renderer fails to load, no event handlers are registered, and the app appears frozen). This only manifests in packaged builds, not in `npm start`.
-
-**Lesson learned (v1.2.1):** `harExporter.js` was added and imported in `app.js` but not added to `build.files`, breaking Windows and Linux packaged builds entirely.
-
-### Build Targets
-
-- macOS: DMG (`FlowRunnerSetup-arm64-mac-{VERSION}.dmg`)
-- Windows: NSIS installer, zipped as portable (`FlowRunnerSetup-x64-win-{VERSION}.zip`)
-- Linux: AppImage (`FlowRunnerSetup-x64-linux-{VERSION}.AppImage`)
-
-### CI/CD
-
-GitHub Actions workflow (`.github/workflows/build.yml`):
-- Triggers on push to `main`/`master`
-- Builds on macOS, Windows, and Ubuntu matrix
-- Creates GitHub Release with tag `v{VERSION}`, uploads all platform installers
-- Uses `release.md` as the release body
-
-## Development
-
-### Prerequisites
-- Node.js 18+
-- `npm ci` to install dependencies
-
-### Commands
-- `npm start` — Run locally in dev mode
-- `npm test` — Unit tests (Jest, jsdom)
-- `npm run e2e` — End-to-end tests (Playwright + Electron)
-- `npm run dist` — Build packaged app for current platform
-
-### Code Style
-- Four-space indentation
-- Semicolons at end of statements
-- ES modules throughout (both main and renderer)
-- `contextIsolation: true`, `nodeIntegration: false` in renderer
-
-### Testing
-- Unit tests: Jest with jsdom environment
-- E2E tests: Playwright with Electron support (uses `xvfb-run` on Linux)
-- Before committing: run both `npm test` and `npm run e2e`
-
-## Flow File Format
-
-Flows are saved as `.flow.json` files. Key structure:
-- `name`, `description` — Flow metadata
-- `headers` — Global headers (key-value object)
-- `staticVars` — Flow-level variables (key-value, typed)
-- `steps[]` — Ordered array of step objects (request, condition, loop, transform)
-- `visualLayout` — Node positions for graph view
-
-## Common Pitfalls
-
-1. **Packaged build vs dev mode**: Always verify that new files are in `build.files`. Dev mode (`npm start`) doesn't use this list.
-2. **IPC registration order**: IPC handlers in `main.js` must be registered before `createWindow()` is called (they are registered inside `app.whenReady()`).
-3. **Dirty state**: Two flags — `appState.isDirty` (flow structure) and `appState.stepEditorIsDirty` (editor panel). Both must be checked for save/close guards.
-4. **Platform-specific code**: macOS uses sheets for dialogs and has dock icon handling. Windows/Linux use separate dialog windows. Linux AppImage needs `--no-sandbox` when running as root.
+`npm start` (dev) · `npm test` (Jest+jsdom) · `npm run e2e` (Playwright+Electron) · `npm run dist` (package current platform). Run `npm test` **and** `npm run e2e` before committing. Style: four-space indent, semicolons, ES modules.
