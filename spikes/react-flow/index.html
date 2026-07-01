@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!--
+            CSP mirrors the packaged FlowRunner app (index.html:11) as closely as a
+            dev page can, to prove a Vite/React-Flow bundle is compatible.
+
+            NOTE: `style-src 'self' 'unsafe-inline'` matches the app exactly. React
+            Flow injects its stylesheet via an inline <style> when you import
+            '@xyflow/react/dist/style.css' through the bundler, so 'unsafe-inline'
+            for styles (already granted by the app) is what makes it load. NO
+            'unsafe-inline' is needed for script-src.
+
+            In `vite dev` this tag is advisory (the dev server injects an inline
+            HMR script + uses a websocket, both of which a strict CSP blocks). The
+            REAL test is `npm run build` + serving dist/ — the built output has no
+            inline scripts. See docs/engine-decision.md "CSP feasibility".
+        -->
+        <meta
+            http-equiv="Content-Security-Policy"
+            content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: assets:; connect-src 'self' http: https:;"
+        />
+        <title>React Flow spike — FlowRunner engine bake-off</title>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="./src/main.jsx"></script>
+    </body>
+</html>
