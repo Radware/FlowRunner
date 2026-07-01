@@ -174,9 +174,17 @@ describe('FlowVisualizer (Drawflow)', () => {
         await waitForVisualizerRender();
 
         const drawflowId = visualizer.nodeIdByStepId.get('step1');
+        // A real Drawflow drag updates BOTH the data model (pos_x/pos_y) AND the
+        // node element's style.left/top in lock-step (see drawflow position()).
+        // The nodeMoved handler treats style.left/top as authoritative, so the
+        // test must move the DOM element too — mutating the data model alone is
+        // not how the interaction reaches the handler.
         const nodeData = visualizer.editor.drawflow.drawflow.Home.data[drawflowId];
         nodeData.pos_x = 300;
         nodeData.pos_y = 400;
+        const nodeEl = container.querySelector(`#node-${drawflowId}`);
+        nodeEl.style.left = '300px';
+        nodeEl.style.top = '400px';
 
         visualizer.editor.dispatch('nodeMoved', drawflowId);
         expect(mockCallbacks.onNodeLayoutUpdate).toHaveBeenCalledWith('step1', 300, 400);
@@ -231,15 +239,23 @@ describe('FlowVisualizer (Drawflow)', () => {
         mockCallbacks.onNodeLayoutUpdate = (id, x, y) => {
             handleVisualizerNodeLayoutUpdate(id, x, y);
         };
+        // Replace the beforeEach visualizer: destroy the old one first so its
+        // modal (appended to document.body) does not leak into later tests.
+        visualizer.destroy();
         visualizer = new FlowVisualizer(container, mockCallbacks);
 
         visualizer.render(mockFlow, null);
         await waitForVisualizerRender();
 
         const drawflowId = visualizer.nodeIdByStepId.get('step1');
+        // Mirror a real Drawflow drag: move both the data model and the DOM
+        // element, which the nodeMoved handler reads as authoritative.
         const nodeData = visualizer.editor.drawflow.drawflow.Home.data[drawflowId];
         nodeData.pos_x = 500;
         nodeData.pos_y = 600;
+        const nodeEl = container.querySelector(`#node-${drawflowId}`);
+        nodeEl.style.left = '500px';
+        nodeEl.style.top = '600px';
 
         visualizer.editor.dispatch('nodeMoved', drawflowId);
 
@@ -255,7 +271,10 @@ describe('FlowVisualizer (Drawflow)', () => {
         const dblClickEvent = new MouseEvent('dblclick', { bubbles: true });
         node.dispatchEvent(dblClickEvent);
 
-        const modal = document.querySelector('.node-editor-modal');
+        // Query THIS visualizer's modal. Each FlowVisualizer appends its own
+        // .node-editor-modal to document.body, so a bare document.querySelector
+        // can return a different visualizer's modal.
+        const modal = visualizer.nodeEditorModal;
         const modalTitle = modal.querySelector('.node-editor-title');
         expect(modal.style.display).toBe('flex');
         expect(modalTitle.textContent).toContain('Step 1');
@@ -268,7 +287,9 @@ describe('FlowVisualizer (Drawflow)', () => {
         const node = container.querySelector('.drawflow-node.flow-node[data-step-id="step1"]');
         node.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
 
-        const addButton = document.querySelector('.node-editor-add');
+        // Use THIS visualizer's add button; a bare document.querySelector can
+        // return the button of another visualizer's modal (see modal note above).
+        const addButton = visualizer.nodeEditorModal.querySelector('.node-editor-add');
         addButton.click();
 
         expect(mockCallbacks.onRequestAddStepAfter).toHaveBeenCalledWith(

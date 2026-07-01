@@ -156,6 +156,21 @@ describe('FlowRunner', () => {
         global.clearTimeout = originalGlobalClearTimeout;
     });
 
+    describe('graceful degradation (unknown step types)', () => {
+        test('unknown step type is skipped with a warning, not thrown or stopped', async () => {
+            const step = { id: 'u1', name: 'Future Step', type: 'future_unknown_type' };
+            await runner._executeSingleStepLogic(step, {});
+            const last = runner.state.results[runner.state.results.length - 1];
+            expect(last.status).toBe('skipped');
+            expect(last.unsupported).toBe(true);
+            // the flow is NOT halted
+            expect(runner.state.stopRequested).toBe(false);
+            expect(mockOnError).not.toHaveBeenCalled();
+            // a warning was surfaced to the user
+            expect(mockOnMessage).toHaveBeenCalled();
+        });
+    });
+
     describe('state management', () => {
         it('should initialize with isRunning and isStepping false', () => {
             expect(runner.isRunning()).toBe(false);

@@ -36,4 +36,21 @@ describe('transformOps', () => {
         expect(context.decoded.payload.exp).toBe(123);
         expect(context.decoded.header.alg).toBe('none');
     });
+
+    test('unknown transform op is skipped with a warning (not downgraded to base64_decode)', async () => {
+        const context = {};
+        const ops = [
+            // "SGVsbG8" base64url-decodes to "Hello"; the old bug set decoded = "Hello".
+            { op: 'totally_unknown_future_op', set: 'decoded', args: ['SGVsbG8'], options: {} },
+            { op: 'base64_encode', set: 'enc', args: ['hi'], options: { base64: 'url' } },
+        ];
+        const output = await executeTransformOps(ops, context, { evaluatePath: simpleEvaluatePath });
+        expect(context.decoded).toBeUndefined();       // unknown op skipped, NOT base64-decoded
+        expect(context.enc).toBeDefined();             // subsequent known op still ran
+        expect(output.updatedVars).toEqual(['enc']);
+        expect(output.warnings).toHaveLength(1);
+        expect(output.warnings[0].op).toBe('totally_unknown_future_op');
+        expect(output.warnings[0].set).toBe('decoded');
+        expect(output.warnings[0].status).toBe('skipped');
+    });
 });

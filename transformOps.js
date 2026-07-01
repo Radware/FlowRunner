@@ -239,6 +239,23 @@ export async function executeTransformOps(ops, context, options = {}) {
     const output = { updatedVars: [], warnings: [] };
     const list = Array.isArray(ops) ? ops : [];
     for (let i = 0; i < list.length; i++) {
+        // Graceful degradation: an unknown/newer transform op is SKIPPED with a
+        // machine-readable warning rather than silently downgraded to base64_decode
+        // (which would run the wrong operation) or thrown (which would fail the step).
+        const rawOp = list[i] && typeof list[i] === 'object' ? list[i] : {};
+        if (!isTransformOpName(rawOp.op)) {
+            const setHint = typeof rawOp.set === 'string' ? rawOp.set : null;
+            output.warnings.push({
+                type: 'unsupported_transform_op',
+                op: rawOp.op ?? null,
+                set: setHint,
+                index: i,
+                status: 'skipped',
+                message: `Unsupported transform op "${rawOp.op}" at position ${i + 1}; skipped (${setHint ? `output variable "${setHint}" left unset` : 'no output variable set'}).`,
+            });
+            console.warn(`[transformOps] TRANSFORM_OP_UNSUPPORTED op=${JSON.stringify(rawOp.op)} set=${JSON.stringify(setHint)} index=${i} - skipped, not executed (refusing to silently substitute base64_decode).`);
+            continue;
+        }
         const normalized = normalizeTransformOp(list[i]);
         if (!normalized.set || typeof normalized.set !== 'string') {
             throw new Error(`Transform op ${i + 1} is missing a valid output variable.`);
