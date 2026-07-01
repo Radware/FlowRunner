@@ -2,6 +2,21 @@
 
 > Traps, dead-ends, and things that wasted real time. Read this before touching the relevant subsystem; **add to it whenever you lose time to something non-obvious** (symptom → root cause → fix/lesson). Ordered by blast radius.
 
+## Cross-app FlowMap contract (highest blast radius)
+
+The `.flow.json` format is shared by **three independently-versioned apps**: FlowRunner UI (JS), **flowrunner-cli** (`/Users/taly/Development/flowrunner-cli`, Python — runs flows 24/7 in containers, *stricter* parser), and the **ShowRunner Demo-Management-Portal** (`dump/Demo-Management-Portal`, Python + React). A schema change here can silently break the production CLI. See [architecture.md](architecture.md) §4 and [masterplan.md](masterplan.md).
+
+### 0a. Renaming/repurposing a shared field silently breaks the 24/7 CLI
+- **Frozen fields — never rename or repurpose in place** (to change, add a *new* field alongside and keep reading the old one): `staticVars` (camelCase; the CLI reads *only* this — a `static_vars` rename emptied all seeded vars in a live incident, portal D-025); the condition wire keys `then`/`else` and loop wire key `steps` (the UI's internal `thenSteps`/`elseSteps`/`loopSteps` must **never** leak to disk — the CLI reads only the aliased wire keys and silently sees empty branches otherwise); `onFailure` (Pydantic-**required** on every request step in the CLI — omitting it hard-fails the whole flow); `type` (CLI discriminated union **rejects** unknown types — stricter than the UI); the `##VAR:type:name##` body markers; the `conditionData` operator vocabulary; the extract namespaces (`body.`/`headers.`/`.status`); the method allow-list.
+- **Additive is safe; renames/removals are silently destructive.** The CLI ignores unknown fields (`extra='ignore'`), so new *optional* fields are safe — but no app is a pass-through (unknown fields are dropped on any round-trip through the UI or CLI). New step types / operators must land in the CLI **before** any flow uses them.
+
+### 0b. No `schemaVersion` field exists yet
+- Flow files carry no machine-readable version. Every consumer is a tolerant reader that "does something plausible" with a too-new file instead of failing loudly, so a breaking change lands silently in the 24/7 runner. Planned fix (see [masterplan.md](masterplan.md)): add an additive top-level `schemaVersion` now, give the CLI a version-gate (unknown MAJOR ⇒ reject), and make readers skip-unknown-with-warning.
+
+### 0c. Two live cross-app bugs found (in sibling repos, tracked for the ecosystem)
+- ShowRunner portal drops camelCase `visualLayout` on flow create/import (needs a `visualLayout`/`visual_layout` fallback like it already has for `staticVars`).
+- flowrunner-cli silently downgrades an unknown transform `op` to `base64_decode` (should skip/fail loudly).
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*
@@ -19,7 +34,7 @@
 - **Lesson:** when editing the release-packaging step, the relative path to `release/` must track the `cd` depth. The step runs under `bash -e`, so the **first** failing command aborts it — a good place for a `ls -lh` before the zip to make failures diagnosable.
 
 ### 2b. CI trigger model — what builds vs what publishes
-- `build.yml` triggers on: **push** to `main`/`master` (builds **and** publishes the release), **pull_request** to `main`/`master` (builds only), and **workflow_dispatch** (manual, any branch — builds only). All three honor `paths-ignore` (`**.md`, `docs/**`, `.vscode/**`), so docs-only changes don't build.
+- `build.yml` triggers on: **push** to `main`/`master` (builds **and** publishes the release), **pull_request** to `main`/`master` (builds only), and **workflow_dispatch** (manual, any branch — builds only). All three honor `paths-ignore` (`**.md`, `docs/**`, `.vscode/**`, `schemas/**`), so docs/schema-only changes don't build.
 - The `release` job is gated `if: github.event_name == 'push' && ref is main/master`, so **only a real push/merge to main publishes** — PR and manual runs never touch the live release (verified: dispatch run → `release` skipped). Build a branch without publishing: `gh workflow run "FlowRunner Build" --ref <branch>`, then `gh run download <run-id>`.
 - Trap: `workflow_dispatch`/`pull_request` only work once the workflow file defining them is on the **default branch** — you can't dispatch a trigger that exists only on a feature branch.
 

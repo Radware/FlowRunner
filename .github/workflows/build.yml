@@ -7,12 +7,14 @@ on:
       - '**.md'
       - 'docs/**'
       - '.vscode/**'
+      - 'schemas/**'
   pull_request:
     branches: [ "main", "master" ]
     paths-ignore:
       - '**.md'
       - 'docs/**'
       - '.vscode/**'
+      - 'schemas/**'
   workflow_dispatch: {}
 
 jobs:

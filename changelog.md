@@ -13,6 +13,9 @@
 - **Fix:** the first CI attempt failed (`zip I/O error`, exit 15) — the zip step wrote to `../release` while two levels deep in `artifacts/windows-latest-build`; corrected to `../../release`. → [gotchas.md](gotchas.md), Build & packaging.
 - Shipped as an update to the existing **v1.2.1** release (no version bump).
 - **CI trigger overhaul (`build.yml`):** added `paths-ignore` (`**.md`, `docs/**`, `.vscode/**`) so docs-only pushes no longer rebuild; added `workflow_dispatch` (manual, any branch) and `pull_request` triggers so branches build on all three platforms **without publishing**; gated the `release` job to `push` on `main`/`master`. **Why:** CI previously built only on push-to-main with no way to validate a build off `main`, blocking safe testing of dependency upgrades (e.g. the Electron bump). Verified: a `push` run publishes; a `workflow_dispatch` run builds all platforms with `release` **skipped**.
+- **CI:** added `schemas/**` to `paths-ignore` so schema-doc changes don't trigger a rebuild.
+- **Fix (schema drift):** `schemas/flow-v1.schema.json` declared the internal model names `thenSteps`/`elseSteps`/`loopSteps`; corrected to the real wire keys `then`/`else`/`steps` (verified against sample flows and `flowCore.js:111-116`; the CLI reads only these).
+- **Research / proposal:** produced the multi-agent councilled [FlowMap & UX evolution proposal](docs/flowmap-evolution.md) and documented the **cross-app FlowMap contract** (three apps share `.flow.json`: FlowRunner UI, flowrunner-cli, ShowRunner portal) in `architecture.md`/`gotchas.md`/`masterplan.md` + the schema `$comment`. **Direction:** sequence over big-bang; graceful-degradation (unknown step/op ⇒ skip-with-warning, never crash) first; adopt React Flow for the node view only behind packaged-build evidence; `schemaVersion` + subflows gated on *deployed* CLI support.
 
 ---
 

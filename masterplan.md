@@ -8,6 +8,15 @@ FlowRunner is an Electron desktop app for visually creating, managing, running, 
 
 **Primary internal motivation:** help Radware **Sales Engineers / Architects demonstrate Business Logic Attack (BLA) Protection** — by authoring and visually presenting both *legitimate* and *malicious* multi-step API sequences. This is the original reason the tool exists and shapes its priorities (visual clarity, easy demo authoring, runtime visualization).
 
+## Ecosystem — FlowMap is a cross-app contract
+
+FlowRunner UI is one of **three apps that share the `.flow.json` "FlowMap" filetype**:
+- **FlowRunner UI** (this repo) — interactive authoring + single-instance runs; the canonical schema origin.
+- **flowrunner-cli** (`/Users/taly/Development/flowrunner-cli`, Python) — headless containerized runner; ShowRunner runs many of these **24/7** to simulate realistic API traffic. Parses the same schema *more strictly* than the UI.
+- **ShowRunner / Demo-Management-Portal** (`dump/Demo-Management-Portal`, Python + React) — orchestrator that also authors/manages flowmaps (with hierarchical folders) and drives the CLI fleet.
+
+**Consequence:** the flow format is a shared contract, not a private file. Evolve it **additive-only**, keep the frozen fields immutable, and coordinate any non-additive change across all three repos. See [architecture.md](architecture.md) §4 and [gotchas.md](gotchas.md) (Cross-app FlowMap contract). A full schema-evolution + UX-modernization proposal is maintained in [docs/flowmap-evolution.md](docs/flowmap-evolution.md).
+
 ## Personas
 
 - **SE / Architect** — demos (the primary driver): present BLA scenarios visually.

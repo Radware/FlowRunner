@@ -1,6 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "FlowRunner Flow v1.0",
+  "$comment": "CROSS-APP CONTRACT: this .flow.json format is shared by FlowRunner UI (JS), flowrunner-cli (Python; 24/7 headless; stricter parser), and the ShowRunner Demo-Management-Portal. Evolve additive-only; never rename/repurpose staticVars, the wire keys then/else/steps (not thenSteps/elseSteps/loopSteps), onFailure, type, the ##VAR:type:name## body markers, conditionData operators, or the extract namespaces. No schemaVersion field exists yet. See the FlowRunner repo architecture.md / gotchas.md / masterplan.md and docs/flowmap-evolution.md.",
   "type": "object",
   "required": ["id", "name", "steps"],
   "properties": {
@@ -51,11 +52,11 @@
           "type": "object",
           "additionalProperties": {"type": "string"}
         },
-        "thenSteps": {
+        "then": {
           "type": "array",
           "items": {"$ref": "#/definitions/step"}
         },
-        "elseSteps": {
+        "else": {
           "type": "array",
           "items": {"$ref": "#/definitions/step"}
         },
@@ -70,7 +71,7 @@
         },
         "source": {"type": "string"},
         "loopVariable": {"type": "string"},
-        "loopSteps": {
+        "steps": {
           "type": "array",
           "items": {"$ref": "#/definitions/step"}
         },
