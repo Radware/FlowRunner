@@ -35,6 +35,9 @@ import {
 // --- HAR Export ---
 import { generateHAR } from './harExporter.js';
 
+// --- cURL / HAR Import (WAVE2 engine-features) ---
+import { initializeImportCurlHar } from './importCurlHarUI.js';
+
 // --- Event Handlers (Callbacks for Components) ---
 import {
     initializeEventListeners, // <-- This function now handles ALL primary button listeners
@@ -149,6 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAppComponents();
     initializeRunner();
     initializeEventListeners(); // <-- Call the consolidated listener setup from eventHandlers.js
+    initializeImportCurlHar(); // WAVE2 engine-features: wire sidebar cURL/HAR import controls
     setupGlobalOverlayListeners(); // For the global Info Overlay *content* listeners (inputs, adds)
     initializeResultFilters();
 

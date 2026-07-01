@@ -779,45 +779,83 @@ export class FlowRunner {
         // --- End body processing logic ---
 
 
-        try {
-            // Set timeout *before* fetch call
-            timeoutId = setTimeout(() => {
-                logger.warn(`[FlowRunner] Request timeout triggered for step ${step.id}. Aborting.`);
-                controller.abort();
-            }, 30000); // 30s timeout
+        // --- WAVE2 engine-features: per-request retries with backoff ---
+        // ADDITIVE step field: step.retries = { count, delayMs }.
+        // count defaults to 0 => IDENTICAL behavior to before (single attempt, no retry).
+        // A retry is attempted on a non-2xx HTTP status OR a network/fetch error,
+        // but NEVER after a user-requested stop/abort. delayMs is the backoff between
+        // attempts (uses _sleep, which short-circuits on stopRequested).
+        const retryConfig = (step.retries && typeof step.retries === 'object') ? step.retries : {};
+        const maxRetries = Math.max(0, Number.isFinite(retryConfig.count) ? Math.floor(retryConfig.count) : 0);
+        const retryDelayMs = Math.max(0, Number.isFinite(retryConfig.delayMs) ? retryConfig.delayMs : 0);
 
-            const response = await fetch(url, fetchOptions);
-            // clearTimeout(timeoutId); // Clear normal completion timeout -> Moved to finally block
-            const responseStatus = response.status;
-            const responseHeaders = {};
-            response.headers.forEach((value, key) => { responseHeaders[key] = value; });
-            let responseBody = null;
+        // The controller created above (for the body-prep phase) is replaced by a fresh
+        // controller for each fetch attempt, since an aborted/timed-out controller cannot
+        // be reused.
+        let lastAttemptController = controller;
 
-            if (responseStatus !== 204) {
-                const respContentType = response.headers.get('content-type');
-                try {
-                    if (respContentType && respContentType.includes('application/json')) {
-                        responseBody = await response.json();
-                    } else {
-                        responseBody = await response.text();
-                    }
-                } catch (parseError) {
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            const attemptsRemaining = maxRetries - attempt;
+
+            // Fresh AbortController + timeout per attempt.
+            const attemptController = new AbortController();
+            this.state.currentFetchController = attemptController;
+            lastAttemptController = attemptController;
+            fetchOptions.signal = attemptController.signal;
+            timeoutId = null;
+
+            try {
+                // Set timeout *before* fetch call
+                timeoutId = setTimeout(() => {
+                    logger.warn(`[FlowRunner] Request timeout triggered for step ${step.id}. Aborting.`);
+                    attemptController.abort();
+                }, 30000); // 30s timeout
+
+                const response = await fetch(url, fetchOptions);
+                // clearTimeout(timeoutId); // Clear normal completion timeout -> Moved to finally block
+                const responseStatus = response.status;
+                const responseHeaders = {};
+                response.headers.forEach((value, key) => { responseHeaders[key] = value; });
+                let responseBody = null;
+
+                if (responseStatus !== 204) {
+                    const respContentType = response.headers.get('content-type');
                     try {
-                        responseBody = await response.text();
-                    } catch (textError) {
-                        responseBody = "[Failed to retrieve response body]";
-                        this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error');
+                        if (respContentType && respContentType.includes('application/json')) {
+                            responseBody = await response.json();
+                        } else {
+                            responseBody = await response.text();
+                        }
+                    } catch (parseError) {
+                        try {
+                            responseBody = await response.text();
+                        } catch (textError) {
+                            responseBody = "[Failed to retrieve response body]";
+                            this.onMessage(`Response body parsing failed and text fallback failed: ${textError.message}`, 'error');
+                        }
+                        this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
                     }
-                    this.onMessage(`Response body parsing failed: ${parseError.message}. Using raw text fallback.`, 'warning');
                 }
-            }
 
-            // --- MODIFICATION START: Implement onFailure logic for HTTP status (remains the same logic) ---
-            const output = { status: responseStatus, headers: responseHeaders, body: responseBody };
+                // --- MODIFICATION START: Implement onFailure logic for HTTP status (remains the same logic) ---
+                const output = { status: responseStatus, headers: responseHeaders, body: responseBody };
 
-            if (response.ok) { // Status 200-299
-                return { status: 'success', output: output, error: null };
-            } else { // Status < 200 or >= 300
+                if (response.ok) { // Status 200-299
+                    return { status: 'success', output: output, error: null };
+                }
+
+                // Non-2xx: retry if attempts remain and no stop was requested.
+                if (attemptsRemaining > 0 && !this.state.stopRequested) {
+                    this.onMessage(`Request step "${step.name}" received status ${responseStatus}. Retrying (${attempt + 1}/${maxRetries})...`, 'warning');
+                    clearTimeout(timeoutId);
+                    await this._sleep(retryDelayMs);
+                    if (this.state.stopRequested) {
+                        return { status: 'error', output: output, error: `Request failed with status ${responseStatus}` };
+                    }
+                    continue; // next attempt
+                }
+
+                // Status < 200 or >= 300, no retries left
                 if (effectiveOnFailure === 'continue') {
                     // Continue flow, report step as success, but output contains non-2xx status
                     this.onMessage(`Request step "${step.name}" received non-2xx status ${responseStatus}, continuing flow.`, 'warning');
@@ -829,60 +867,77 @@ export class FlowRunner {
                     // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
                     return { status: 'error', output: output, error: `Request failed with status ${responseStatus}` };
                 }
-            }
-            // --- MODIFICATION END ---
+                // --- MODIFICATION END ---
 
-        } catch (error) { // Catch network errors, timeouts, ABORTS etc.
-            // clearTimeout(timeoutId); // Clear error/abort timeout -> Moved to finally block
-            logger.error(`Fetch error for step ${step.id}:`, error);
-            let errorMsg = error.message || 'Network error or invalid request';
+            } catch (error) { // Catch network errors, timeouts, ABORTS etc.
+                // clearTimeout(timeoutId); // Clear error/abort timeout -> Moved to finally block
+                logger.error(`Fetch error for step ${step.id}:`, error);
+                let errorMsg = error.message || 'Network error or invalid request';
+                let userAborted = false;
 
-            // --- MODIFICATION START: Specific message for user abort ---
-            if (error.name === 'AbortError') {
-                // Check if it was aborted by the timeout or by user stop()
-                if (this.state.stopRequested && this.state.currentFetchController === controller) { // Ensure this abort corresponds to the *current* stop request
-                    errorMsg = 'Request aborted by user.';
-                    this.onMessage(`Request step "${step.name}" was aborted by user.`, 'warning');
-                } else {
-                    errorMsg = 'Request timed out (30s)';
-                    this.onMessage(`Request step "${step.name}" timed out after 30 seconds.`, 'error');
+                // --- MODIFICATION START: Specific message for user abort ---
+                if (error.name === 'AbortError') {
+                    // Check if it was aborted by the timeout or by user stop()
+                    if (this.state.stopRequested && this.state.currentFetchController === attemptController) { // Ensure this abort corresponds to the *current* stop request
+                        errorMsg = 'Request aborted by user.';
+                        userAborted = true;
+                        this.onMessage(`Request step "${step.name}" was aborted by user.`, 'warning');
+                    } else {
+                        errorMsg = 'Request timed out (30s)';
+                        this.onMessage(`Request step "${step.name}" timed out after 30 seconds.`, 'error');
+                    }
+                } else if (errorMsg.match(/ENOTFOUND|DNS|getaddrinfo|Failed to fetch|Name or service not known|Could not resolve host/i)) {
+                    errorMsg = 'Network error: Could not resolve host or DNS lookup failed.';
+                    this.onMessage(`Request step "${step.name}": Could not resolve host or DNS lookup failed.\n\nCheck the URL and your network connection.`, 'error');
+                } else if (errorMsg.match(/ECONNREFUSED|connection refused|ECONNRESET|Connection refused/i)) {
+                    errorMsg = 'Network error: Connection refused by server.';
+                    this.onMessage(`Request step "${step.name}": Connection refused by server.\n\nCheck if the server is running and reachable.`, 'error');
+                } else if (errorMsg.match(/timeout|timed out|ETIMEDOUT/i)) {
+                    errorMsg = 'Network error: Connection timed out.';
+                    this.onMessage(`Request step "${step.name}": Connection timed out.\n\nCheck your network connection and server status.`, 'error');
+                } else if (errorMsg.match(/NetworkError|network error|TypeError: Failed to fetch/i)) {
+                    errorMsg = 'Network error: Failed to connect.';
+                    this.onMessage(`Request step "${step.name}": Failed to connect.\n\nCheck your network connection and the request URL.`, 'error');
                 }
-            } else if (errorMsg.match(/ENOTFOUND|DNS|getaddrinfo|Failed to fetch|Name or service not known|Could not resolve host/i)) {
-                errorMsg = 'Network error: Could not resolve host or DNS lookup failed.';
-                this.onMessage(`Request step "${step.name}": Could not resolve host or DNS lookup failed.\n\nCheck the URL and your network connection.`, 'error');
-            } else if (errorMsg.match(/ECONNREFUSED|connection refused|ECONNRESET|Connection refused/i)) {
-                errorMsg = 'Network error: Connection refused by server.';
-                this.onMessage(`Request step "${step.name}": Connection refused by server.\n\nCheck if the server is running and reachable.`, 'error');
-            } else if (errorMsg.match(/timeout|timed out|ETIMEDOUT/i)) {
-                errorMsg = 'Network error: Connection timed out.';
-                this.onMessage(`Request step "${step.name}": Connection timed out.\n\nCheck your network connection and server status.`, 'error');
-            } else if (errorMsg.match(/NetworkError|network error|TypeError: Failed to fetch/i)) {
-                errorMsg = 'Network error: Failed to connect.';
-                this.onMessage(`Request step "${step.name}": Failed to connect.\n\nCheck your network connection and the request URL.`, 'error');
-            }
-            // --- MODIFICATION END ---
+                // --- MODIFICATION END ---
 
-            // --- MODIFICATION START: Implement onFailure logic for fetch errors (remains the same logic) ---
-            if (effectiveOnFailure === 'continue') {
-                // Continue flow, report step as error (since the request fundamentally failed)
-                this.onMessage(`Request step "${step.name}" encountered network/fetch error, continuing flow. Error: ${errorMsg}`, 'warning');
-                // Return 'error' status, but _executeSingleStepLogic checks onFailure === 'continue' and won't stop the flow
-                return { status: 'error', output: null, error: errorMsg };
-            } else { // 'stop' (default)
-                // Stop flow, report step as error
-                this.onMessage(`Request step "${step.name}" failed with network/fetch error, stopping flow. Error: ${errorMsg}`, 'error');
-                // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
-                return { status: 'error', output: null, error: errorMsg };
+                // Retry on network/fetch errors (NOT on user-aborts) if attempts remain.
+                if (!userAborted && attemptsRemaining > 0 && !this.state.stopRequested) {
+                    this.onMessage(`Request step "${step.name}" failed (${errorMsg}). Retrying (${attempt + 1}/${maxRetries})...`, 'warning');
+                    clearTimeout(timeoutId);
+                    await this._sleep(retryDelayMs);
+                    if (this.state.stopRequested) {
+                        return { status: 'error', output: null, error: errorMsg };
+                    }
+                    continue; // next attempt
+                }
+
+                // --- MODIFICATION START: Implement onFailure logic for fetch errors (remains the same logic) ---
+                if (effectiveOnFailure === 'continue') {
+                    // Continue flow, report step as error (since the request fundamentally failed)
+                    this.onMessage(`Request step "${step.name}" encountered network/fetch error, continuing flow. Error: ${errorMsg}`, 'warning');
+                    // Return 'error' status, but _executeSingleStepLogic checks onFailure === 'continue' and won't stop the flow
+                    return { status: 'error', output: null, error: errorMsg };
+                } else { // 'stop' (default)
+                    // Stop flow, report step as error
+                    this.onMessage(`Request step "${step.name}" failed with network/fetch error, stopping flow. Error: ${errorMsg}`, 'error');
+                    // Return 'error' status - _executeSingleStepLogic will see this and trigger stop()
+                    return { status: 'error', output: null, error: errorMsg };
+                }
+                // --- MODIFICATION END ---
+            } finally {
+                // --- MODIFICATION START: Always clear the controller and timeout ---
+                clearTimeout(timeoutId); // Ensure timeout is cleared regardless of outcome
+                if (this.state.currentFetchController === attemptController) {
+                    this.state.currentFetchController = null; // Clear the stored controller only if it's the one we created
+                }
+                // --- MODIFICATION END ---
             }
-            // --- MODIFICATION END ---
-        } finally {
-            // --- MODIFICATION START: Always clear the controller and timeout ---
-            clearTimeout(timeoutId); // Ensure timeout is cleared regardless of outcome
-            if (this.state.currentFetchController === controller) {
-                this.state.currentFetchController = null; // Clear the stored controller only if it's the one we created
-            }
-            // --- MODIFICATION END ---
         }
+
+        // Unreachable in practice: the loop always returns. Kept as a safety net.
+        void lastAttemptController;
+        return { status: 'error', output: null, error: 'Request failed after all retry attempts.' };
     } // --- End of _executeRequestStep ---
 
     async _executeConditionStep(step, context) {

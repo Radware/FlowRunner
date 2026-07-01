@@ -37,6 +37,10 @@
                 <div class="sidebar-actions">
                     <button id="add-flow-btn" class="btn btn-primary">+ New Flow</button>
                     <button id="open-flow-btn" class="btn btn-secondary">Open Flow</button>
+                    <!-- WAVE2 engine-features: import cURL / HAR into the current flow -->
+                    <button id="import-curl-btn" class="btn btn-secondary" title="Import a cURL command as a request step">Import cURL</button>
+                    <button id="import-har-btn" class="btn btn-secondary" title="Import request steps from a HAR file">Import HAR</button>
+                    <input id="import-har-file-input" type="file" accept=".har,application/json" style="display: none;" />
                 </div>
                 <div class="flow-list-container">
                     <ul id="flow-list" class="flow-list">
