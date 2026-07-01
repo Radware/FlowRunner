@@ -11,7 +11,8 @@
 ## Unreleased — CI: Windows release ships the NSIS installer
 - **Decision:** the Windows asset (`FlowRunnerSetup-x64-win-{VERSION}.zip`) now contains the electron-builder **NSIS installer** (`FlowRunner Setup {VERSION}.exe`) instead of the zipped `win-unpacked` portable directory. **Why:** `win.target` was already `nsis`, so the installer was being built and then discarded; shipping it gives recipients a real install experience (choose dir, Start-Menu shortcut, uninstaller) — better for handing demo builds to SEs/customers.
 - **Fix:** the first CI attempt failed (`zip I/O error`, exit 15) — the zip step wrote to `../release` while two levels deep in `artifacts/windows-latest-build`; corrected to `../../release`. → [gotchas.md](gotchas.md), Build & packaging.
-- Shipped as an update to the existing **v1.2.1** release (no version bump). Note: the CI workflow has **no `paths-ignore`**, so *every* push to `main` — including docs-only — rebuilds all platforms and re-publishes the release.
+- Shipped as an update to the existing **v1.2.1** release (no version bump).
+- **CI trigger overhaul (`build.yml`):** added `paths-ignore` (`**.md`, `docs/**`, `.vscode/**`) so docs-only pushes no longer rebuild; added `workflow_dispatch` (manual, any branch) and `pull_request` triggers so branches build on all three platforms **without publishing**; gated the `release` job to `push` on `main`/`master`. **Why:** CI previously built only on push-to-main with no way to validate a build off `main`, blocking safe testing of dependency upgrades (e.g. the Electron bump). Verified: a `push` run publishes; a `workflow_dispatch` run builds all platforms with `release` **skipped**.
 
 ---
 

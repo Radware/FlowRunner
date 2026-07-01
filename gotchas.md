@@ -18,8 +18,10 @@
 - **Cause:** `mkdir -p release` makes `release/` at the repo root; the Windows step `cd`s **two** levels into `artifacts/windows-latest-build` but wrote to `../release` (one level up = `artifacts/release`, which doesn't exist). Must be `../../release`. (The old portable step `cd`'d three levels and correctly used `../../../release`.)
 - **Lesson:** when editing the release-packaging step, the relative path to `release/` must track the `cd` depth. The step runs under `bash -e`, so the **first** failing command aborts it — a good place for a `ls -lh` before the zip to make failures diagnosable.
 
-### 2b. CI rebuilds + re-publishes on *every* push to `main`
-- `build.yml` triggers on any push to `main`/`master` with **no `paths-ignore`**. Docs-only commits therefore rebuild all three platforms and (via `make_latest: true`) overwrite the current release's assets. Consider `paths-ignore: ['**.md', 'docs/**']` if that noise/asset-churn is unwanted.
+### 2b. CI trigger model — what builds vs what publishes
+- `build.yml` triggers on: **push** to `main`/`master` (builds **and** publishes the release), **pull_request** to `main`/`master` (builds only), and **workflow_dispatch** (manual, any branch — builds only). All three honor `paths-ignore` (`**.md`, `docs/**`, `.vscode/**`), so docs-only changes don't build.
+- The `release` job is gated `if: github.event_name == 'push' && ref is main/master`, so **only a real push/merge to main publishes** — PR and manual runs never touch the live release (verified: dispatch run → `release` skipped). Build a branch without publishing: `gh workflow run "FlowRunner Build" --ref <branch>`, then `gh run download <run-id>`.
+- Trap: `workflow_dispatch`/`pull_request` only work once the workflow file defining them is on the **default branch** — you can't dispatch a trigger that exists only on a feature branch.
 
 ## Execution engine
 
