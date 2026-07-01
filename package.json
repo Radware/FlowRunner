@@ -48,7 +48,9 @@
     "jest-environment-jsdom": "^29.7.0",
     "playwright": "^1.52.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "electron-store": "^11.0.2"
+  },
   "build": {
     "appId": "com.radware.flowrunner",
     "productName": "FlowRunner",
@@ -74,6 +76,7 @@
       "modelUtils.js",
       "runnerInterface.js",
       "state.js",
+      "workspaceManager.js",
       "harExporter.js",
       "transformOps.js",
       "uiUtils.js",
