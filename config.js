@@ -22,6 +22,19 @@ export const STORE_SETTINGS_KEY = 'settings';        // free-form settings objec
 export const WORKSPACE_DIR = '.flowrunner';
 export const WORKSPACE_FILE = 'workspace.json';
 
+// --- WAVE3 demo-mode: guided first-run persistence ---
+// localStorage key that records whether the lightweight first-run onboarding
+// coach-marks have been dismissed. Renderer-only UI preference (same class of
+// persistence as sidebarCollapsed/runnerCollapsed), so it lives in localStorage
+// rather than the electron-store settings blob. The value "true" means "seen";
+// absence means "show onboarding on the next empty workspace".
+export const FIRST_RUN_SEEN_KEY = 'flowrunnerFirstRunSeen';
+
+// --- WAVE3 demo-mode: presentation toggle persistence ---
+// localStorage key that remembers whether Demo Mode (the projector presentation
+// toggle) was left on, so a presenter's setup survives an app relaunch mid-demo.
+export const DEMO_MODE_KEY = 'flowrunnerDemoMode';
+
 // --- Logging Level Config ---
 export const LOG_LEVEL = 'info'; // Possible values: 'debug', 'info', 'warn', 'error'
 

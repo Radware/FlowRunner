@@ -2694,3 +2694,270 @@ body.flow-step-dragging { cursor: grabbing !important; }
     box-shadow: inset 3px 0 0 0 var(--accent);
 }
 /* === END WAVE2 LANE file-features === */
+
+/* === WAVE3 demo-mode === */
+/* Two features share this block:
+   (A) DEMO MODE — a projector presentation view, activated by `html.demo-mode`
+       (toggled by demoMode.js). It hides authoring chrome, enlarges nodes + the
+       run-status readout, and makes pass/fail the visual focus. Status is
+       conveyed by a GLYPH as well as hue (WCAG 1.4.1 — legible when projected
+       and for colour-blind viewers). Keeps the light-default projector theme and
+       consumes ONLY the OKLCH semantic tokens.
+   (B) GUIDED FIRST-RUN — teaching empty-states + the dismissible onboarding
+       overlay (firstRun.js).
+   No hardcoded colours; no #000/#fff; semantic tokens only. */
+
+/* Demo-Mode toolbar toggle: show its active (pressed) state distinctly. */
+#demo-mode-btn[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-contrast);
+    border-color: var(--accent);
+}
+
+/* ---- (A) DEMO MODE: hide authoring chrome --------------------------------- */
+/* Collapse the side panels and per-step editing chrome so the graph + status
+   fill the projected screen. Left additive/reversible: removing the class
+   restores every panel. */
+html.demo-mode .sidebar,
+html.demo-mode .runner-panel,
+html.demo-mode .workspace-file-controls,
+html.demo-mode #file-search-wrap,
+html.demo-mode #steps-search-wrap,
+html.demo-mode .flow-info-overlay,
+html.demo-mode .variables-panel,
+html.demo-mode #toggle-info-btn,
+html.demo-mode #toggle-variables-btn,
+html.demo-mode #tidy-up-btn,
+html.demo-mode #next-error-btn,
+html.demo-mode #import-curl-btn,
+html.demo-mode #import-har-btn {
+    display: none !important;
+}
+
+/* Give the workspace the full width once the flex side panes are hidden. */
+html.demo-mode .workspace {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+}
+
+/* Bigger, calmer header; the flow title becomes the headline. */
+html.demo-mode .workspace-header {
+    background: var(--surface-raised);
+    border-bottom: 2px solid var(--border-strong);
+    padding: 14px 22px;
+}
+html.demo-mode #workspace-title {
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* ---- (A) DEMO MODE: enlarge nodes + make status the focus ----------------- */
+html.demo-mode .flow-node {
+    transform: scale(1.12);
+    transform-origin: center;
+}
+html.demo-mode .node-name {
+    font-size: 17px;
+}
+html.demo-mode .flow-node-inner {
+    border-width: 2px;
+}
+
+/* Thicker, higher-contrast status rings on run outcome. */
+html.demo-mode .flow-node.success .flow-node-inner {
+    border-color: var(--run-success) !important;
+    box-shadow: 0 0 0 4px var(--run-success);
+}
+html.demo-mode .flow-node.error .flow-node-inner {
+    border-color: var(--run-error) !important;
+    box-shadow: 0 0 0 4px var(--run-error);
+}
+html.demo-mode .flow-node.stopped .flow-node-inner {
+    border-color: var(--run-skipped) !important;
+    box-shadow: 0 0 0 4px var(--run-skipped);
+}
+html.demo-mode .flow-node.active-step .flow-node-inner {
+    border-color: var(--run-running) !important;
+    box-shadow: 0 0 0 4px var(--run-running);
+}
+
+/* GLYPH-not-hue: a large status glyph badge on each run-state node so pass/fail
+   reads without relying on colour. The glyph text is set per-state below. */
+html.demo-mode .flow-node.success .flow-node-inner::before,
+html.demo-mode .flow-node.error .flow-node-inner::before,
+html.demo-mode .flow-node.stopped .flow-node-inner::before,
+html.demo-mode .flow-node.active-step .flow-node-inner::before {
+    position: absolute;
+    top: -14px;
+    right: -14px;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent-contrast);
+    background: var(--text-muted);
+    box-shadow: 0 2px 6px var(--focus-ring);
+    z-index: 2;
+}
+html.demo-mode .flow-node.success .flow-node-inner::before {
+    content: "\2713"; /* check mark */
+    background: var(--run-success);
+}
+html.demo-mode .flow-node.error .flow-node-inner::before {
+    content: "\2715"; /* multiplication x */
+    background: var(--run-error);
+}
+html.demo-mode .flow-node.stopped .flow-node-inner::before {
+    content: "\25A0"; /* filled square (stop) */
+    background: var(--run-skipped);
+}
+html.demo-mode .flow-node.active-step .flow-node-inner::before {
+    content: "\25B6"; /* right-pointing triangle (running) */
+    background: var(--run-running);
+}
+/* The node-inner is the positioning context for the badge. */
+html.demo-mode .flow-node-inner {
+    position: relative;
+    overflow: visible;
+}
+
+/* ---- (B) GUIDED FIRST-RUN: teaching empty-states -------------------------- */
+.guided-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    max-width: 460px;
+    margin: 0 auto;
+    padding: 32px 24px;
+    text-align: center;
+    color: var(--text);
+}
+.guided-empty-icon {
+    font-size: 2.4rem;
+    line-height: 1;
+    color: var(--accent);
+}
+.guided-empty-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+}
+.guided-empty-body {
+    margin: 0;
+    font-size: 0.95rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+.guided-empty-actions {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+.guided-empty-action {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius, 6px);
+    background: var(--surface-raised);
+}
+.guided-action-label {
+    font-weight: 600;
+    color: var(--text);
+}
+.guided-action-hint {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+
+/* ---- (B) GUIDED FIRST-RUN: onboarding overlay ----------------------------- */
+.guided-onboarding {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--focus-ring);
+}
+.guided-onboarding-card {
+    width: min(480px, 100%);
+    max-height: 90vh;
+    overflow-y: auto;
+    background: var(--surface-raised);
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px var(--focus-ring);
+    padding: 22px 24px;
+}
+.guided-onboarding-header h3 {
+    margin: 0 0 6px;
+    font-size: 1.3rem;
+    color: var(--text);
+}
+.guided-onboarding-intro {
+    margin: 0 0 14px;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+}
+.guided-onboarding-steps {
+    list-style: none;
+    counter-reset: none;
+    margin: 0 0 18px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.guided-onboarding-step {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 12px;
+    align-items: baseline;
+}
+.guided-onboarding-num {
+    grid-row: 1 / span 2;
+    align-self: center;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--accent-contrast);
+    background: var(--accent);
+}
+.guided-onboarding-label {
+    font-weight: 600;
+    color: var(--text);
+}
+.guided-onboarding-hint {
+    grid-column: 2;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.guided-onboarding-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+/* === END WAVE3 demo-mode === */

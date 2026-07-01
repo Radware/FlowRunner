@@ -44,6 +44,9 @@ export function initializeDOMReferences() {
         tidyUpBtn: document.getElementById('tidy-up-btn'),
         nextErrorBtn: document.getElementById('next-error-btn'),
         toggleMinimapBtn: document.getElementById('toggle-minimap-btn'),
+        // === WAVE3 demo-mode === presentation toggle + first-run onboarding host
+        demoModeBtn: document.getElementById('demo-mode-btn'),
+        onboardingHost: document.getElementById('onboarding-host'),
 
         // Panels relative to Workspace
         variablesPanel: document.querySelector('.variables-panel'),

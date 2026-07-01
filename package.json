@@ -84,6 +84,8 @@
       "modelUtils.js",
       "palette.js",
       "jsonView.js",
+      "demoMode.js",
+      "firstRun.js",
       "runnerInterface.js",
       "state.js",
       "workspaceManager.js",
