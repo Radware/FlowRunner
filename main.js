@@ -13,6 +13,12 @@ import { app, BrowserWindow, ipcMain, dialog, Menu, nativeImage, shell } from 'e
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import Store from 'electron-store';
+import {
+    STORE_NAME, STORE_RECENT_FILES_KEY, MAX_RECENT_FILES,
+    WORKSPACE_DIR, WORKSPACE_FILE
+} from './config.js';
+import { parseWorkspace, serializeWorkspace } from './workspaceManager.js';
 
 // ------------------------------------------------------------------
 // Provide a CommonJS‑style `require` helper for Playwright E2E tests
@@ -39,6 +45,70 @@ if (process.platform === 'linux' && process.getuid && process.getuid() === 0) {
 let mainWindow; // Global reference
 let helpWindow = null; // Keep track of the help window
 let forceQuit = false; // Flag to bypass prompts if user confirmed quit
+
+// ------------------------------------------------------------------
+// Persistent settings + recent-files (electron-store) and the sidecar
+// workspace model. `store` is created lazily on first use so importing
+// this module (e.g. under Jest) never touches the filesystem.
+// ------------------------------------------------------------------
+let store = null;
+function getStore() {
+    if (!store) {
+        // electron-store persists JSON under app.getPath('userData').
+        store = new Store({ name: STORE_NAME });
+    }
+    return store;
+}
+
+/** Read the persisted recent-files list (array of absolute paths). */
+function readRecentFiles() {
+    const list = getStore().get(STORE_RECENT_FILES_KEY, []);
+    if (!Array.isArray(list)) return [];
+    return list.filter(p => typeof p === 'string' && p.trim().length > 0);
+}
+
+/** Persist the recent-files list (already ordered, most-recent-first). */
+function writeRecentFiles(list) {
+    getStore().set(STORE_RECENT_FILES_KEY, Array.isArray(list) ? list : []);
+    return readRecentFiles();
+}
+
+/** Add/promote a path to the top of the recent-files list, capped at MAX. */
+function addRecentFilePath(filePath) {
+    if (typeof filePath !== 'string' || filePath.trim().length === 0) {
+        return readRecentFiles();
+    }
+    const current = readRecentFiles().filter(p => p !== filePath);
+    current.unshift(filePath);
+    return writeRecentFiles(current.slice(0, MAX_RECENT_FILES));
+}
+
+/** Absolute path to the sidecar workspace file under the user data dir. */
+function workspaceFilePath() {
+    return path.join(app.getPath('userData'), WORKSPACE_DIR, WORKSPACE_FILE);
+}
+
+/** Load + normalize the sidecar workspace (empty workspace if none/corrupt). */
+async function readWorkspace() {
+    const target = workspaceFilePath();
+    try {
+        const raw = await fs.readFile(target, 'utf-8');
+        return parseWorkspace(raw);
+    } catch (error) {
+        if (error && error.code !== 'ENOENT') {
+            logger.warn(`[Workspace] Failed to read ${target}, using empty workspace:`, error.message);
+        }
+        return parseWorkspace(null);
+    }
+}
+
+/** Persist the sidecar workspace (normalized) atomically-ish to disk. */
+async function writeWorkspace(workspace) {
+    const target = workspaceFilePath();
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, serializeWorkspace(workspace), 'utf-8');
+    return parseWorkspace(workspace);
+}
 
 // Helper function to ask renderer if there are unsaved changes
 async function checkUnsavedChanges() {
@@ -487,6 +557,85 @@ app.whenReady().then(async () => {
           else if (error.code === 'EROFS') userMessage = `Cannot write file: The destination is read-only.`;
           logger.error(`[IPC Main] Error writing file ${filePath}:`, error);
           return { success: false, error: userMessage, code: error.code, path: filePath };
+      }
+  });
+
+  // --- Recent Files (persisted via electron-store) ---
+
+  // Return the persisted recent-files list.
+  ipcMain.handle('store:getRecentFiles', async () => {
+      try {
+          return { success: true, recentFiles: readRecentFiles() };
+      } catch (error) {
+          logger.error('[IPC Main] Error in store:getRecentFiles:', error);
+          return { success: false, error: error.message, recentFiles: [] };
+      }
+  });
+
+  // Add/promote a path to the top of the recent-files list.
+  ipcMain.handle('store:addRecentFile', async (event, filePath) => {
+      try {
+          return { success: true, recentFiles: addRecentFilePath(filePath) };
+      } catch (error) {
+          logger.error('[IPC Main] Error in store:addRecentFile:', error);
+          return { success: false, error: error.message, recentFiles: readRecentFiles() };
+      }
+  });
+
+  // Remove a single path from the recent-files list.
+  ipcMain.handle('store:removeRecentFile', async (event, filePath) => {
+      try {
+          const next = readRecentFiles().filter(p => p !== filePath);
+          return { success: true, recentFiles: writeRecentFiles(next) };
+      } catch (error) {
+          logger.error('[IPC Main] Error in store:removeRecentFile:', error);
+          return { success: false, error: error.message, recentFiles: readRecentFiles() };
+      }
+  });
+
+  // Replace the recent-files list wholesale (e.g. after a drag-reorder).
+  ipcMain.handle('store:setRecentFiles', async (event, list) => {
+      try {
+          const clean = Array.isArray(list)
+              ? list.filter(p => typeof p === 'string' && p.trim().length > 0).slice(0, MAX_RECENT_FILES)
+              : [];
+          return { success: true, recentFiles: writeRecentFiles(clean) };
+      } catch (error) {
+          logger.error('[IPC Main] Error in store:setRecentFiles:', error);
+          return { success: false, error: error.message, recentFiles: readRecentFiles() };
+      }
+  });
+
+  // Clear the recent-files list.
+  ipcMain.handle('store:clearRecentFiles', async () => {
+      try {
+          return { success: true, recentFiles: writeRecentFiles([]) };
+      } catch (error) {
+          logger.error('[IPC Main] Error in store:clearRecentFiles:', error);
+          return { success: false, error: error.message, recentFiles: readRecentFiles() };
+      }
+  });
+
+  // --- Sidecar Workspace (folders/tags/category referencing flows by path) ---
+
+  // Load the sidecar workspace model.
+  ipcMain.handle('workspace:load', async () => {
+      try {
+          return { success: true, workspace: await readWorkspace() };
+      } catch (error) {
+          logger.error('[IPC Main] Error in workspace:load:', error);
+          return { success: false, error: error.message, workspace: parseWorkspace(null) };
+      }
+  });
+
+  // Persist the sidecar workspace model. The renderer owns the mutations
+  // (via workspaceManager.js) and sends the full workspace object to save.
+  ipcMain.handle('workspace:save', async (event, workspace) => {
+      try {
+          return { success: true, workspace: await writeWorkspace(workspace) };
+      } catch (error) {
+          logger.error('[IPC Main] Error in workspace:save:', error);
+          return { success: false, error: error.message };
       }
   });
 

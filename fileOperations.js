@@ -23,10 +23,70 @@ const path = {
 
 
 // --- Recent Files Helpers ---
+//
+// Recent files are now PERSISTED across sessions via electron-store in the main
+// process (see main.js `store:*` IPC + preload `getRecentFiles`/`addRecentFile`/
+// etc.). To keep every existing SYNCHRONOUS caller working, localStorage remains
+// the fast in-renderer mirror and synchronous source of truth; every mutation is
+// ALSO pushed to electron-store (fire-and-forget) so the list survives a restart
+// and a cleared localStorage. `hydrateRecentFiles()` reconciles the durable store
+// back into localStorage on startup.
+
+/** Persist the current localStorage recent-files list to electron-store (async, best-effort). */
+function syncRecentFilesToStore(list) {
+    try {
+        if (window.electronAPI && typeof window.electronAPI.setRecentFiles === 'function') {
+            // Fire-and-forget; the durable store is a mirror of the local list.
+            Promise.resolve(window.electronAPI.setRecentFiles(list)).catch(err => {
+                logger.warn("Failed to persist recent files to electron-store:", err);
+            });
+        }
+    } catch (error) {
+        logger.warn("Error syncing recent files to electron-store:", error);
+    }
+}
+
+/**
+ * Reconcile the durable electron-store recent-files list into the renderer.
+ * Called once at startup (from loadFlowList). If the durable store has entries
+ * they become the source of truth (they survive a cleared localStorage); if it's
+ * empty but localStorage has entries (first run after upgrade), we seed the store
+ * from localStorage instead. Always re-renders the list when done.
+ */
+export async function hydrateRecentFiles() {
+    if (!window.electronAPI || typeof window.electronAPI.getRecentFiles !== 'function') {
+        // No durable store available (e.g. tests/browser) — render whatever localStorage has.
+        renderFlowList(getRecentFiles());
+        return;
+    }
+    try {
+        const result = await window.electronAPI.getRecentFiles();
+        const durable = (result && result.success && Array.isArray(result.recentFiles))
+            ? result.recentFiles
+            : [];
+        const local = getRecentFiles();
+
+        if (durable.length > 0) {
+            // Durable store wins; mirror it into localStorage.
+            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(durable));
+            renderFlowList(durable);
+        } else if (local.length > 0) {
+            // First run with persistence: seed the durable store from localStorage.
+            syncRecentFilesToStore(local);
+            renderFlowList(local);
+        } else {
+            renderFlowList([]);
+        }
+    } catch (error) {
+        logger.error("Error hydrating recent files from electron-store:", error);
+        renderFlowList(getRecentFiles());
+    }
+}
 
 // --- NEW HELPER FUNCTION ---
 /**
- * Adds a file path to the recent files list in localStorage.
+ * Adds a file path to the recent files list (localStorage mirror + durable
+ * electron-store).
  * @param {string} filePath
  * @param {boolean} [moveToTop=true] - If true the file is moved to the top of the list.
  */
@@ -54,6 +114,7 @@ export function addRecentFile(filePath, moveToTop = true) {
         }
 
         localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recentFiles));
+        syncRecentFilesToStore(recentFiles);
         renderFlowList(recentFiles);
     } catch (error) {
         logger.error("Error updating recent files in localStorage:", error);
@@ -130,9 +191,10 @@ export function loadFlowList() {
     logger.debug("Loading recent files list...");
     try {
         domRefs.flowList.innerHTML = '<li class="loading-flows">Loading recent files...</li>';
-        const recentFiles = getRecentFiles();
-        logger.debug("Retrieved recent files:", recentFiles);
-        renderFlowList(recentFiles);
+        // Render the local mirror immediately, then reconcile with the durable
+        // electron-store (which may add entries that survived a restart).
+        renderFlowList(getRecentFiles());
+        hydrateRecentFiles();
     } catch (error) {
         logger.debug("Error loading recent files:", error);
         domRefs.flowList.innerHTML = '<li class="error-flows">Error loading recent files.</li>';
@@ -191,6 +253,7 @@ export function renderFlowList(recentFiles) {
             li.classList.remove('dragging');
             const order = [...domRefs.flowList.querySelectorAll('.recent-file-item')].map(el => el.dataset.filePath);
             localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(order));
+            syncRecentFilesToStore(order);
             renderFlowList(order);
         });
 
@@ -224,6 +287,11 @@ export async function handleFlowListActions(event) {
                 let currentRecent = getRecentFiles();
                 currentRecent = currentRecent.filter(p => p !== filePathToRemove);
                 localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(currentRecent));
+                if (window.electronAPI && typeof window.electronAPI.removeRecentFile === 'function') {
+                    Promise.resolve(window.electronAPI.removeRecentFile(filePathToRemove)).catch(err => {
+                        logger.warn("Failed to remove recent file from electron-store:", err);
+                    });
+                }
                 renderFlowList(currentRecent);
 
                 // If we're removing the currently open flow, clear the current path but don't clear workspace
