@@ -103,6 +103,16 @@ export function flowModelToJson(flowModel) {
         if (step.extract && Object.keys(step.extract).length > 0) {
           jsonStep.extract = makeExtractPathsExplicit(step.extract);
         }
+
+        // === WAVE3 assertions ===
+        // Additive optional per-step assertions. Emitted verbatim (frozen
+        // conditionData operator vocabulary + { target, operator, value, critical? }).
+        // Only written when non-empty so a step without assertions never gains an
+        // empty key — keeps golden pre-sprint flows byte-stable and CLI-safe.
+        if (Array.isArray(step.assertions) && step.assertions.length > 0) {
+          jsonStep.assertions = step.assertions.map(a => ({ ...a }));
+        }
+        // === END WAVE3 assertions ===
       } else if (step.type === 'condition') {
         jsonStep.condition = step.condition || '';
         // Store structured condition data if available (preferred)
@@ -246,6 +256,17 @@ export function jsonToFlowModel(json) {
         }
         // Upgrade extract paths for backward compatibility
         step.extract = upgradeExtractPaths(jsonStep.extract || {});
+
+        // === WAVE3 assertions ===
+        // Load additive per-step assertions into the model verbatim (deep-copied)
+        // when present. Absent/malformed ⇒ no `assertions` key on the model, so a
+        // pre-sprint flow round-trips byte-identically.
+        if (Array.isArray(jsonStep.assertions) && jsonStep.assertions.length > 0) {
+          step.assertions = jsonStep.assertions
+            .filter(a => a && typeof a === 'object')
+            .map(a => ({ ...a }));
+        }
+        // === END WAVE3 assertions ===
       } else if (jsonStep.type === 'condition') {
         step.condition = jsonStep.condition || '';
         if (jsonStep.conditionData) {

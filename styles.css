@@ -2961,3 +2961,175 @@ html.demo-mode .flow-node-inner {
     justify-content: flex-end;
 }
 /* === END WAVE3 demo-mode === */
+
+/* === WAVE3 assertions === per-step assertion editor, result rows + test-summary panel.
+   Consumes semantic tokens only (docs/design-tokens.md); no hardcoded colors. */
+
+/* ---- Power-mode assertion editor ---- */
+.assertions-editor .assertions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.assertion-row {
+    display: grid;
+    grid-template-columns: minmax(140px, 1.4fr) minmax(120px, 1fr) minmax(120px, 1.2fr) auto auto;
+    gap: 6px;
+    align-items: center;
+}
+.assertion-row .assertion-target,
+.assertion-row .assertion-value,
+.assertion-row .assertion-operator {
+    min-width: 0;
+}
+.assertion-row .assertion-critical {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    font-size: 0.85em;
+    color: var(--text-muted);
+}
+.assertion-row .btn-remove-assertion {
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    border-radius: 4px;
+    line-height: 1;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+.assertion-row .btn-remove-assertion:hover {
+    color: var(--run-error);
+    border-color: var(--run-error);
+}
+.assertions-editor .assertions-empty {
+    padding: 6px 2px;
+}
+
+/* ---- Per-step assertion results (inside a result item) ---- */
+.result-header-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.result-assert-badge {
+    font-size: 0.78em;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+}
+.result-assert-badge.assert-pass {
+    color: var(--run-success);
+    border-color: color-mix(in oklch, var(--run-success) 45%, var(--border));
+    background: color-mix(in oklch, var(--run-success) 12%, var(--surface-raised));
+}
+.result-assert-badge.assert-fail,
+.result-assert-badge.assert-critical {
+    color: var(--run-error);
+    border-color: color-mix(in oklch, var(--run-error) 45%, var(--border));
+    background: color-mix(in oklch, var(--run-error) 12%, var(--surface-raised));
+}
+.result-assertions {
+    margin: 6px 0;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+}
+.result-assertions.has-fail {
+    border-color: color-mix(in oklch, var(--run-error) 40%, var(--border));
+}
+.result-assertions > strong {
+    display: block;
+    font-size: 0.85em;
+    margin-bottom: 4px;
+    color: var(--text-muted);
+}
+.result-assertions ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.assert-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: var(--text);
+}
+.assert-row .assert-mark {
+    width: 1em;
+    font-weight: 700;
+    flex: 0 0 auto;
+}
+.assert-row.assert-pass .assert-mark { color: var(--run-success); }
+.assert-row.assert-fail .assert-mark { color: var(--run-error); }
+.assert-row .assert-label {
+    background: transparent;
+    padding: 0;
+}
+.assert-row .assert-actual {
+    color: var(--run-error);
+    font-size: 0.92em;
+}
+.assert-row .assert-crit-tag {
+    font-size: 0.72em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--run-error);
+    border: 1px solid color-mix(in oklch, var(--run-error) 45%, var(--border));
+    border-radius: 3px;
+    padding: 0 4px;
+}
+
+/* ---- Aggregate test-summary panel ---- */
+.runner-test-summary {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin: 8px 0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+}
+.runner-test-summary .test-summary-verdict {
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 3px 12px;
+    border-radius: 6px;
+    color: var(--accent-contrast);
+}
+.runner-test-summary.summary-pass {
+    border-color: color-mix(in oklch, var(--run-success) 45%, var(--border));
+}
+.runner-test-summary.summary-pass .test-summary-verdict {
+    background: var(--run-success);
+}
+.runner-test-summary.summary-fail,
+.runner-test-summary.summary-critical {
+    border-color: color-mix(in oklch, var(--run-error) 45%, var(--border));
+}
+.runner-test-summary.summary-fail .test-summary-verdict,
+.runner-test-summary.summary-critical .test-summary-verdict {
+    background: var(--run-error);
+}
+.runner-test-summary .test-summary-counts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 0.88em;
+    color: var(--text-muted);
+}
+.runner-test-summary .test-summary-count.pass strong { color: var(--run-success); }
+.runner-test-summary .test-summary-count.fail strong { color: var(--run-error); }
+.runner-test-summary .test-summary-count.critical {
+    color: var(--run-error);
+    font-weight: 600;
+}
+/* === END WAVE3 assertions === */
