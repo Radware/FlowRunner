@@ -1,0 +1,41 @@
+{
+    "id": "fixture-future-condition-operator",
+    "name": "From-the-future: unknown condition operator",
+    "description": "A condition step uses an operator this engine has never seen. The tolerant reader must treat the condition as NOT MET (take the Else branch) and surface a warning, instead of throwing and aborting the whole run.",
+    "schemaVersion": "2.0",
+    "staticVars": {
+        "answer": "42"
+    },
+    "steps": [
+        {
+            "id": "c1",
+            "name": "Semantic match (from the future)",
+            "type": "condition",
+            "conditionData": {
+                "variable": "answer",
+                "operator": "semantic_matches",
+                "value": "the meaning of life"
+            },
+            "then": [
+                {
+                    "id": "c1-then",
+                    "name": "Then branch (should NOT run on an unknown operator)",
+                    "type": "request",
+                    "method": "GET",
+                    "url": "https://example.test/then",
+                    "onFailure": "continue"
+                }
+            ],
+            "else": [
+                {
+                    "id": "c1-else",
+                    "name": "Else branch (degradation target)",
+                    "type": "request",
+                    "method": "GET",
+                    "url": "https://example.test/else",
+                    "onFailure": "continue"
+                }
+            ]
+        }
+    ]
+}

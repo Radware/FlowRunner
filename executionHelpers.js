@@ -397,8 +397,12 @@ export function evaluateCondition(conditionData, context) {
             case 'is_false':
                 return actualValue === false;
             default:
-                console.warn(`Unknown condition operator: ${operator}`);
-                throw new Error(`Unknown condition operator: ${operator}`);
+                // Graceful degradation (tolerant reader): an unknown/newer condition
+                // operator is treated as NOT MET and a machine-readable warning is
+                // surfaced, instead of throwing (which would abort the whole run when a
+                // newer file trips an older engine). KNOWN operators above are unchanged.
+                console.warn(`[executionHelpers] CONDITION_OPERATOR_UNSUPPORTED operator=${JSON.stringify(operator)} - condition treated as false (not met), run continues.`);
+                return false;
         }
     } catch (evalError) {
         console.error(`Error during condition evaluation (Operator: ${operator}, Variable Path: ${variable}):`, evalError);

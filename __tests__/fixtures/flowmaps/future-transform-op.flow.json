@@ -1,0 +1,29 @@
+{
+    "id": "fixture-future-transform-op",
+    "name": "From-the-future: unknown transform op",
+    "description": "A transform step references an op this engine does not implement. It must be skipped with an unsupported_transform_op warning and NEVER silently downgraded to base64_decode (the historical CLI bug).",
+    "schemaVersion": "1.9",
+    "staticVars": {
+        "token": "abc.def.ghi"
+    },
+    "steps": [
+        {
+            "id": "t1",
+            "name": "Transform with a from-the-future op",
+            "type": "transform",
+            "ops": [
+                {
+                    "op": "to_string",
+                    "set": "knownResult",
+                    "args": ["{{token}}"]
+                },
+                {
+                    "op": "homomorphic_encrypt",
+                    "set": "futureResult",
+                    "args": ["{{token}}"],
+                    "options": {"scheme": "ckks"}
+                }
+            ]
+        }
+    ]
+}
