@@ -91,6 +91,9 @@
                     <button id="tidy-up-btn" class="btn btn-sm btn-secondary" title="Tidy Up — auto-layout the graph (hold Alt to tidy only the selected step)" style="display: none;">Tidy Up</button>
                     <button id="next-error-btn" class="btn btn-sm" title="Jump to next failed step" style="display: none;">Next Error</button>
                     <button id="toggle-minimap-btn" class="btn btn-sm" title="Show/Hide Minimap" style="display: none;">Hide Minimap</button>
+                    <!-- === WAVE3 demo-mode === presentation toggle (projector view). Shortcut: Ctrl/Cmd+Shift+D -->
+                    <button id="demo-mode-btn" class="btn btn-sm btn-secondary" aria-pressed="false"
+                        title="Enter Demo Mode (presentation view for projecting a live flow)">Demo Mode</button>
                 </div>
             </div>
 
@@ -291,6 +294,9 @@
 
     <!-- WAVE2 node-features: command/search palette overlay host (palette.js) -->
     <div id="palette-host"></div>
+
+    <!-- === WAVE3 demo-mode === guided first-run onboarding overlay host (firstRun.js) -->
+    <div id="onboarding-host"></div>
 
     <!-- Global Loading Overlay -->
     <div class="loading-overlay global-loading" id="global-loading-overlay" style="display: none;">

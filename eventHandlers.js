@@ -45,6 +45,14 @@ import { createJsonView, flowToPrettyJson } from './jsonView.js';
 import { undoFlow, redoFlow, canUndoFlow, canRedoFlow } from './flowHistory.js';
 import { applyFileSearch, applyStepsSearch } from './uiUtils.js';
 
+/* === WAVE3 demo-mode === presentation toggle + guided first-run onboarding. */
+import { initDemoMode } from './demoMode.js';
+import { maybeShowOnboarding, renderEmptyState } from './firstRun.js';
+
+// Controller for the Demo-Mode toggle, created in initializeEventListeners so
+// the keyboard shortcut and the toolbar button drive the SAME state machine.
+let demoModeController = null;
+
 // --- Initialization of Listeners ---
 
 export function initializeEventListeners() {
@@ -116,6 +124,36 @@ export function initializeEventListeners() {
 
     // --- WAVE2 node-features: command palette (Cmd/Ctrl+K) + add-node (Tab) ---
     initializePaletteShortcuts();
+
+    /* === WAVE3 demo-mode === wire the presentation toggle + first-run coach-marks.
+       Both the toolbar button and the Ctrl/Cmd+Shift+D shortcut drive the same
+       controller. onChange re-fits the graph so nodes fill the enlarged viewport. */
+    demoModeController = initDemoMode({
+        toggleButton: domRefs.demoModeBtn,
+        onChange: () => {
+            // Re-fit the graph so nodes fill the resized viewport. resetZoom() is
+            // a documented public method in docs/visualizer-contract.md; called
+            // defensively (graph view may be inactive).
+            if (appState.currentView === 'node-graph') {
+                appState.visualizerComponent?.resetZoom?.();
+            }
+        },
+    });
+
+    /* === WAVE3 demo-mode === show the dismissible first-run onboarding once.
+       No-op after the user dismisses it (persisted via localStorage). Skipped
+       entirely in Demo Mode so a live presentation never gets coach-marks. */
+    if (!demoModeController?.isActive?.()) {
+        maybeShowOnboarding({ host: domRefs.onboardingHost });
+    }
+
+    /* === WAVE3 demo-mode === upgrade the static "no flow open" placeholder into
+       a teaching empty-state that names the New/Open actions. Additive: swaps the
+       inner content of the existing #workspace-placeholder, shown by uiUtils
+       whenever no flow is loaded. */
+    if (domRefs.workspacePlaceholder) {
+        domRefs.workspacePlaceholder.replaceChildren(renderEmptyState('no-flow-open'));
+    }
 
     // Make step type dialog function globally accessible (if needed by other components)
     window.showAppStepTypeDialog = showAppStepTypeDialog;
@@ -218,6 +256,15 @@ export function initializeEventListeners() {
         if (ctrlOrCmd && e.key === '3') {
             e.preventDefault();
             domRefs.toggleViewBtn?.click(); // Simulate click on the button
+        }
+
+        /* === WAVE3 demo-mode === Ctrl/Cmd+Shift+D toggles the projector view.
+           Shift+D avoids clashing with any bare-key shortcut and with the
+           browser's Ctrl/Cmd+D (bookmark) intent. Drives the shared controller
+           so the toolbar button stays in sync. */
+        if (ctrlOrCmd && e.shiftKey && e.key.toLowerCase() === 'd') {
+            e.preventDefault();
+            demoModeController?.toggle();
         }
 
         if (e.key.toLowerCase() === 'm' && appState.currentView === 'node-graph') {
