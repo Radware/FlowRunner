@@ -19,6 +19,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 // import() — one script tag, one stylesheet link, both same-origin.
 export default defineConfig({
     base: '',
+    // Vite lib mode does NOT auto-replace process.env.NODE_ENV, so React's
+    // production bundle ships bare `process.env.NODE_ENV` reads that throw
+    // `process is not defined` at eval in the browser (the IIFE aborts → the
+    // FlowRunnerReactIsland global is never assigned → the facade rejects).
+    // Define it at build time so the bundle is browser-safe under CSP.
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
     plugins: [react()],
     build: {
         // Emit straight into the app repo's assets dir so build.files can ship it.
