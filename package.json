@@ -81,6 +81,8 @@
       "state.js",
       "workspaceManager.js",
       "harExporter.js",
+      "importCurlHar.js",
+      "importCurlHarUI.js",
       "transformOps.js",
       "uiUtils.js",
       "utils.js",

@@ -958,4 +958,114 @@ describe('FlowRunner', () => {
             expect(seen[1]).toEqual({ G: '1', Shared: 'step', Step: '2' });
         });
     });
+
+    describe('per-request retries with backoff (WAVE2 engine-features)', () => {
+        // Helper to build a mock Response object for global.fetch.
+        const mockResponse = (status, { ok } = {}) => ({
+            ok: ok !== undefined ? ok : status >= 200 && status < 300,
+            status,
+            json: async () => ({}),
+            text: async () => "",
+            headers: {
+                get: jest.fn(h => h.toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null),
+                forEach: jest.fn(cb => cb('application/json; charset=utf-8', 'content-type')),
+                [Symbol.iterator]: function* () { yield ['content-type', 'application/json; charset=utf-8']; }
+            }
+        });
+
+        const baseStep = (overrides = {}) => ({
+            ...createNewStep('request'),
+            id: 'r1',
+            name: 'Retryable',
+            method: 'GET',
+            url: 'https://example.test/api',
+            ...overrides
+        });
+
+        // The suite uses fake timers; the backoff _sleep would otherwise never
+        // resolve without manual timer advancement. Stub it to resolve immediately
+        // while still recording the delay values passed to it.
+        let sleepSpy;
+        beforeEach(() => {
+            sleepSpy = jest.spyOn(runner, '_sleep').mockResolvedValue(undefined);
+        });
+        afterEach(() => {
+            sleepSpy.mockRestore();
+        });
+
+        it('does NOT retry by default (0 retries preserves today\'s behavior)', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(500)));
+            const step = baseStep({ onFailure: 'continue' });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            // onFailure=continue => non-2xx reported as success passthrough
+            expect(result.output.status).toBe(500);
+        });
+
+        it('retries a failing (non-2xx) request up to retries.count times', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(503)));
+            const step = baseStep({ onFailure: 'stop', retries: { count: 2, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            // 1 initial attempt + 2 retries = 3 total
+            expect(global.fetch).toHaveBeenCalledTimes(3);
+            expect(result.status).toBe('error');
+        });
+
+        it('stops retrying once a request succeeds', async () => {
+            global.fetch = jest.fn()
+                .mockResolvedValueOnce(mockResponse(500))
+                .mockResolvedValueOnce(mockResponse(200));
+            const step = baseStep({ retries: { count: 3, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(2);
+            expect(result.status).toBe('success');
+            expect(result.output.status).toBe(200);
+        });
+
+        it('retries on network/fetch errors', async () => {
+            global.fetch = jest.fn(() => Promise.reject(new Error('Failed to fetch')));
+            const step = baseStep({ retries: { count: 2, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(3);
+            expect(result.status).toBe('error');
+        });
+
+        it('recovers from network errors when a later attempt succeeds', async () => {
+            global.fetch = jest.fn()
+                .mockRejectedValueOnce(new Error('Failed to fetch'))
+                .mockRejectedValueOnce(new Error('Failed to fetch'))
+                .mockResolvedValueOnce(mockResponse(200));
+            const step = baseStep({ retries: { count: 5, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(3);
+            expect(result.status).toBe('success');
+        });
+
+        it('waits retries.delayMs between attempts (backoff via _sleep)', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(500)));
+            const step = baseStep({ retries: { count: 2, delayMs: 250 } });
+            await runner._executeRequestStep(step, {}, {});
+            // One sleep before each retry attempt (2 retries => 2 sleeps)
+            expect(sleepSpy).toHaveBeenCalledTimes(2);
+            expect(sleepSpy).toHaveBeenCalledWith(250);
+        });
+
+        it('does not retry after a user-requested stop/abort', async () => {
+            const abortErr = new Error('aborted');
+            abortErr.name = 'AbortError';
+            global.fetch = jest.fn(() => Promise.reject(abortErr));
+            runner.state.stopRequested = true;
+            const step = baseStep({ retries: { count: 3, delayMs: 0 } });
+            await runner._executeRequestStep(step, {}, {});
+            // Aborted by user => no retry attempts
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+        });
+
+        it('treats a missing/zero retries field as no retries', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(500)));
+            const step = baseStep({ retries: { count: 0, delayMs: 100 }, onFailure: 'continue' });
+            await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+        });
+    });
 });
