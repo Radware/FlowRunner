@@ -8,6 +8,12 @@
 
 ---
 
+## Unreleased — OKLCH design-token foundation + projector theme (UX Wave 1, lane ux-p1)
+- **Decision:** introduced a two-tier OKLCH token layer in `styles.css` — a primitive `--ramp-*` ramp feeding semantic tokens (`--surface`, `--surface-raised`, `--text`, `--text-muted`, `--accent`, `--border`, `--run-success|error|skipped|running`, …). **Why:** unblocks the whole UX overhaul with one place to define color, and OKLCH's perceptual uniformity keeps contrast honest across the light/dark flip. The **default theme is LIGHT, tuned for projector legibility** (the core demo scenario: an SE mirrors a live API attack/defense flow to a projector in a lit room). Dark is opt-in via `[data-theme="dark"]` and `@media (prefers-color-scheme: dark)` (the latter suppressed by an explicit `data-theme="light"`). Neutrals are tinted toward the brand hue (262°) so they never land on pure `#000`/`#fff`.
+- **Removed** the gradient wordmark (`background-clip:text` → a single solid `var(--accent)`) and the `.app-branding` `linear-gradient`. **Why:** clipped-text gradients render soft and low-contrast on projectors.
+- **Proof surfaces only** (not a full restyle — that's Wave 2): workspace header, primary button, branding wordmark, and a new token-driven run-status **pip** (a solid dot before `.result-status` badges) now consume semantic tokens. Legacy `--primary-color` etc. remain until Wave 2 migrates the rest.
+- Contract documented in `docs/design-tokens.md`; guarded by `__tests__/designTokens.test.js` (11 tests). No JS behavior change, no new deps, no `build.files` change.
+
 ## Unreleased — CI: Windows release ships the NSIS installer
 - **Decision:** the Windows asset (`FlowRunnerSetup-x64-win-{VERSION}.zip`) now contains the electron-builder **NSIS installer** (`FlowRunner Setup {VERSION}.exe`) instead of the zipped `win-unpacked` portable directory. **Why:** `win.target` was already `nsis`, so the installer was being built and then discarded; shipping it gives recipients a real install experience (choose dir, Start-Menu shortcut, uninstaller) — better for handing demo builds to SEs/customers.
 - **Fix:** the first CI attempt failed (`zip I/O error`, exit 15) — the zip step wrote to `../release` while two levels deep in `artifacts/windows-latest-build`; corrected to `../../release`. → [gotchas.md](gotchas.md), Build & packaging.

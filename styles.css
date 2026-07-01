@@ -1,7 +1,74 @@
 /* styles.css */
 
-/* --- CSS Variables --- */
+/* =========================================================================
+   DESIGN TOKENS — OKLCH two-tier layer (lane ux-p1)
+   -------------------------------------------------------------------------
+   Tier 1: a primitive OKLCH ramp (--ramp-*). Perceptually-uniform lightness
+           steps, tinted toward the FlowRunner brand hue (~262, blue) so
+           neutrals never land on pure #000 / #fff.
+   Tier 2: semantic tokens (--surface, --text, --accent, --run-* …) that map
+           roles onto ramp stops. UI should consume the SEMANTIC tier only.
+
+   The DEFAULT theme is LIGHT and tuned for PROJECTOR legibility: an SE
+   mirrors a live API attack/defense flow to a projector in a LIT room, so
+   surfaces stay bright, text stays high-contrast, and run-state colors are
+   saturated enough to read from across the room.
+
+   Dark is opt-in two ways: [data-theme="dark"] (explicit) and
+   @media (prefers-color-scheme: dark) when no explicit choice is set.
+   Contract is documented in docs/design-tokens.md — both renderers and a
+   future React island consume it. Evolve additively; do not rename tokens.
+   ========================================================================= */
 :root {
+    /* ---- Tier 1: primitive OKLCH ramp (brand-tinted neutrals, hue 262) ---- */
+    --ramp-neutral-0:  oklch(0.995 0.004 262);  /* near-white, faint brand tint */
+    --ramp-neutral-50: oklch(0.985 0.006 262);
+    --ramp-neutral-100: oklch(0.965 0.008 262);
+    --ramp-neutral-200: oklch(0.925 0.010 262);
+    --ramp-neutral-300: oklch(0.870 0.012 262);
+    --ramp-neutral-400: oklch(0.740 0.014 262);
+    --ramp-neutral-500: oklch(0.620 0.016 262);
+    --ramp-neutral-600: oklch(0.520 0.018 262);
+    --ramp-neutral-700: oklch(0.400 0.020 262);
+    --ramp-neutral-800: oklch(0.300 0.022 262);
+    --ramp-neutral-900: oklch(0.210 0.022 262);
+    --ramp-neutral-1000: oklch(0.150 0.020 262); /* near-black, brand tint */
+
+    /* Brand accent ramp (blue) */
+    --ramp-accent-400: oklch(0.680 0.170 262);
+    --ramp-accent-500: oklch(0.600 0.190 262);
+    --ramp-accent-600: oklch(0.530 0.195 262);
+    --ramp-accent-700: oklch(0.470 0.180 262);
+
+    /* Run-state ramps — projector-saturated */
+    --ramp-success-500: oklch(0.640 0.170 150);
+    --ramp-success-600: oklch(0.560 0.160 150);
+    --ramp-error-500:   oklch(0.620 0.230 27);
+    --ramp-error-600:   oklch(0.550 0.220 27);
+    --ramp-warning-500: oklch(0.780 0.170 75);
+    --ramp-running-500: oklch(0.720 0.180 60);
+    --ramp-skipped-500: oklch(0.620 0.014 262);
+
+    /* ---- Tier 2: semantic tokens (LIGHT / projector default) ---- */
+    --surface: var(--ramp-neutral-50);         /* app/window background */
+    --surface-raised: var(--ramp-neutral-0);   /* panels, cards, headers */
+    --surface-sunken: var(--ramp-neutral-100); /* wells, list backgrounds */
+    --text: var(--ramp-neutral-900);           /* primary text */
+    --text-muted: var(--ramp-neutral-600);     /* secondary / meta text */
+    --accent: var(--ramp-accent-500);          /* primary/brand action */
+    --accent-hover: var(--ramp-accent-600);
+    --accent-contrast: var(--ramp-neutral-0);  /* text on accent fills */
+    --border: var(--ramp-neutral-200);         /* default hairline border */
+    --border-strong: var(--ramp-neutral-300);
+
+    --run-success: var(--ramp-success-500);
+    --run-error: var(--ramp-error-500);
+    --run-skipped: var(--ramp-skipped-500);
+    --run-running: var(--ramp-running-500);
+
+    --focus-ring: oklch(0.600 0.190 262 / 0.35);
+
+    /* -------- Legacy variables (Wave 1 keeps these; Wave 2 migrates UI) ---- */
     --primary-color: #3b82f6; /* blue-500 */
     --primary-hover-color: #2563eb; /* blue-600 */
     --secondary-color: #6b7280; /* gray-500 */
@@ -29,6 +96,55 @@
     --box-shadow-light: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
     --box-shadow-medium: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     --box-shadow-overlay: 0 5px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* ---- Semantic tokens: DARK theme ----
+   Shared remap used by both the explicit opt-in and the automatic
+   prefers-color-scheme path below. Neutrals stay brand-tinted (hue 262),
+   never pure black; run-state hues nudge lighter for contrast on dark
+   surfaces. Only the semantic tier flips — the primitive ramp is stable. */
+[data-theme="dark"] {
+    --surface: var(--ramp-neutral-1000);
+    --surface-raised: var(--ramp-neutral-900);
+    --surface-sunken: var(--ramp-neutral-800);
+    --text: var(--ramp-neutral-50);
+    --text-muted: var(--ramp-neutral-400);
+    --accent: var(--ramp-accent-400);
+    --accent-hover: var(--ramp-accent-500);
+    --accent-contrast: var(--ramp-neutral-1000);
+    --border: var(--ramp-neutral-800);
+    --border-strong: var(--ramp-neutral-700);
+
+    --run-success: oklch(0.720 0.170 150);
+    --run-error:   oklch(0.700 0.220 27);
+    --run-skipped: var(--ramp-neutral-500);
+    --run-running: oklch(0.780 0.170 60);
+
+    --focus-ring: oklch(0.680 0.170 262 / 0.45);
+}
+
+/* Automatic dark when the OS prefers it AND no explicit theme is set.
+   [data-theme="light"] on <html> opts back into the projector default. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --surface: var(--ramp-neutral-1000);
+        --surface-raised: var(--ramp-neutral-900);
+        --surface-sunken: var(--ramp-neutral-800);
+        --text: var(--ramp-neutral-50);
+        --text-muted: var(--ramp-neutral-400);
+        --accent: var(--ramp-accent-400);
+        --accent-hover: var(--ramp-accent-500);
+        --accent-contrast: var(--ramp-neutral-1000);
+        --border: var(--ramp-neutral-800);
+        --border-strong: var(--ramp-neutral-700);
+
+        --run-success: oklch(0.720 0.170 150);
+        --run-error:   oklch(0.700 0.220 27);
+        --run-skipped: var(--ramp-neutral-500);
+        --run-running: oklch(0.780 0.170 60);
+
+        --focus-ring: oklch(0.680 0.170 262 / 0.45);
+    }
 }
 
 /* --- Basic Reset & Defaults --- */
@@ -94,8 +210,8 @@ code {
     gap: 6px;
 }
 
-.btn-primary { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
-.btn-primary:hover { background-color: var(--primary-hover-color); border-color: var(--primary-hover-color); }
+.btn-primary { background-color: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
+.btn-primary:hover { background-color: var(--accent-hover); border-color: var(--accent-hover); }
 
 .btn-secondary { background-color: var(--secondary-color); color: white; border-color: var(--secondary-color); }
 .btn-secondary:hover { background-color: var(--secondary-hover-color); border-color: var(--secondary-hover-color); }
@@ -147,8 +263,8 @@ button:disabled {
     display: flex;
     align-items: center;
     padding: 15px 20px;
-    background: linear-gradient(to right, #f8f9fa, #ffffff);
-    border-bottom: 1px solid var(--border-color-light);
+    background: var(--surface-raised);
+    border-bottom: 1px solid var(--border);
     gap: 8px;
 }
 
@@ -162,13 +278,10 @@ button:disabled {
 .app-name-text {
     font-size: 2em;
     font-weight: 700;
-    color: #2563eb;
+    /* Single solid brand color — gradient background-clip:text removed
+       (lane ux-p1): it rendered soft/low-contrast on projectors. */
+    color: var(--accent);
     letter-spacing: -0.5px;
-    background: linear-gradient(90deg, #2563eb 0%, #1e40af 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.03);
     font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     margin-left: 0;
     line-height: 1;
@@ -335,8 +448,8 @@ button:disabled {
     align-items: center;
     flex-wrap: wrap;
     padding: 10px 20px;
-    border-bottom: 1px solid var(--border-color-light);
-    background: #fff;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-raised);
     flex-shrink: 0;
     gap: 15px 20px;
 }
@@ -344,7 +457,7 @@ button:disabled {
 .workspace-header h2 {
     margin: 0;
     font-size: 1.3em;
-    color: var(--dark-text-color);
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -900,7 +1013,25 @@ button:disabled {
     font-weight: 500;
     white-space: nowrap;
     text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 }
+/* Run-status pip (lane ux-p1 proof surface): a solid, token-driven dot that
+   reads at projector distance. Legacy pastel badge backgrounds below remain
+   until Wave 2 migrates the badges wholesale. */
+.result-status::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background-color: var(--run-skipped);
+}
+.result-status.success::before { background-color: var(--run-success); }
+.result-status.error::before   { background-color: var(--run-error); }
+.result-status.running::before { background-color: var(--run-running); }
+.result-status.skipped::before { background-color: var(--run-skipped); }
 .result-status.success { background-color: #d1fae5; color: #065f46; }
 .result-status.error { background-color: #fee2e2; color: #991b1b; }
 .result-status.running { background-color: #ffedd5; color: #9a3412; animation: pulse-orange 1.5s infinite; }
