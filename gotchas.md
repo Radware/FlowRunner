@@ -27,6 +27,12 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 ### 2e. Golden/fixture tests must use GIT-TRACKED fixtures
 - A conformance test that reads a **gitignored** flow (e.g. `jwt-manipulation-attacks.flow.json`) passes on your working tree but **fails in worktrees/CI** (the file isn't checked out). Use tracked fixtures (`httpbin-flow.flow.json`, `random-ip-example.flow.json`, `__tests__/fixtures/**`).
 
+### 2f. Vite **lib** mode doesn't replace `process.env.NODE_ENV` — React island throws at runtime
+- **Symptom:** the React Flow island (`visualizer-island/`) builds, packages, and passes unit tests, but at runtime the facade logs `React Flow island loaded but did not expose createReactFlowVisualizer` and falls back to Drawflow — the island never mounts.
+- **Cause:** Vite **library** builds (unlike app builds) do NOT auto-define `process.env.NODE_ENV`. React's bundle then ships bare `process.env.NODE_ENV` reads; in the browser (no `process`) the first read throws `process is not defined`, the IIFE aborts before assigning the `FlowRunnerReactIsland` global, and the facade rejects.
+- **Fix:** `visualizer-island/vite.config.js` → `define: { 'process.env.NODE_ENV': JSON.stringify('production') }`. Side benefit: React tree-shakes dev code, halving the bundle (778 kB → 380 kB / 122 kB gzip).
+- **Lesson:** jsdom unit tests never load the real bundle and the packaged build only checks it *compiles* — this class of bug is **only** caught by running the app (browser preview or packaged). Dogfound flag-gated features before flipping the default. (Note: a browser preview served by `http.server` may cache `island.js`, so a rebuild needs a cache-bust to be observed.)
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*
