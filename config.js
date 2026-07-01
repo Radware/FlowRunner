@@ -3,6 +3,11 @@ export const RECENT_FILES_KEY = 'flowrunnerRecentFiles';
 export const MAX_RECENT_FILES = 10;
 export const DEFAULT_REQUEST_DELAY = 1000; // Keep this in ms
 
+// --- WAVE2 file-features: undo/redo history ---
+// Max number of undoable flow-model edits kept in memory (immer-patch history).
+// Bounds memory on long editing sessions; older edits fall off the bottom.
+export const UNDO_HISTORY_LIMIT = 100;
+
 // --- Persistence (electron-store, main process) ---
 // electron-store keys for persistent app settings + the recent-files list.
 // The store name/keys live here so main.js and any future consumer agree.

@@ -51,7 +51,9 @@
   "dependencies": {
     "@dagrejs/dagre": "^1.1.4",
     "electron-store": "^11.0.2",
-    "elkjs": "^0.9.3"
+    "elkjs": "^0.9.3",
+    "fuse.js": "^7.4.2",
+    "immer": "^10.2.0"
   },
   "build": {
     "appId": "com.radware.flowrunner",
@@ -71,6 +73,9 @@
       "eventHandlers.js",
       "executionHelpers.js",
       "fileOperations.js",
+      "fuzzySearch.js",
+      "undoManager.js",
+      "flowHistory.js",
       "flowBuilderComponent.js",
       "flowCore.js",
       "flowRunner.js",

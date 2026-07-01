@@ -12,6 +12,11 @@ export function initializeDOMReferences() {
         addFlowBtn: document.getElementById('add-flow-btn'), // Now just "New"
         openFlowBtn: document.getElementById('open-flow-btn'),
         flowList: document.getElementById('flow-list'), // Now shows recent files
+        // WAVE2 file-features: fuzzy-search inputs (files + steps)
+        fileSearchInput: document.getElementById('file-search-input'),
+        stepsSearchWrap: document.getElementById('steps-search-wrap'),
+        stepsSearchInput: document.getElementById('steps-search-input'),
+        stepsSearchCount: document.getElementById('steps-search-count'),
 
         // Workspace
         workspace: document.getElementById('workspace'),

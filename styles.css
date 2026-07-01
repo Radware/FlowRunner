@@ -2228,3 +2228,77 @@ body.flow-step-dragging { cursor: grabbing !important; }
 .visualizer-canvas.nodes-dragging {
     cursor: grabbing !important;            /* keep hand cursor on drag      */
 }
+
+/* === WAVE2 LANE file-features === */
+/* Fuzzy-search boxes (recent files + steps) and undo/redo search-hidden rows.
+   Consumes Wave 1 OKLCH semantic tokens only — no hardcoded colors. */
+
+.sidebar-search {
+    padding: 0 8px 8px;
+}
+
+.sidebar-search-input,
+.steps-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 10px;
+    font-size: 0.85rem;
+    color: var(--text);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius, 4px);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sidebar-search-input::placeholder,
+.steps-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.sidebar-search-input:focus,
+.steps-search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.steps-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: var(--surface-sunken);
+    border-bottom: 1px solid var(--border);
+}
+
+.steps-search-input {
+    flex: 1 1 auto;
+}
+
+.steps-search-count {
+    flex: 0 0 auto;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Rows filtered out by a live search are hidden but kept in the DOM so drag
+   order / selection / open editors survive clearing the query. */
+.search-hidden {
+    display: none !important;
+}
+
+/* Placeholder shown when a file search yields nothing. */
+.flow-list .search-no-matches {
+    padding: 10px 12px;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+/* Subtle emphasis on a step that directly matches the steps search. */
+.flow-step.search-match > .flow-step-header {
+    box-shadow: inset 3px 0 0 0 var(--accent);
+}
+/* === END WAVE2 LANE file-features === */

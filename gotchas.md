@@ -44,6 +44,13 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Fix:** `assets/vendor/drawflow/package.json` = `{"type": "commonjs"}` scopes only that vendored dir to CJS (the browser loads Drawflow via a `<script>` tag, so runtime is unaffected; the file isn't imported by the app).
 - **Note:** fixing this unmasked **4 pre-existing failures in `flowVisualizer.test.js`** (Drawflow drag/double-click/add-step under jsdom). They pre-date the fix — treat as a known follow-up, not a regression.
 
+### 2d. New npm renderer deps must be vendored as ESM + imported by relative path (CSP)
+- **Symptom (would-be):** a renderer module `import Fuse from 'fuse.js'` (or `immer`) works in `npm start`/Jest but the **packaged** app can't resolve the bare specifier under `script-src 'self'` (no Node integration in the renderer) — silent module-graph death, dead UI (same failure mode as gotcha #1).
+- **Fix (Wave 2 file-features):** vendor the library's **single-file `.mjs`** build under `assets/vendor/<lib>/` and import by **relative path** (`import Fuse from './assets/vendor/fuse/fuse.min.mjs'`). Unlike Drawflow (UMD → needs a `{"type":"commonjs"}` scoping `package.json`), these are already ESM, so no scoping file is needed. Keep the npm package in `dependencies` **only** so Jest's node_modules resolver runs the same source; the packaged app imports the vendored copy, not node_modules. Covered by the existing `assets/**/*` in `build.files` — but the JS modules that import them still need their own `build.files` entries.
+
+### 2e. Undo/redo history: detect a "new flow" by model object identity, not a flag
+- **Trap:** wiring `resetFlowHistory()` into every load/create/clone/save-as handler is high-blast-radius across lanes. Instead `flowHistory.js` watches `appState.currentFlowModel` **object identity** in `renderCurrentFlow`: loads reassign the reference (⇒ reset the stack), in-place edits keep it (⇒ snapshot). **Gotcha:** undo/redo also reassigns the reference (it writes a fresh clone), so a `suppressAutoReset` latch tells the *next* render "this is time-travel, not a new flow." That latch **must be cleared on every hard `resetFlowHistory`** or a stale suppress from an interrupted undo makes a subsequent real load fail to reset (surfaced as cross-test history leakage under the shared `appState` singleton in jsdom).
+
 ## Execution engine
 
 ### 3. `substituteVariablesInStep` depends on being called as a method

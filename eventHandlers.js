@@ -33,6 +33,9 @@ import {
 } from './modelUtils.js';
 import { createNewStep, escapeHTML, findStepById } from './flowCore.js';
 import { logger } from './logger.js';
+// WAVE2 file-features: undo/redo (immer-patch history) + live fuzzy search.
+import { undoFlow, redoFlow, canUndoFlow, canRedoFlow } from './flowHistory.js';
+import { applyFileSearch, applyStepsSearch } from './uiUtils.js';
 
 // --- Initialization of Listeners ---
 
@@ -139,6 +142,20 @@ export function initializeEventListeners() {
             }
         }
 
+        // WAVE2 file-features: Undo / Redo over flow-model edits.
+        // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) = redo. Only fires when
+        // focus is OUTSIDE inputs (guarded above), so native text-field undo is
+        // untouched inside step editors and the search boxes.
+        if (ctrlOrCmd && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+            e.preventDefault();
+            handleFlowRedoUndo('undo');
+        }
+        if ((ctrlOrCmd && e.key.toLowerCase() === 'z' && e.shiftKey)
+            || (ctrlOrCmd && e.key.toLowerCase() === 'y')) {
+            e.preventDefault();
+            handleFlowRedoUndo('redo');
+        }
+
         // Runner Controls
         if (e.key === 'F5') {
             e.preventDefault();
@@ -195,7 +212,38 @@ export function initializeEventListeners() {
         }
     });
 
+    // --- WAVE2 file-features: live fuzzy-search inputs (files + steps) ---
+    // 'input' fires on every keystroke and on native clear (the search "x").
+    domRefs.fileSearchInput?.addEventListener('input', applyFileSearch);
+    domRefs.stepsSearchInput?.addEventListener('input', applyStepsSearch);
+    // Esc clears the box and restores the full list without stopping a run.
+    domRefs.fileSearchInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; applyFileSearch(); }
+    });
+    domRefs.stepsSearchInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; applyStepsSearch(); }
+    });
+
     logger.info("All core event listeners initialized.");
+}
+
+// --- WAVE2 file-features: Undo/Redo dispatch ---
+// Composes with the existing dirty flags: flowHistory reconciles appState.isDirty
+// against the last-saved baseline, then we re-render and refresh button states.
+export function handleFlowRedoUndo(direction) {
+    if (!appState.currentFlowModel) return;
+    const changed = direction === 'redo' ? redoFlow() : undoFlow();
+    if (!changed) return;
+    renderCurrentFlow();      // re-render list/graph from the restored model
+    updateDefinedVariables(); // structure may have changed
+    setDirty();               // reconcile Save/Cancel/Close button enablement
+    const verb = direction === 'redo' ? 'Redid' : 'Undid';
+    showMessage(`${verb} last change.`, 'info');
+}
+
+/** Exposed for tests / callers that want to know if undo/redo is available. */
+export function flowUndoRedoAvailability() {
+    return { canUndo: canUndoFlow(), canRedo: canRedoFlow() };
 }
 
 // --- View and Panel Toggles ---
