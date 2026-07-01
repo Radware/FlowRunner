@@ -48,7 +48,10 @@
     "jest-environment-jsdom": "^29.7.0",
     "playwright": "^1.52.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@dagrejs/dagre": "^1.1.4",
+    "elkjs": "^0.9.3"
+  },
   "build": {
     "appId": "com.radware.flowrunner",
     "productName": "FlowRunner",
@@ -61,6 +64,7 @@
       "config.js",
       "app.js",
       "appFeatures.js",
+      "autoLayout.js",
       "dialogs.js",
       "domUtils.js",
       "eventHandlers.js",
