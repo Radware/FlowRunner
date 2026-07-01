@@ -18,6 +18,7 @@ import {
   generateConditionString, // Used by Condition editor
   generateConditionPreview, // Used by Condition editor/renderer
   doesOperatorNeedValue, // Used by Condition editor
+  preProcessBody, // Used by inspector raw ##VAR## marker preview (READ-ONLY)
   escapeHTML, // General utility
   escapeRegExp // General utility
 } from './flowCore.js'; // <--- Ensure this path is correct
@@ -429,11 +430,18 @@ export function createStepEditor(step, options) {
 
   // --- Create Editor Structure (remains same) ---
   const editorEl = document.createElement('div');
-  editorEl.className = 'step-editor';
+  editorEl.className = 'step-editor inspector inspector-mode-basic';
   editorEl.innerHTML = `
     <div class="step-editor-content">
-      <div class="editor-header"> <h3>Edit: ${getStepTypeLabel(localStep.type)} Step</h3> </div>
+      <div class="editor-header">
+        <h3>Edit: ${getStepTypeLabel(localStep.type)} Step</h3>
+        <div class="inspector-disclosure" role="tablist" aria-label="Field disclosure level">
+          <button type="button" class="inspector-disclosure-btn active" data-disclosure="basic" role="tab" aria-selected="true" title="Show common fields only">Basic</button>
+          <button type="button" class="inspector-disclosure-btn" data-disclosure="power" role="tab" aria-selected="false" title="Reveal advanced fields">Power</button>
+        </div>
+      </div>
       <div class="form-group"> <label for="step-editor-name-${localStep.id}">Step Name</label> <input type="text" id="step-editor-name-${localStep.id}" value="${escapeHTML(localStep.name || '')}" placeholder="Enter a descriptive name"> </div>
+      <div class="inspector-summary" data-ref="inspectorSummary" aria-live="polite"></div>
       <div class="step-save-message" style="display: none; color: green; margin: 0.5rem 0; font-weight: bold;"> Step changes saved! </div>
       <div class="editor-type-content"> <!-- Type-specific fields go here --> </div>
     </div>
@@ -446,6 +454,29 @@ export function createStepEditor(step, options) {
   const saveMessageEl = editorEl.querySelector('.step-save-message');
   const saveBtn = editorEl.querySelector('.btn-save-step');
   const cancelBtn = editorEl.querySelector('.btn-cancel-step');
+  const summaryEl = editorEl.querySelector('[data-ref="inspectorSummary"]');
+  const disclosureEl = editorEl.querySelector('.inspector-disclosure');
+
+  // --- Basic/Power progressive disclosure (view-only; NEVER marks dirty) ---
+  function setDisclosure(mode) {
+      const power = mode === 'power';
+      editorEl.classList.toggle('inspector-mode-power', power);
+      editorEl.classList.toggle('inspector-mode-basic', !power);
+      disclosureEl.querySelectorAll('.inspector-disclosure-btn').forEach(btn => {
+          const active = btn.dataset.disclosure === mode;
+          btn.classList.toggle('active', active);
+          btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+  }
+  disclosureEl.querySelectorAll('.inspector-disclosure-btn').forEach(btn => {
+      btn.addEventListener('click', () => setDisclosure(btn.dataset.disclosure));
+  });
+
+  // --- Basic-mode at-a-glance summary (common fields distilled) ---
+  function refreshInspectorSummary() {
+      if (summaryEl) summaryEl.innerHTML = buildInspectorSummary(localStep);
+  }
+  refreshInspectorSummary();
 
   // --- Populate Type-Specific Editor ---
   // Pass setDirtyState down
@@ -521,6 +552,7 @@ export function createStepEditor(step, options) {
            saveMessageEl.style.display = 'block';
            setTimeout(() => { if (saveMessageEl) saveMessageEl.style.display = 'none'; }, 2500);
       }
+      refreshInspectorSummary(); // Reflect saved values in the Basic-mode summary
       setDirtyState(false); // Reset dirty state after successful save
   });
 
@@ -539,6 +571,7 @@ export function createStepEditor(step, options) {
 
       // Reset the UI by re-rendering the editor with original data
       nameInput.value = localStep.name || ''; // Reset name input
+      refreshInspectorSummary(); // Reflect reverted values in the Basic-mode summary
       typeContentContainer.innerHTML = ''; // Clear current specific fields
 
        // Re-create sub-editor with original data and pass the *same* setDirtyState function
@@ -661,7 +694,7 @@ function createRequestEditor(container, options) {
         <div class="form-group"> <label for="request-method-${localStep.id}">Method</label> <select id="request-method-${localStep.id}">${getHttpMethods().map(m => `<option value="${m}" ${localStep.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select> </div>
         <div class="form-group"> <label for="request-url-${localStep.id}">URL</label> <div class="input-with-vars"> <input type="text" id="request-url-${localStep.id}" value="${escapeHTML(localStep.url || '')}" placeholder="e.g., https://api.example.com/users/{{userId}}"> <button class="btn-insert-var" data-target-input="request-url-${localStep.id}">{{…}}</button> <button class="btn btn-secondary btn-copy-curl" type="button" title="Copy request as cURL">Copy cURL</button> </div> </div>
 
-        <div class="form-tabs">
+        <div class="form-tabs power-only">
             <div class="tab-buttons">
                  <button class="tab-button active" data-tab="headers">Headers (${Object.keys(localStep.headers || {}).length})</button>
                  <button class="tab-button" data-tab="body">Body</button>
@@ -674,6 +707,11 @@ function createRequestEditor(container, options) {
             </div>
             <div class="tab-content" id="tab-body-${localStep.id}">
                 <div class="form-group"><label for="request-body-${localStep.id}">Request Body (JSON)</label><textarea id="request-body-${localStep.id}" rows="10" placeholder='e.g.,\n{\n "key": "value",\n "id": {{var}}\n}'>${escapeHTML(localStep.body || '')}</textarea><div class="form-hint">Use "{{var}}" for strings, {{var}} for numbers/booleans.</div><div class="body-actions"><button class="btn-format-json">Format</button><button class="btn-insert-var" data-target-input="request-body-${localStep.id}">Insert Var</button></div><div class="json-validation-error" style="color:red;margin-top:5px;font-size:0.9em;display:none;"></div></div>
+                <div class="form-group raw-body-markers-group" data-ref="rawBodyGroup" style="display:none;">
+                    <label for="request-body-markers-${localStep.id}">Stored body (##VAR## markers, read-only)</label>
+                    <textarea id="request-body-markers-${localStep.id}" class="raw-body-markers" rows="8" readonly aria-readonly="true" tabindex="-1" spellcheck="false"></textarea>
+                    <div class="form-hint">Read-only preview of exactly what is persisted after <code>{{var}}</code> placeholders are converted to <code>##VAR##</code> markers. Edit the body above, never this view.</div>
+                </div>
             </div>
             <div class="tab-content" id="tab-extract-${localStep.id}">
                 <div class="extract-editor"><div class="extracts-list"></div><button class="btn-add-extract" style="margin-top:10px;">+ Add Extraction</button><p class="form-hint">Extract values via dot notation (<code>body.data.token</code>), array index (<code>body.items[0].id</code>), or keywords (<code>.status</code>, <code>headers.Content-Type</code>, <code>body</code>).</p></div>
@@ -699,6 +737,31 @@ function createRequestEditor(container, options) {
     const bodyError = container.querySelector('.json-validation-error');
     const headersTabBtn = container.querySelector('[data-tab="headers"]');
     const extractTabBtn = container.querySelector('[data-tab="extract"]');
+    const rawBodyGroup = container.querySelector('[data-ref="rawBodyGroup"]');
+    const rawBodyView = container.querySelector('.raw-body-markers');
+
+    // --- READ-ONLY raw ##VAR## marker preview ---
+    // Renders exactly what preProcessBody() would persist. This view is display-only:
+    // a hand-typed {{var}} here MUST NEVER reach the saved body JSON, so we route the
+    // *body textarea* value through preProcessBody unchanged and never read this field back.
+    function refreshRawBodyMarkers() {
+        if (!rawBodyView || !rawBodyGroup) return;
+        const source = String(localStep.body || '');
+        if (!source.trim()) {
+            rawBodyGroup.style.display = 'none';
+            rawBodyView.value = '';
+            return;
+        }
+        rawBodyGroup.style.display = '';
+        try {
+            rawBodyView.value = preProcessBody(source);
+        } catch (error) {
+            logger.error('Failed to render raw body markers preview:', error);
+            rawBodyView.value = '';
+            rawBodyGroup.style.display = 'none';
+        }
+    }
+    refreshRawBodyMarkers();
     // --- MODIFICATION START: Get onFailure select ---
     const onFailureSelect = container.querySelector(`#request-onfailure-${localStep.id}`);
     // --- MODIFICATION END ---
@@ -706,7 +769,7 @@ function createRequestEditor(container, options) {
     // --- Existing listeners + NEW onFailure listener ---
     methodSelect.addEventListener('change', () => { localStep.method = methodSelect.value; setDirtyState(true); });
     urlInput.addEventListener('input', () => { localStep.url = urlInput.value; setDirtyState(true); });
-    bodyTextarea.addEventListener('input', () => { localStep.body = bodyTextarea.value; bodyError.style.display = 'none'; setDirtyState(true); });
+    bodyTextarea.addEventListener('input', () => { localStep.body = bodyTextarea.value; bodyError.style.display = 'none'; refreshRawBodyMarkers(); setDirtyState(true); });
     // --- MODIFICATION START: Add listener for onFailure ---
     onFailureSelect.addEventListener('change', () => {
         localStep.onFailure = onFailureSelect.value;
@@ -1300,4 +1363,71 @@ function getStepTypeLabel(type) {
     case 'transform': return 'Transform';
     default: return 'Step';
   }
+}
+
+/**
+ * Builds the Basic-mode at-a-glance summary chips for a step.
+ * Purely presentational — distills the common fields so the author keeps
+ * context without expanding into Power mode. Never mutates the step.
+ * @param {Object} step - The (local) step being edited.
+ * @return {string} HTML string of summary chips.
+ */
+function buildInspectorSummary(step) {
+    if (!step || !step.type) return '';
+    const chips = [];
+    const chip = (label, value, cls = '') =>
+        `<span class="inspector-chip ${cls}"><span class="inspector-chip-label">${escapeHTML(label)}</span><span class="inspector-chip-value">${escapeHTML(value)}</span></span>`;
+
+    switch (step.type) {
+        case 'request': {
+            chips.push(chip('Method', step.method || 'GET', `method-${escapeHTML(step.method || 'GET')}`));
+            if (step.url) chips.push(chip('URL', truncateMiddle(step.url, 48)));
+            const headerKeys = Object.keys(step.headers || {});
+            if (headerKeys.length) {
+                const shown = headerKeys.slice(0, 3).join(', ');
+                const extra = headerKeys.length > 3 ? ` +${headerKeys.length - 3}` : '';
+                chips.push(chip('Headers', `${shown}${extra}`));
+            }
+            const extractKeys = Object.keys(step.extract || {});
+            if (extractKeys.length) chips.push(chip('Extracts', String(extractKeys.length)));
+            if (step.body && String(step.body).trim()) chips.push(chip('Body', 'set'));
+            break;
+        }
+        case 'condition': {
+            let preview = '';
+            if (step.conditionData?.variable && step.conditionData.operator) {
+                preview = generateConditionPreview(step.conditionData);
+            } else if (step.condition) {
+                const parsed = parseConditionString(step.condition);
+                preview = parsed.preview || step.condition;
+            }
+            chips.push(chip('If', preview || 'Not set'));
+            chips.push(chip('Then', `${step.thenSteps?.length || 0} step(s)`));
+            chips.push(chip('Else', `${step.elseSteps?.length || 0} step(s)`));
+            break;
+        }
+        case 'loop': {
+            if (step.source) chips.push(chip('For each', `{{${step.source}}}`));
+            chips.push(chip('As', step.loopVariable || 'item'));
+            chips.push(chip('Body', `${step.loopSteps?.length || 0} step(s)`));
+            break;
+        }
+        case 'transform': {
+            const ops = Array.isArray(step.ops) ? step.ops : [];
+            chips.push(chip('Operations', String(ops.length)));
+            const outputs = ops.map(op => op && typeof op.set === 'string' ? op.set.trim() : '').filter(Boolean);
+            if (outputs.length) chips.push(chip('Outputs', outputs.slice(0, 3).join(', ')));
+            break;
+        }
+        default:
+            return '';
+    }
+    return chips.join('');
+}
+
+function truncateMiddle(text, max) {
+    const str = String(text || '');
+    if (str.length <= max) return str;
+    const half = Math.floor((max - 1) / 2);
+    return `${str.slice(0, half)}…${str.slice(str.length - half)}`;
 }

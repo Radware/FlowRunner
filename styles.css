@@ -2228,3 +2228,123 @@ body.flow-step-dragging { cursor: grabbing !important; }
 .visualizer-canvas.nodes-dragging {
     cursor: grabbing !important;            /* keep hand cursor on drag      */
 }
+
+/* === WAVE2 LANE inspector === */
+/* Inline step inspector: Basic/Power progressive disclosure + at-a-glance
+   summary + read-only ##VAR## body-marker preview. Consumes OKLCH semantic
+   tokens only (docs/design-tokens.md) — no hardcoded colors, no #000/#fff. */
+
+.inspector .editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+/* Basic/Power segmented toggle */
+.inspector-disclosure {
+    display: inline-flex;
+    padding: 2px;
+    gap: 2px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+
+.inspector-disclosure-btn {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.8125rem;
+    line-height: 1;
+    padding: 0.35rem 0.85rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.inspector-disclosure-btn:hover {
+    color: var(--text);
+}
+
+.inspector-disclosure-btn.active {
+    background: var(--accent);
+    color: var(--accent-contrast);
+}
+
+.inspector-disclosure-btn:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+}
+
+/* At-a-glance summary chips (visible primarily in Basic mode) */
+.inspector-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0.35rem 0 0.65rem;
+}
+
+.inspector-summary:empty {
+    display: none;
+}
+
+.inspector-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.2rem 0.55rem;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    color: var(--text);
+}
+
+.inspector-chip-label {
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: 0.66rem;
+    font-weight: 600;
+}
+
+.inspector-chip-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Progressive disclosure: hide Power-only blocks while in Basic mode. */
+.inspector.inspector-mode-basic .power-only {
+    display: none !important;
+}
+
+/* In Power mode the summary is redundant with the expanded fields; keep it
+   subtle rather than removing it (so the author never loses their bearings). */
+.inspector.inspector-mode-power .inspector-summary {
+    opacity: 0.65;
+}
+
+/* Read-only ##VAR## marker preview — visually distinct from an editable field
+   so no one mistakes it for the body input. */
+.raw-body-markers {
+    width: 100%;
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    border: 1px dashed var(--border-strong);
+    border-radius: 6px;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+    font-size: 0.82rem;
+    cursor: default;
+    resize: vertical;
+}
+
+.raw-body-markers:focus {
+    outline: none;
+    border-color: var(--border-strong);
+}
+/* === /WAVE2 LANE inspector === */
