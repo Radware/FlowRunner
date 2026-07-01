@@ -17,6 +17,16 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - ShowRunner portal drops camelCase `visualLayout` on flow create/import (needs a `visualLayout`/`visual_layout` fallback like it already has for `staticVars`).
 - flowrunner-cli silently downgrades an unknown transform `op` to `base64_decode` (should skip/fail loudly).
 
+## Testing / workflows
+
+### 2d. Workflow worktrees pollute `npm test` (duplicate/failing suites)
+- **Symptom:** after a multi-agent `Workflow` with `isolation: 'worktree'`, `npm test` reports a huge count (e.g. 2039 tests / 100 suites) or fails on a path like `.claude/worktrees/wf_.../__tests__/...`.
+- **Cause:** each worktree is a full repo checkout under `.claude/worktrees/`; jest's `testMatch` `**/__tests__/**/*.test.js` scans them as extra (often stale) suites; `testPathIgnorePatterns` only excluded `/node_modules/`.
+- **Fix:** `jest.config.mjs` now also ignores `/\.claude/` and `/visualizer-island/`. Also **remove worktrees after integrating a wave** — `git worktree remove --force <path>` for each under `.claude/worktrees/`, then `git worktree prune`.
+
+### 2e. Golden/fixture tests must use GIT-TRACKED fixtures
+- A conformance test that reads a **gitignored** flow (e.g. `jwt-manipulation-attacks.flow.json`) passes on your working tree but **fails in worktrees/CI** (the file isn't checked out). Use tracked fixtures (`httpbin-flow.flow.json`, `random-ip-example.flow.json`, `__tests__/fixtures/**`).
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*
