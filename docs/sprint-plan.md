@@ -1,5 +1,7 @@
 # FlowRunner UI — Roadmap + UX Overhaul Sprint Plan
 
+> **▶ Current status + what's done/not-done + how to resume: [sprint-status.md](sprint-status.md).** (This file is the plan; that one is the live state.)
+
 > A long-lived sprint branch we live on until the roadmap + UI overhaul is fully done and verified. This plan sequences the [evolution proposal](flowmap-evolution.md) into **parallel waves** designed to be executed by maxed-out multi-agent workflows. The real limiter on parallelism is **file contention**, not item count — that analysis is the spine of this document.
 
 ## Baseline — the sprint starts from a clean, verified `main`

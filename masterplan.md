@@ -33,6 +33,13 @@ Shipped and solid:
 - **Export:** results → JSON / CSV; execution → HAR 1.2.
 - **Platforms:** Windows x64, macOS arm64, Linux x64 (AppImage). Update-check against GitHub releases (notify-only).
 
+## Active sprint — Roadmap + UX overhaul (branch `sprint/roadmap-ux-overhaul`, unreleased)
+
+A large multi-wave sprint is **in progress on a branch, not yet merged/released**. Full status + honest gaps: **[docs/sprint-status.md](docs/sprint-status.md)**.
+
+- **Landed + verified** (476 tests, packaged builds green, backward-compat locked): design-token foundation + projector theme, elkjs auto-layout + **Tidy Up**, `electron-store` recent-files + sidecar workspace, **Basic/Power inspector**, **palettes / Cmd+K / fuzzy search / undo-redo**, request **retries** + **cURL/HAR import**, per-step **assertions** + run summary, **Demo Mode** + first-run, additive **`schemaVersion`** stamping, and a flag-gated **React Flow island** engine (off by default). Cross-app: flowrunner-cli [PR #36](https://github.com/rdwr-taly/flowrunner-cli/pull/36).
+- **NOT done — the honest gap:** the **visual overhaul itself is not applied yet** — only *proof surfaces* were restyled and the styles.css token migration was deferred, so the app still largely *looks* like the old basic UI. That (a bold modern redesign via the `impeccable` + `ui-ux-pro-max` skills, finishing the token migration) is the **#1 priority for the next session**, along with getting the React island to render nodes, then Wave 4 (subflows, environments, canonical schema).
+
 ## Roadmap
 
 ### Near-term / concrete (specified but not built)

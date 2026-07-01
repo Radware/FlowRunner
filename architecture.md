@@ -139,3 +139,21 @@ Open button → eventHandlers.handleOpenFile() → fileOperations: confirmDiscar
 - **Commands:** `npm start` (dev) · `npm test` (Jest + jsdom) · `npm run e2e` (Playwright + Electron, `xvfb-run` on Linux) · `npm run dist` (package). Run both `npm test` and `npm run e2e` before committing.
 - **Style:** four-space indent, semicolons, ES modules throughout.
 - **Test coverage today:** Jest unit tests for `flowCore` (id gen, model↔JSON, variable extraction, `evaluatePath`, `validateFlow`, body JSON validation, marker pre/decode, step CRUD, condition helpers) and `flowRunner` (state, sequential/condition/loop execution, extraction, substitution, onFailure stop/continue, Stop+fetch-abort, delay); component render tests; IPC/file-I/O integration tests; E2E flows (simple-request, ui-interactions drag/drop, complex flow-execution, step-through). Manual regression cases for v1.2.0 features are listed in [masterplan.md](masterplan.md).
+
+## 11. Sprint additions (branch `sprint/roadmap-ux-overhaul`, unreleased)
+
+New subsystems added by the in-progress overhaul sprint (status + gaps: [docs/sprint-status.md](docs/sprint-status.md)). These live on the sprint branch, not yet on `main`.
+
+| Module / area | Role |
+|---|---|
+| **Design tokens** (`styles.css` `--ramp-*`→semantic tokens, [docs/design-tokens.md](docs/design-tokens.md)) | OKLCH two-tier token layer; light-default projector theme + dark opt-in. **Only proof surfaces migrated so far** — full token migration is pending (the visible overhaul). |
+| `autoLayout.js` (+ `elkjs`, `@dagrejs/dagre`) | Engine-agnostic layout adapter (ELK main-thread — CSP; dagre fallback). Powers the **Tidy Up** button. [docs/auto-layout-spike.md](docs/auto-layout-spike.md). |
+| `workspaceManager.js` (+ `electron-store`) | Durable recent-files + sidecar `.flowrunner/workspace.json` folders/tags (never in `.flow.json`). |
+| `flowHistory.js` (+ `immer`), `palette.js`, `jsonView.js` (+ `fuse.js`) | Undo/redo; Tab/Cmd+K command-search palette; read-only View-as-JSON diff; fuzzy search. |
+| `importCurlHar.js` / `importCurlHarUI.js` | Zero-dep cURL + HAR import → request steps. |
+| `demoMode.js`, `firstRun.js` | Projector Demo Mode (glyph-not-hue status) + guided first-run/empty-states. |
+| **Assertions** (`step.assertions[]` in `flowCore`/`executionHelpers`/`runnerInterface`) | Additive per-step assertions reusing the `conditionData` operator vocabulary + a pass/fail run summary. |
+| **`schemaVersion`** (`flowCore.flowModelToJson` stamps `"1.0"`) | Additive, lossless, absence⇒`"1.0"`. See §4 + [docs/schema-versioning.md](docs/schema-versioning.md). Golden-guarded. |
+| **React Flow island** (`reactFlowVisualizer.js` facade + `visualizer-island/` Vite app → `assets/visualizer-island/`) | **Flag-gated** alternative node engine (`localStorage['flowrunner.visualizerEngine']==='react'`); Drawflow stays default. Built by `build:island` via the `predist` hook; behind the FlowVisualizer contract facade. Mounts (gotcha 2f fix) but the node adapter still needs dogfooding. See [docs/engine-decision.md](docs/engine-decision.md). |
+
+**Frozen-contract note:** every new `.flow.json` field this sprint (`schemaVersion`, `step.retries`, `step.assertions[]`) is **additive/optional**; the Python CLI ignores unknown fields and, per [PR #36](https://github.com/rdwr-taly/flowrunner-cli/pull/36), now honors them — old flows run identically (§4, golden tests both sides).
