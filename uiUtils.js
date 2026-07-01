@@ -634,6 +634,8 @@ export function updateViewToggle() {
         if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = 'none';
         if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = 'none';
         if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = 'none';
+        if(domRefs.tidyUpBtn) domRefs.tidyUpBtn.style.display = 'none'; // WAVE2 LANE canvas
+        if(domRefs.nextErrorBtn) domRefs.nextErrorBtn.style.display = 'none'; // WAVE2 LANE canvas
         if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = 'none';
         return;
     }
@@ -642,6 +644,8 @@ export function updateViewToggle() {
     if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.tidyUpBtn) domRefs.tidyUpBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none'; // WAVE2 LANE canvas
+    if(domRefs.nextErrorBtn) domRefs.nextErrorBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none'; // WAVE2 LANE canvas
     if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if (appState.currentView === 'list-editor') {
         domRefs.toggleViewBtn.textContent = 'Visual View';

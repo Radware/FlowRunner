@@ -70,6 +70,10 @@ change can find them.
 | `zoomOut` | `zoomOut()` | Zooms the graph out one step (toolbar button). | `eventHandlers.js:64` |
 | `resetZoom` | `resetZoom()` | Resets zoom to the default level (toolbar button). | `eventHandlers.js:65` |
 | `destroy` | `destroy()` | Tears down all listeners/DOM the visualizer created; safe to call before re-init. The app guards with `typeof … === 'function'` before calling. | `uiUtils.js:486` |
+| `applyLayout` | `applyLayout(positions, { animate?, onlyStepIds? }) → number` | Applies a `{ [stepId]: {x,y} }` map (from `autoLayout.js` `computeLayout`) to the graph, persists into `flowModel.visualLayout`, animates (~200ms ease-out, transform/opacity only), and snapshots the pre-apply positions for one-level undo. `onlyStepIds` restricts the move so manually-placed nodes are preserved (Tidy-selection). Ignores unknown/stale ids. Returns nodes moved. Called via `?.`. | `eventHandlers.js` (`handleTidyUp`) |
+| `undoLayout` | `undoLayout() → boolean` | Reverts the most recent `applyLayout` in a single step (Cmd/Ctrl+Z). Returns false when nothing to undo. Called via `?.`. | `eventHandlers.js` (`handleUndoTidyUp`) |
+| `canUndoLayout` | `canUndoLayout() → boolean` | Whether an `applyLayout` can currently be undone; the app gates the Cmd/Ctrl+Z shortcut on it. Called via `?.`. | `eventHandlers.js` (keyboard shortcut) |
+| `jumpToNextError` | `jumpToNextError() → stepId \| null` | Focuses the next failed step (cycles in document order), returning its id or null when there are no on-node run errors. Called via `?.`. | `eventHandlers.js` (`handleJumpToNextError`) |
 
 ### Notes on the contract's tolerances
 
