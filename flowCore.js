@@ -697,8 +697,10 @@ export function formatJson(bodyText) {
        return finalFormattedJson;
   } catch (error) {
     logger.warn("JSON formatting failed:", error.message);
-    // Optionally provide user feedback here, e.g., using an alert or status message
-    alert(`Formatting Error: ${error.message}. Please check syntax.`);
+    // Toast via the uiUtils bridge (no import: flowCore must not depend on UI modules).
+    document.dispatchEvent(new CustomEvent('flowrunner:toast', {
+        detail: { message: `Formatting error: ${error.message}. Check the JSON syntax.`, type: 'error' }
+    }));
     return bodyText; // Return original on error to avoid data loss
   }
 }

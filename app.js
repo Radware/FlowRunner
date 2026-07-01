@@ -68,7 +68,8 @@ import { ReactFlowVisualizer } from './reactFlowVisualizer.js';
 import {
     initializeStepTypeDialogListeners,
     initializeVarDropdownListeners,
-    initializeVariableInsertionListener
+    initializeVariableInsertionListener,
+    showConfirmDialog
 } from './dialogs.js';
 
 // --- Runner and Execution Components ---
@@ -95,18 +96,14 @@ async function handleHARExport() {
         // Check if execution results exist
         if (!appState.executionResults || appState.executionResults.length === 0) {
             logger.warn('[Renderer] No execution results found. Cannot export HAR.');
-            if (window.alert) {
-                alert('Please run a flow first before exporting HAR file.');
-            }
+            showMessage('Run a flow first, then export the HAR of that run.', 'warning');
             return;
         }
 
         // Check if current flow model exists
         if (!appState.currentFlowModel || !appState.currentFlowModel.steps) {
             logger.error('[Renderer] No flow model found. Cannot export HAR.');
-            if (window.alert) {
-                alert('No flow loaded. Please load or create a flow first.');
-            }
+            showMessage('No flow loaded. Open or create a flow first.', 'warning');
             return;
         }
 
@@ -117,9 +114,7 @@ async function handleHARExport() {
         // Check if any request entries were found
         if (!harData.log.entries || harData.log.entries.length === 0) {
             logger.warn('[Renderer] No HTTP requests found in execution results.');
-            if (window.alert) {
-                alert('No HTTP requests found in the last flow execution. Only request steps are included in HAR export.');
-            }
+            showMessage('No HTTP requests in the last run. Only request steps are included in HAR export.', 'warning');
             return;
         }
 
@@ -134,9 +129,7 @@ async function handleHARExport() {
 
         if (result && result.success && !result.cancelled) {
             logger.info(`[Renderer] HAR file exported successfully to: ${result.filePath}`);
-            if (window.alert) {
-                alert(`HAR file exported successfully!\n\nLocation: ${result.filePath}`);
-            }
+            showMessage(`HAR file saved to ${result.filePath}`, 'success', undefined, 'HAR exported');
         } else if (result && result.cancelled) {
             logger.info('[Renderer] HAR export cancelled by user');
         } else {
@@ -144,11 +137,47 @@ async function handleHARExport() {
         }
     } catch (error) {
         logger.error('[Renderer] Error during HAR export:', error);
-        if (window.alert) {
-            alert(`Error exporting HAR file: ${error.message}`);
-        }
+        showMessage(`Error exporting HAR file: ${error.message}`, 'error');
     }
 }
+
+// --- Theme (light / dark) ------------------------------------------------
+// The projector default is light (PRODUCT.md), but an SE presenting from a
+// dark-mode machine needs to force it. Persist an explicit choice; when none is
+// set the app follows the OS via prefers-color-scheme (styles.css). Applied at
+// module load (before DOMContentLoaded) to minimize any theme flash.
+const THEME_KEY = 'flowrunner-theme';
+function applyStoredTheme() {
+    try {
+        const saved = localStorage.getItem(THEME_KEY);
+        if (saved === 'light' || saved === 'dark') {
+            document.documentElement.setAttribute('data-theme', saved);
+        }
+    } catch (_) { /* localStorage unavailable */ }
+}
+function effectiveTheme() {
+    const explicit = document.documentElement.getAttribute('data-theme');
+    if (explicit === 'light' || explicit === 'dark') return explicit;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function updateThemeToggleUI() {
+    const btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
+    const isDark = effectiveTheme() === 'dark';
+    btn.setAttribute('aria-pressed', String(isDark));
+    btn.title = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+    const iconUse = btn.querySelector('.theme-toggle-icon use');
+    if (iconUse) iconUse.setAttribute('href', isDark ? '#i-sun' : '#i-moon');
+}
+function toggleTheme() {
+    const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (_) { /* ignore */ }
+    updateThemeToggleUI();
+    // Canvas-painted surfaces don't track CSS variables; repaint them.
+    appState.visualizerComponent?.refreshMinimap?.();
+}
+applyStoredTheme();
 
 // --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -162,6 +191,11 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeImportCurlHar(); // WAVE2 engine-features: wire sidebar cURL/HAR import controls
     setupGlobalOverlayListeners(); // For the global Info Overlay *content* listeners (inputs, adds)
     initializeResultFilters();
+
+    // Theme toggle: wire the control and sync its icon to the active theme.
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
+    updateThemeToggleUI();
 
     updateRunnerUI();
     updateViewToggle();
@@ -285,7 +319,12 @@ function initializeVisualizer() {
             onDeleteStep: (stepId) => handleBuilderStepUpdate({ type: 'delete', stepId }), // Delete requested from node
             onStepEdit: handleBuilderStepEdit, // Save in graph editor modal
             onEditorDirtyChange: handleBuilderEditorDirtyChange, // Track dirty state in graph editor modal
-            onRequestAddStepAfter: handleBuilderRequestAddStepAfter // Add step after current node
+            onRequestAddStepAfter: handleBuilderRequestAddStepAfter, // Add step after current node
+            // Non-blocking dialog + toast injection (native confirm/alert freeze the renderer)
+            confirmDiscard: (msg) => showConfirmDialog(msg, {
+                title: 'Unsaved changes', confirmText: 'Discard changes', cancelText: 'Keep editing', danger: true
+            }),
+            onShowError: (msg) => showMessage(msg, 'error', undefined, 'Step error')
             // Add other callbacks like onCloneStep if needed
         }
     );
@@ -354,7 +393,10 @@ function loadPersistedUIStates() {
         if (sidebarCollapsed && domRefs.sidebar) {
             appState.isSidebarCollapsed = true;
             domRefs.sidebar.classList.add('collapsed');
-            if (domRefs.sidebarToggleBtn) domRefs.sidebarToggleBtn.setAttribute('aria-expanded', 'false');
+            if (domRefs.sidebarToggleBtn) {
+                domRefs.sidebarToggleBtn.setAttribute('aria-expanded', 'false');
+                domRefs.sidebarToggleBtn.setAttribute('aria-pressed', 'false');
+            }
         }
         // Runner state
         if (runnerCollapsed && domRefs.runnerPanel) {

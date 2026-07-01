@@ -20,6 +20,7 @@ import {
 import {
     showAppStepTypeDialog, initializeStepTypeDialogListeners,
     initializeVarDropdownListeners, initializeVariableInsertionListener,
+    showConfirmDialog,
 } from './dialogs.js';
 import {
     handleToggleSidebarCollapse, handleToggleRunnerCollapse
@@ -71,6 +72,12 @@ export function initializeEventListeners() {
 
     // --- Workspace Header View/Panel Controls ---
     domRefs.toggleViewBtn?.addEventListener('click', handleToggleView); // Toggles List/Graph view
+    // Sentinel: List|Visual segmented control drives the same toggle (only when switching away from the active view)
+    document.querySelectorAll('#view-segmented .segmented__cell').forEach((cell) => {
+        cell.addEventListener('click', () => {
+            if (cell.dataset.view !== appState.currentView) handleToggleView();
+        });
+    });
 
     // Info Panel Toggle Button (Main Header) - Toggles based on current state
     domRefs.toggleInfoBtn?.addEventListener('click', () => handleToggleInfoOverlay());
@@ -78,11 +85,30 @@ export function initializeEventListeners() {
     // Variables Panel Toggle Button (Main Header) - Toggles based on current state
     domRefs.toggleVariablesBtn?.addEventListener('click', () => handleToggleVariablesPanel());
 
+    // --- Sentinel v2 shell ---
+    // Flows drawer close chevron mirrors the rail toggle.
+    document.getElementById('drawer-close-btn')?.addEventListener('click', handleToggleSidebarCollapse);
+    // Rail palette button opens the command palette (same path as Cmd/Ctrl+K).
+    document.getElementById('rail-palette-btn')?.addEventListener('click', () => openCommandPalette());
+    // Inspector tab rack: Results = both context panes closed; Variables / Info
+    // reuse the existing overlay toggles (state, shortcuts, palette all shared).
+    document.getElementById('inspector-tabs')?.addEventListener('click', (e) => {
+        const tab = e.target.closest('.inspector-tab');
+        if (!tab) return;
+        if (tab.dataset.tab === 'results') {
+            handleToggleInfoOverlay(false);
+            handleToggleVariablesPanel(false);
+        } else if (tab.dataset.tab === 'variables') {
+            handleToggleVariablesPanel(true);
+        } else if (tab.dataset.tab === 'info') {
+            handleToggleInfoOverlay(true);
+        }
+    });
+
     // Zoom Controls
     domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
     domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
     domRefs.zoomResetBtn?.addEventListener('click', () => appState.visualizerComponent?.resetZoom());
-    domRefs.autoLayoutBtn?.addEventListener('click', handleAutoArrangeLayout);
     // WAVE2 LANE canvas: Tidy Up (Alt-click = tidy only the selected step) + jump-to-next-failed.
     domRefs.tidyUpBtn?.addEventListener('click', (event) => handleTidyUp({ selectionOnly: !!event.altKey }));
     domRefs.nextErrorBtn?.addEventListener('click', handleJumpToNextError);
@@ -153,6 +179,24 @@ export function initializeEventListeners() {
        whenever no flow is loaded. */
     if (domRefs.workspacePlaceholder) {
         domRefs.workspacePlaceholder.replaceChildren(renderEmptyState('no-flow-open'));
+
+        /* Wire the teaching empty-state's action rows to the real New/Open
+           controls. The rows advertise themselves as buttons (role/tabindex set
+           in firstRun.js), so honor both click and Enter/Space. A single
+           delegated listener survives content swaps. */
+        const triggerEmptyStateAction = (key) => {
+            if (key === 'new') document.getElementById('add-flow-btn')?.click();
+            else if (key === 'open') document.getElementById('open-flow-btn')?.click();
+        };
+        domRefs.workspacePlaceholder.addEventListener('click', (e) => {
+            const el = e.target.closest('.guided-empty-action');
+            if (el) triggerEmptyStateAction(el.dataset.action);
+        });
+        domRefs.workspacePlaceholder.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const el = e.target.closest('.guided-empty-action');
+            if (el) { e.preventDefault(); triggerEmptyStateAction(el.dataset.action); }
+        });
     }
 
     // Make step type dialog function globally accessible (if needed by other components)
@@ -328,27 +372,8 @@ export function handleToggleView() {
     if (appState.isVariablesPanelVisible) handleToggleVariablesPanel(false);
 }
 
-export function handleAutoArrangeLayout() {
-    if (!appState.currentFlowModel || !appState.visualizerComponent) return;
-    const layout = appState.visualizerComponent.getAutoLayout?.() || {};
-    const layoutEntries = Object.entries(layout);
-    if (layoutEntries.length === 0) {
-        showMessage('No steps available to arrange.', 'warning');
-        return;
-    }
-
-    appState.currentFlowModel.visualLayout = layout;
-    appState.isDirty = true;
-    setDirty();
-    renderCurrentFlow();
-
-    const firstStepId = appState.currentFlowModel.steps?.[0]?.id;
-    if (firstStepId) {
-        requestAnimationFrame(() => {
-            appState.visualizerComponent?.focusNode(firstStepId);
-        });
-    }
-}
+// (The legacy grid "Auto Arrange" was removed in favor of the elkjs Tidy Up —
+// one layout affordance, one result. See handleTidyUp below.)
 
 // ================= WAVE2 LANE canvas: "Tidy Up" + error navigation =================
 
@@ -568,12 +593,16 @@ export function handleBuilderFlowVarsUpdate(staticVars) { // Called by app.js gl
 
 // --- Component Callbacks (FlowBuilderComponent, FlowVisualizer) ---
 
-export function handleBuilderStepSelect(stepId) {
+export async function handleBuilderStepSelect(stepId) {
     if (appState.selectedStepId === stepId) return; // No action if already selected
 
     // Check for unsaved changes in the *currently open* editor before switching
     if (appState.stepEditorIsDirty) {
-         if (!confirm("You have unsaved changes in the current step editor. Discard changes and select the new step?")) {
+         const discard = await showConfirmDialog(
+             "You have unsaved changes in the current step editor. Discard changes and select the new step?",
+             { title: 'Unsaved changes', confirmText: 'Discard changes', cancelText: 'Keep editing', danger: true }
+         );
+         if (!discard) {
              // User cancelled, do not proceed with selection change
              // Optionally, re-highlight the original step if UI deselects on click attempt
              renderCurrentFlow(); // Re-render to ensure selection remains correct
@@ -656,7 +685,7 @@ export function handleBuilderStepEdit(updatedStepData) {
     }
 }
 
-export function handleBuilderStepUpdate(action) {
+export async function handleBuilderStepUpdate(action) {
      // Handles actions like add, delete, move, clone originating from UI interactions (list view or visualizer)
      if (!appState.currentFlowModel) return;
 
@@ -708,7 +737,11 @@ export function handleBuilderStepUpdate(action) {
                  const stepToDeleteInfo = findStepInfoRecursive(appState.currentFlowModel.steps, action.stepId);
                  const stepName = stepToDeleteInfo ? stepToDeleteInfo.step.name : `step ${action.stepId}`;
 
-                 if (confirm(`Are you sure you want to delete step "${escapeHTML(stepName)}"? This cannot be undone and includes any nested steps.`)) {
+                 const confirmed = await showConfirmDialog(
+                     `Delete step "${stepName}"? This cannot be undone and includes any nested steps.`,
+                     { title: 'Delete step', confirmText: 'Delete', cancelText: 'Cancel', danger: true }
+                 );
+                 if (confirmed) {
                      modelChanged = deleteStepFromModel(action.stepId);
                      if (modelChanged) {
                          if (appState.selectedStepId === action.stepId) newSelectedStepId = null; // Deselect if deleted
@@ -1014,7 +1047,7 @@ function buildCommandItems() {
         push('Toggle Variables', () => domRefs.toggleVariablesBtn?.click(), 'Ctrl/Cmd+2');
     }
     if (appState.currentView === 'node-graph') {
-        push('Auto Arrange Nodes', () => domRefs.autoLayoutBtn?.click(), 'Layout the graph');
+        push('Tidy Up', () => domRefs.tidyUpBtn?.click(), 'Auto-layout the graph');
         push('Toggle Minimap', () => domRefs.toggleMinimapBtn?.click(), 'Show/hide minimap');
     }
 

@@ -379,10 +379,14 @@ export class FlowVisualizer {
         this.nodeEditorModal.setAttribute('aria-hidden', 'false');
     }
 
-    _closeNodeEditor(force = false) {
+    async _closeNodeEditor(force = false) {
         if (!this.nodeEditorModal) return;
         if (this.nodeEditorDirty && !force) {
-            const shouldClose = confirm('You have unsaved changes. Close the editor and discard them?');
+            // Never call native confirm() here: it freezes the renderer mid-demo.
+            // The host injects a promise-based dialog via options.confirmDiscard.
+            const ask = this.options.confirmDiscard
+                || ((msg) => Promise.resolve(window.confirm(msg)));
+            const shouldClose = await ask('You have unsaved changes. Close the editor and discard them?');
             if (!shouldClose) return;
         }
 
@@ -641,7 +645,7 @@ export class FlowVisualizer {
                 else this.collapsedNodes.add(step.id);
 
                 nodeData.collapsed = !wasCollapsed;
-                toggleBtn.textContent = nodeData.collapsed ? 'v' : '^';
+                toggleBtn.innerHTML = `<svg class="icon icon-sm" aria-hidden="true"><use href="#${nodeData.collapsed ? 'i-chevron-down' : 'i-chevron-up'}"/></svg>`;
                 nodeEl.classList.toggle('collapsed', nodeData.collapsed);
 
                 this.options.onNodeLayoutUpdate?.(step.id, nodeData.x, nodeData.y, { collapsed: nodeData.collapsed });
@@ -667,7 +671,7 @@ export class FlowVisualizer {
         const hasCollapse = step.type === 'condition' || step.type === 'loop';
         const name = escapeHTML(step.name || '');
         const collapseButton = hasCollapse
-            ? `<button class="btn-node-action btn-toggle-collapse node-collapse-toggle" title="Toggle Collapse">${collapsed ? 'v' : '^'}</button>`
+            ? `<button class="btn-node-action btn-toggle-collapse node-collapse-toggle" title="Toggle Collapse"><svg class="icon icon-sm" aria-hidden="true"><use href="#${collapsed ? 'i-chevron-down' : 'i-chevron-up'}"/></svg></button>`
             : '';
 
         return `
@@ -677,7 +681,7 @@ export class FlowVisualizer {
                     <span class="node-name">${name}</span>
                     <div class="node-actions">
                         ${collapseButton}${step.actions || ''}
-                        <button class="btn-node-action btn-delete-node" title="Delete step">x</button>
+                        <button class="btn-node-action btn-delete-node" title="Delete step" aria-label="Delete step"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>
                     </div>
                 </div>
                 <div class="node-content">
@@ -692,8 +696,7 @@ export class FlowVisualizer {
         try {
             switch (step.type) {
                 case 'request': {
-                    const urlPreview = (step.url || '').length > 30 ? step.url.substring(0, 27) + '...' : step.url;
-                    return `<span class="request-method ${step.method || 'GET'}">${step.method || 'GET'}</span> <code class="request-url" title="${escapeHTML(step.url)}">${escapeHTML(urlPreview)}</code>`;
+                    return `<div class="node-line"><span class="request-method ${step.method || 'GET'}">${step.method || 'GET'}</span><code class="request-url" title="${escapeHTML(step.url || '')}">${escapeHTML(step.url || '')}</code></div>`;
                 }
                 case 'condition': {
                     let conditionPreview = 'No condition set';
@@ -936,10 +939,35 @@ export class FlowVisualizer {
         if (nodeEl) nodeEl.classList.add('selected');
     }
 
+    /** Public: repaint the minimap with current theme tokens (called after a
+     *  theme switch; canvas pixels don't follow CSS variables on their own). */
+    refreshMinimap() {
+        this._updateMinimap();
+    }
+
+    /** Resolve minimap paint colors from the theme tokens so both themes render
+     *  correctly (a hardcoded white fill used to glare in dark mode). */
+    _minimapColors() {
+        const css = getComputedStyle(this.minimapContainer);
+        const v = (name, fallback) => (css.getPropertyValue(name) || '').trim() || fallback;
+        return {
+            node: v('--surface-raised', '#ffffff'),
+            nodeStroke: v('--border-strong', ROLE_COLORS.main),
+            selection: v('--accent', '#2563eb'),
+            roles: {
+                main: v('--border-strong', ROLE_COLORS.main),
+                then: v('--run-success', ROLE_COLORS.then),
+                else: v('--run-error', ROLE_COLORS.else),
+                loop: v('--accent', ROLE_COLORS.loop),
+            },
+        };
+    }
+
     _updateMinimap() {
         if (!this.minimapCanvas || !this.minimapContainer || !this.minimapVisible) return;
         const ctx = this.minimapCanvas.getContext('2d');
         if (!ctx) return;
+        const colors = this._minimapColors();
 
         const width = this.minimapContainer.clientWidth;
         const height = this.minimapContainer.clientHeight;
@@ -980,7 +1008,8 @@ export class FlowVisualizer {
 
         this.minimapScale = Math.min(
             (width - MINIMAP_PADDING * 2) / contentWidth,
-            (height - MINIMAP_PADDING * 2) / contentHeight
+            (height - MINIMAP_PADDING * 2) / contentHeight,
+            0.35 // cap: tiny flows shouldn't render one node as the whole map
         );
 
         this.minimapBounds = { minX, minY, maxX, maxY };
@@ -996,7 +1025,7 @@ export class FlowVisualizer {
             const endX = (toNode.x + NODE_WIDTH / 2 - minX) * this.minimapScale + MINIMAP_PADDING;
             const endY = (toNode.y + NODE_MIN_HEIGHT / 2 - minY) * this.minimapScale + MINIMAP_PADDING;
 
-            ctx.strokeStyle = ROLE_COLORS[conn.role] || ROLE_COLORS.main;
+            ctx.strokeStyle = colors.roles[conn.role] || colors.roles.main;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(startX, startY);
@@ -1010,14 +1039,14 @@ export class FlowVisualizer {
             const w = NODE_WIDTH * this.minimapScale;
             const h = NODE_MIN_HEIGHT * this.minimapScale;
 
-            ctx.fillStyle = '#ffffff';
-            ctx.strokeStyle = '#94a3b8';
+            ctx.fillStyle = colors.node;
+            ctx.strokeStyle = colors.nodeStroke;
             ctx.lineWidth = 1;
             ctx.fillRect(x, y, w, h);
             ctx.strokeRect(x, y, w, h);
 
             if (node.id === this.selectedNodeId) {
-                ctx.strokeStyle = '#2563eb';
+                ctx.strokeStyle = colors.selection;
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
             }
@@ -1619,7 +1648,10 @@ export class FlowVisualizer {
             badge.addEventListener('click', (event) => {
                 event.stopPropagation();
                 const current = this.nodeErrors.get(stepId);
-                if (current) alert(current);
+                if (!current) return;
+                // Surface through the host's toast system; alert() would block the page.
+                if (this.options.onShowError) this.options.onShowError(current);
+                else logger.error(`[FlowVisualizer] Step error: ${current}`);
             });
             const header = nodeEl.querySelector('.node-header') || nodeEl;
             header.appendChild(badge);

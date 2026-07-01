@@ -14,6 +14,8 @@ export function handleToggleSidebarCollapse() {
 
     appState.isSidebarCollapsed = !appState.isSidebarCollapsed;
     domRefs.sidebar.classList.toggle('collapsed', appState.isSidebarCollapsed);
+    // Rail flows button reflects drawer state (Sentinel v2).
+    domRefs.sidebarToggleBtn.setAttribute('aria-pressed', String(!appState.isSidebarCollapsed));
 
     try { localStorage.setItem('sidebarCollapsed', appState.isSidebarCollapsed); } catch (e) { logger.warn("Could not persist sidebar state:", e); }
 

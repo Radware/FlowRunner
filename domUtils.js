@@ -39,7 +39,6 @@ export function initializeDOMReferences() {
         zoomOutBtn: document.getElementById('zoom-out-btn'),
         zoomInBtn: document.getElementById('zoom-in-btn'),
         zoomResetBtn: document.getElementById('zoom-reset-btn'),
-        autoLayoutBtn: document.getElementById('auto-layout-btn'),
         // WAVE2 LANE canvas: Tidy Up + jump-to-next-failed toolbar buttons
         tidyUpBtn: document.getElementById('tidy-up-btn'),
         nextErrorBtn: document.getElementById('next-error-btn'),
@@ -124,6 +123,5 @@ export function initializeDOMReferences() {
     if (!domRefs.resultsStatusFilter) logger.warn("Required select #results-status-filter not found in HTML.");
     if (!domRefs.exportResultsJsonBtn) logger.warn("Required button #export-results-json-btn not found in HTML.");
     if (!domRefs.exportResultsCsvBtn) logger.warn("Required button #export-results-csv-btn not found in HTML.");
-    if (!domRefs.autoLayoutBtn) logger.warn("Required button #auto-layout-btn not found in HTML.");
 
 }

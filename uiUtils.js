@@ -122,17 +122,72 @@ export function updateWorkspaceTitle() {
         const displayFileName = appState.currentFilePath ? path.basename(appState.currentFilePath) : baseName;
         const needsSave = appState.isDirty || appState.stepEditorIsDirty;
 
-        // Title bar shows filename (or flow name) + dirty indicator
+        // OS window title keeps the conventional asterisk; the on-screen header
+        // shows dirtiness as the #dirty-flag pip (an instrument readout), not " *".
         title = `${displayFileName}${needsSave ? ' *' : ''} - FlowRunner`;
-        // Workspace header shows flow name + dirty indicator
-        workspaceHeader = `${baseName}${needsSave ? ' *' : ''}`;
+        workspaceHeader = baseName;
     }
 
     // Update DOM elements if they exist
     if (domRefs.workspaceTitle) {
         domRefs.workspaceTitle.textContent = workspaceHeader;
     }
+    const dirtyFlag = document.getElementById('dirty-flag');
+    if (dirtyFlag) {
+        const isDirty = !!(appState.currentFlowModel && (appState.isDirty || appState.stepEditorIsDirty));
+        dirtyFlag.hidden = !isDirty;
+    }
     document.title = title;
+}
+
+/**
+ * Drive the System Status Pip (the Sentinel signature) in the brand lockup and
+ * its mirror in the runner header. state: idle | running | success | error | stopped.
+ * Bound strictly to real engine state — never faked, never animated when idle.
+ */
+export function setSystemStatus(state) {
+    const WORDS = { idle: 'IDLE', running: 'RUNNING', success: 'PASSED', error: 'FAILED', stopped: 'STOPPED' };
+    const dataState = state === 'stopped' ? 'idle' : state;
+    ['system-status-pip', 'runner-status-pip'].forEach((id) => {
+        const pip = document.getElementById(id);
+        if (!pip) return;
+        pip.dataset.state = dataState;
+        const word = pip.querySelector('.status-word');
+        if (word) word.textContent = WORDS[state] || 'IDLE';
+    });
+}
+
+/** Sync the List|Visual segmented control to appState.currentView (selection + sliding thumb). */
+export function syncViewSegmented(hasFlow) {
+    // Reflect the active view on the workspace so the floating canvas toolbar can gate itself.
+    const ws = document.getElementById('workspace');
+    if (ws) ws.dataset.view = hasFlow ? appState.currentView : 'list-editor';
+    const seg = document.getElementById('view-segmented');
+    if (!seg) return;
+    seg.style.display = hasFlow ? '' : 'none';
+    if (!hasFlow) return;
+    const cells = seg.querySelectorAll('.segmented__cell');
+    const thumb = seg.querySelector('.segmented__thumb');
+    let active = null;
+    cells.forEach((cell) => {
+        const on = cell.dataset.view === appState.currentView;
+        cell.setAttribute('aria-selected', String(on));
+        if (on) active = cell;
+    });
+    if (active && thumb) {
+        thumb.style.width = `${active.offsetWidth}px`;
+        thumb.style.transform = `translateX(${active.offsetLeft - active.parentElement.clientLeft - 3}px)`;
+    }
+}
+
+// Toast bridge: lets low-level modules (flowCore, flowStepComponents) surface
+// toasts without importing uiUtils (avoids circular imports). Dispatch with:
+// document.dispatchEvent(new CustomEvent('flowrunner:toast', {detail:{message, type}}))
+if (typeof document !== 'undefined') {
+    document.addEventListener('flowrunner:toast', (e) => {
+        const { message, type = 'error', title = null } = e.detail || {};
+        if (message) showMessage(message, type, undefined, title);
+    });
 }
 
 export function showMessage(message, type = 'info', container = domRefs.builderMessages, title = null, allowHTML = false) {
@@ -146,8 +201,9 @@ export function showMessage(message, type = 'info', container = domRefs.builderM
 
     const messageEl = document.createElement('div');
     messageEl.className = `flow-message ${type}`;
-    const icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
-    const iconHtml = `<div class="message-icon">${icons[type] || icons.info}</div>`;
+    // Sentinel icon system: sprite SVGs, never emoji (index.html <symbol> defs).
+    const icons = { info: 'i-info', success: 'i-check', error: 'i-alert-circle', warning: 'i-alert-triangle' };
+    const iconHtml = `<div class="message-icon"><svg class="icon" aria-hidden="true"><use href="#${icons[type] || icons.info}"/></svg></div>`;
     const contentContainer = document.createElement('div'); // Container for content
     contentContainer.className = 'message-content';
 
@@ -171,12 +227,10 @@ export function showMessage(message, type = 'info', container = domRefs.builderM
     messageEl.innerHTML = `
         ${iconHtml}
         <div class="message-body">
-            <div class="message-header">
-                ${title ? `<strong>${escapeHTML(title)}</strong>` : ''}
-                <button class="btn-close-message" title="Dismiss message">✕</button>
-            </div>
+            ${title ? `<div class="message-header"><strong>${escapeHTML(title)}</strong></div>` : ''}
             <!-- Content will be appended below -->
         </div>
+        <button class="btn-close-message" title="Dismiss message" aria-label="Dismiss message"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>
     `;
     // Append the content element we created and potentially attached listeners to
     messageEl.querySelector('.message-body').appendChild(contentContainer);
@@ -222,6 +276,7 @@ export function renderCurrentFlow() {
 
     if (!appState.currentFlowModel) {
         clearWorkspace(true); // Full clear if no model
+        syncViewSegmented(false);
         return;
     }
 
@@ -234,6 +289,7 @@ export function renderCurrentFlow() {
     // Set active view
     if (domRefs.flowBuilderMount) domRefs.flowBuilderMount.classList.toggle('active', appState.currentView === 'list-editor');
     if (domRefs.flowVisualizerMount) domRefs.flowVisualizerMount.classList.toggle('active', appState.currentView === 'node-graph');
+    syncViewSegmented(true); // Sentinel: keep the List|Visual segmented control in sync
 
     // Populate global info overlay (values only)
     _populateGlobalInfoOverlay();
@@ -645,17 +701,16 @@ export function updateViewToggle() {
         if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = 'none';
         if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = 'none';
         if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = 'none';
-        if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = 'none';
         if(domRefs.tidyUpBtn) domRefs.tidyUpBtn.style.display = 'none'; // WAVE2 LANE canvas
         if(domRefs.nextErrorBtn) domRefs.nextErrorBtn.style.display = 'none'; // WAVE2 LANE canvas
         if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = 'none';
+        syncViewSegmented(false);
         return;
     }
     domRefs.toggleViewBtn.style.display = ''; // Ensure button is visible if flow loaded
     if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
-    if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.tidyUpBtn) domRefs.tidyUpBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none'; // WAVE2 LANE canvas
     if(domRefs.nextErrorBtn) domRefs.nextErrorBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none'; // WAVE2 LANE canvas
     if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
@@ -674,6 +729,7 @@ export function updateViewToggle() {
         if(domRefs.toggleVariablesBtn) domRefs.toggleVariablesBtn.style.display = '';
         if(appState.visualizerComponent) appState.visualizerComponent.showMinimap();
     }
+    syncViewSegmented(true);
 }
 
 /** Syncs the visibility and state of Info/Variables panels and their toggle buttons */
@@ -703,13 +759,27 @@ export function syncPanelVisibility() {
     if (toggleMinimapBtn) {
         const isVisible = appState.visualizerComponent?.isMinimapVisible() ?? false;
         toggleMinimapBtn.classList.toggle('active', isVisible);
-        toggleMinimapBtn.textContent = isVisible ? 'Hide Minimap' : 'Show Minimap';
+        // Icon-only button in the floating toolbar: update the tooltip, keep the glyph.
+        toggleMinimapBtn.title = isVisible ? 'Hide Minimap' : 'Show Minimap';
     }
 
-    // Show/hide the toggle buttons themselves based on whether a flow is loaded
+    // Sentinel v2: reflect the overlay state onto the inspector tab rack.
+    const tabRack = document.getElementById('inspector-tabs');
+    if (tabRack) {
+        const active = appState.isInfoOverlayOpen ? 'info'
+            : appState.isVariablesPanelVisible ? 'variables' : 'results';
+        tabRack.querySelectorAll('.inspector-tab').forEach((tab) => {
+            tab.setAttribute('aria-selected', String(tab.dataset.tab === active));
+        });
+        const resultsPane = document.getElementById('inspector-pane-results');
+        if (resultsPane) resultsPane.style.display = active === 'results' ? '' : 'none';
+    }
+
+    // Sentinel v2: the info/variables buttons are palette/shortcut compat stubs;
+    // the inspector tab rack is the visible affordance. Keep them hidden.
     const shouldShowButtons = !!appState.currentFlowModel;
-    if (toggleInfoBtn) toggleInfoBtn.style.display = shouldShowButtons ? '' : 'none';
-    if (toggleVariablesBtn) toggleVariablesBtn.style.display = shouldShowButtons ? '' : 'none';
+    if (toggleInfoBtn) toggleInfoBtn.style.display = 'none';
+    if (toggleVariablesBtn) toggleVariablesBtn.style.display = 'none';
     if (toggleMinimapBtn) {
         const shouldShow = shouldShowButtons && appState.currentView === 'node-graph';
         toggleMinimapBtn.style.display = shouldShow ? '' : 'none';
@@ -826,6 +896,17 @@ export function syncStepsSearchVisibility() {
     const hasSteps = !!appState.currentFlowModel?.steps?.length;
     const inListView = appState.currentView === 'list-editor';
     const shouldShow = hasSteps && inListView;
+    // The search lives inside the Flow Steps panel header (single search box,
+    // scoped to the list it filters). The builder owns that DOM and may wipe it,
+    // so re-adopt the wrap after every render; moving a node keeps its listeners.
+    if (shouldShow && domRefs.flowBuilderMount) {
+        const panel = domRefs.flowBuilderMount.querySelector('.flow-steps-panel');
+        const heading = panel?.querySelector('h3');
+        if (panel && wrap.parentElement !== panel) {
+            heading ? heading.insertAdjacentElement('afterend', wrap)
+                    : panel.prepend(wrap);
+        }
+    }
     wrap.style.display = shouldShow ? '' : 'none';
     if (shouldShow) {
         // Re-apply an active query against freshly rendered rows.
@@ -911,14 +992,14 @@ export function highlightStepInList(stepId, statusClass) {
 
      // Create a list of errors
      const errorListHtml = errors.map(error => `<li>${escapeHTML(error)}</li>`).join('');
-     const iconHtml = '<div class="message-icon">❌</div>'; // Error icon
+     const iconHtml = '<div class="message-icon"><svg class="icon" aria-hidden="true"><use href="#i-alert-circle"/></svg></div>';
 
      messageEl.innerHTML = `
           ${iconHtml}
           <div class="message-body">
              <div class="message-header">
                  <strong>Validation Failed</strong>
-                 <button class="btn-close-message" title="Dismiss message">✕</button>
+                 <button class="btn-close-message" title="Dismiss message" aria-label="Dismiss message"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>
              </div>
              <ul class="validation-errors">${errorListHtml}</ul>
          </div>

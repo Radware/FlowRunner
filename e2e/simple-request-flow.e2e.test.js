@@ -21,7 +21,7 @@ let mockUrl;
 
 async function pushToRecentFiles(page, filePath) {
   return page.evaluate(
-    ({ key, filePath, max }) => {
+    async ({ key, filePath, max }) => {
       let arr = [];
       try {
         const raw = localStorage.getItem(key);
@@ -32,6 +32,9 @@ async function pushToRecentFiles(page, filePath) {
       arr.unshift(filePath);
       if (arr.length > max) arr = arr.slice(0, max);
       localStorage.setItem(key, JSON.stringify(arr));
+      if (window.electronAPI && typeof window.electronAPI.setRecentFiles === 'function') {
+        try { await window.electronAPI.setRecentFiles(arr); } catch { /* best effort */ }
+      }
       return true;
     },
     { key: RECENT_FILES_KEY, filePath, max: MAX_RECENT_FILES }

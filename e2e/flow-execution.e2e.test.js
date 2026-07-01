@@ -271,13 +271,18 @@ const MOCK_FLOW_CONTENT = {
 
 async function pushRecent(page, fp) {
   await page.evaluate(
-    ({ k, fp, m }) => {
+    async ({ k, fp, m }) => {
       let a; try { a = JSON.parse(localStorage.getItem(k) || '[]'); }
       catch { a = []; }
       if (!Array.isArray(a)) a = [];
       a = a.filter(p => p !== fp); a.unshift(fp);
       if (a.length > m) a = a.slice(0, m);
       localStorage.setItem(k, JSON.stringify(a));
+      // Mirror into the durable electron-store: hydrateRecentFiles() treats it
+      // as the source of truth on reload and would wipe a localStorage-only seed.
+      if (window.electronAPI && typeof window.electronAPI.setRecentFiles === 'function') {
+        try { await window.electronAPI.setRecentFiles(a); } catch { /* best effort */ }
+      }
     },
     { k: RECENT_FILES_KEY, fp, m: MAX_RECENT_FILES }
   );
@@ -524,7 +529,7 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
   test('Graph view connectors reflect step status', async () => {
     const currentView = await page.evaluate(() => window.appState?.currentView || 'list-editor');
     if (currentView === 'list-editor') {
-        await page.locator('#toggle-view-btn').click();
+        await page.locator('#view-segmented .segmented__cell[aria-selected="false"]').first().click();
         await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/);
     }
 

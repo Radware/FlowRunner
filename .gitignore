@@ -93,3 +93,6 @@ test-results/
 .nyc_output/
 playwright-report/
 test-report/
+
+# e2e renderer log capture (local artifact)
+e2e-renderer-logs.txt

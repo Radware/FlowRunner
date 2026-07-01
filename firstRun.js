@@ -117,6 +117,8 @@ export function renderEmptyState(kind) {
             const li = document.createElement('li');
             li.className = 'guided-empty-action';
             li.dataset.action = action.key;
+            li.setAttribute('role', 'button');
+            li.setAttribute('tabindex', '0');
 
             const label = document.createElement('span');
             label.className = 'guided-action-label';
@@ -239,7 +241,9 @@ export function createOnboarding({ onDismiss } = {}) {
  */
 export function maybeShowOnboarding({ host, force = false, onDismiss } = {}) {
     if (!host) return false;
-    if (!force && hasSeenFirstRun()) return false;
+    // Automation (Playwright sets navigator.webdriver) never wants the overlay:
+    // it steals every click and the driver refuses to click covered targets.
+    if (!force && (hasSeenFirstRun() || (typeof navigator !== 'undefined' && navigator.webdriver))) return false;
 
     // Never stack two overlays.
     const existing = host.querySelector('.guided-onboarding');

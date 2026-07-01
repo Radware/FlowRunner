@@ -11,6 +11,7 @@ import {
     escapeHTML, findStepById
 } from './flowCore.js';
 import { assignNewIdsRecursive } from './modelUtils.js';
+import { showConfirmDialog } from './dialogs.js';
 import { showValidationErrors } from './uiUtils.js';
 import { initializeAppComponents } from './app.js'; // <-- ADDED IMPORT
 import { logger } from './logger.js'; // <-- ADDED IMPORT
@@ -228,12 +229,13 @@ export function renderFlowList(recentFiles) {
 
         li.innerHTML = `
             <div class="flow-item-content">
+                <svg class="icon flow-item-icon" aria-hidden="true"><use href="#i-file"/></svg>
                 <span class="flow-item-name">${escapeHTML(getFileName(filePath))}</span>
                 <button class="btn-remove-recent-file"
                         data-action="remove-recent"
                         title="Remove from recent list"
                         aria-label="Remove ${escapeHTML(getFileName(filePath))} from recent list">
-                    ✕
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg>
                 </button>
             </div>
         `;
@@ -321,9 +323,13 @@ export async function handleFlowListActions(event) {
 }
 
 // --- [Modified Code] in app.js ---
-export function confirmDiscardChanges() {
+export async function confirmDiscardChanges() {
     if (appState.isDirty || appState.stepEditorIsDirty) {
-        if (!confirm("You have unsaved changes. Discard them and continue?")) {
+        const discard = await showConfirmDialog(
+            "You have unsaved changes. Discard them and continue?",
+            { title: 'Unsaved changes', confirmText: 'Discard changes', cancelText: 'Keep editing', danger: true }
+        );
+        if (!discard) {
             return false; // User canceled
         }
     }
@@ -348,7 +354,7 @@ export async function handleSelectFlow(filePath) {
         return;
     }
 
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User cancelled discarding changes
     }
 
@@ -368,7 +374,7 @@ export async function handleOpenFile() {
     if (!await confirmStopContinuousRun(`Opening a new file`)) {
         return;
     }
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User cancelled discarding changes
     }
 
@@ -424,7 +430,7 @@ export async function handleCreateNewFlow() {
         return;
     }
 
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User cancelled discarding changes
     }
 
@@ -767,7 +773,7 @@ export async function handleCloseFlow() {
 
     // confirmDiscardChanges will prompt if dirty.
     // It also resets dirty flags and calls setDirty() if the user proceeds.
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User chose not to discard changes (and thus not to close)
     }
 
@@ -816,7 +822,11 @@ export async function handleCancelFlow() {
     }
 
     if (appState.isDirty || appState.stepEditorIsDirty) {
-        if (!confirm("You have unsaved changes. Are you sure you want to cancel and revert them?")) {
+        const revert = await showConfirmDialog(
+            "You have unsaved changes. Are you sure you want to cancel and revert them?",
+            { title: 'Revert changes', confirmText: 'Revert', cancelText: 'Keep editing', danger: true }
+        );
+        if (!revert) {
             return; // User chose not to discard changes
         }
     }
@@ -873,12 +883,15 @@ export async function handleCancelFlow() {
 // --- NEW HELPER: Confirm stopping continuous run ---
 async function confirmStopContinuousRun(actionDescription = "This action") {
     if (appState.isContinuousRunActive) {
-        if (confirm(`${actionDescription} will stop the currently running continuous flow. Continue?`)) {
+        const proceed = await showConfirmDialog(
+            `${actionDescription} will stop the currently running continuous flow. Continue?`,
+            { title: 'Stop continuous run', confirmText: 'Stop and continue', cancelText: 'Cancel' }
+        );
+        if (proceed) {
             handleStopFlow(); // Stop the continuous flow
             return true; // User confirmed
-        } else {
-            return false; // User cancelled
         }
+        return false; // User cancelled
     }
     return true; // Not active, so proceed
 }

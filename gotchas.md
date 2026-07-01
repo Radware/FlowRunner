@@ -33,6 +33,22 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Fix:** `visualizer-island/vite.config.js` → `define: { 'process.env.NODE_ENV': JSON.stringify('production') }`. Side benefit: React tree-shakes dev code, halving the bundle (778 kB → 380 kB / 122 kB gzip).
 - **Lesson:** jsdom unit tests never load the real bundle and the packaged build only checks it *compiles* — this class of bug is **only** caught by running the app (browser preview or packaged). Dogfound flag-gated features before flipping the default. (Note: a browser preview served by `http.server` may cache `island.js`, so a rebuild needs a cache-bust to be observed.)
 
+### 2g. Native `confirm()`/`alert()` freeze the renderer — and wedge remote-driven Chrome
+- **Symptom:** during browser validation the tab became permanently "still loading"; screenshots/JS injection failed until the tab was killed. Root cause: a native dialog (`confirm()` on dirty-step select) blocks the JS event loop; the page never reaches idle, and on a projector it freezes the live demo.
+- **Fix/lesson:** never call native dialogs in the renderer. Use `showConfirmDialog()` (dialogs.js, promise-based) or `showMessage` toasts; low-level modules dispatch the `flowrunner:toast` CustomEvent instead of importing uiUtils.
+
+### 2h. E2E recent-files seeding MUST write through to electron-store
+- **Symptom:** a spec seeds `localStorage.flowrunnerRecentFiles`, reloads, and the item is gone → click times out. `hydrateRecentFiles()` treats the durable electron-store list as the source of truth on startup and overwrites localStorage-only seeds. Passes/failures depended on what earlier runs left in the shared store profile (also why `workers: 1`).
+- **Fix/lesson:** seed BOTH (`localStorage` + `await window.electronAPI.setRecentFiles(arr)`) — helper in `e2e/testUtils.js`. Watch for spec-local copies of `pushRecent` shadowing the shared helper (flow-execution had one).
+
+### 2i. Playwright never clicks covered targets — overlays must not blanket the app
+- **Symptom:** first-run onboarding overlay intercepts pointer events; Playwright waits for the target to be unobstructed (it will NOT click the scrim to dismiss), so every spec times out on a fresh profile.
+- **Fix/lesson:** `maybeShowOnboarding` skips under `navigator.webdriver`. Generally: overlays in this app must be dismissible AND absent under automation.
+
+### 2j. Canvas-painted UI (minimap) doesn't follow CSS variables
+- **Symptom:** minimap glared near-white in dark mode. Canvas pixels are painted once; they don't re-resolve `var(--…)` on theme change, and the node fill was hardcoded `#ffffff`.
+- **Fix/lesson:** resolve theme tokens at paint time (`getComputedStyle`) and repaint on theme toggle (`visualizer.refreshMinimap()` from `toggleTheme()` in app.js).
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*
@@ -163,6 +179,20 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 
 ### 30. `clearHighlights('active-step')` ignores its argument
 - `FlowVisualizer.clearHighlights()` takes no parameter and always clears **all** highlight classes; callers passing `'active-step'` wipe every status highlight, not just the active one.
+
+### 31. ⚠️ One missing `}` in `styles.css` silently kills the whole tail via CSS nesting *(cost hours of "why does it still look old")*
+- **Symptom:** large, recently-added CSS sections (command palette, Demo Mode, guided onboarding, teaching empty-states, Basic/Power inspector, test-summary, tidy-relayout, on-node error badges) render **completely unstyled** — the app "looks like the old UI" even though the rules exist in the file and the file loads without error.
+- **Root cause:** a rule with **no closing brace** (found: `.inspector-disclosure-btn:focus-visible {` and `.palette-search:focus {`, each with a comment where the body should be and no `}`). Modern browsers parse **native CSS nesting**, so every subsequent top-level rule becomes a *nested* rule inside the unclosed one (you'll see `& .foo {…}` in the CSSOM). Those nested selectors only match as descendants of a non-matching parent, so they never apply. One missing brace can bury 100+ rules. No parse error is thrown.
+- **Diagnose fast:** in the page, walk `document.styleSheets[…].cssRules` and find the top-level rule whose `.cssRules` contains your "dead" selector — that rule is the one missing its `}`. Or strip comments and count braces: `node -e "const c=require('fs').readFileSync('styles.css','utf8').replace(/\/\*[\s\S]*?\*\//g,''); let d=0; for(const ch of c){if(ch==='{')d++;else if(ch==='}')d--;} console.log(d)"` — must be `0`. (A naive count that includes comments gives false positives.)
+- **Lesson:** run the comment-stripped brace check after any hand-edit to `styles.css`; treat "a block of new styles isn't applying at all" as a missing-brace suspicion, not a specificity problem.
+
+### 32. Run-status pill classes live on `.result-item`, not `.result-status`
+- `.result-status.success` etc. **never matched**: `runnerInterface.js` puts the status class on the parent `<li class="result-item success">`, while the inner `<span class="result-status">` carries no modifier. Style status badges as `.result-item.<status> .result-status` (and `::before` pip). Same shape applies to node status (`.result-item`-style parents) — check the parent, not the span, before writing status selectors.
+
+### 33. Chrome disk-caches ES modules in the browser-preview workflow — JS edits need a hard reload
+- **Symptom:** you edit a renderer module (`app.js`, `eventHandlers.js`, `firstRun.js`, …), reload the localhost preview, and your change **isn't running** (old behavior persists), even though `curl` shows the served file is updated.
+- **Cause:** `python -m http.server` sends no cache headers, so Chrome heuristically caches the ES modules and, on a normal reload, serves them from disk without revalidating. `styles.css` (a `<link>`) refetches fine, which is why CSS edits *look* live but JS edits don't.
+- **Fix:** hard-reload (**Cmd/Ctrl+Shift+R**) after JS edits, or serve with `Cache-Control: no-store`. Tell whether the new JS loaded by probing for a change you made in the DOM (e.g. a new attribute) before assuming your logic is wrong.
 
 ## Install-time (for users / support)
 

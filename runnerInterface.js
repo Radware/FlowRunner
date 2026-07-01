@@ -2,7 +2,7 @@
 
 import { appState, domRefs } from './state.js';
 import { DEFAULT_REQUEST_DELAY } from './config.js';
-import { showMessage, clearListViewHighlights, highlightStepInList, updateDefinedVariables } from './uiUtils.js';
+import { showMessage, clearListViewHighlights, highlightStepInList, updateDefinedVariables, setSystemStatus } from './uiUtils.js';
 import { findStepById, escapeHTML } from './flowCore.js'; // findStepById needed for result rendering
 import { logger } from './logger.js';
 
@@ -212,6 +212,7 @@ export function handleClearResults() {
     // 1. Clear App State results array
     appState.executionResults = [];
     appState.lastRuntimeContext = null;
+    setSystemStatus('idle'); // Sentinel status pip back to idle (a run will set 'running' after this)
 
     // 2. Clear Results List UI
     if(domRefs.runnerResultsList) {
@@ -267,6 +268,7 @@ export async function handleRunFlow() {
     handleClearResults();
     // <<< --- CHANGE HERE --- >>>
     showMessage(`Flow execution started${isContinuousChecked ? ' (Continuous)' : ''}...`, "info", domRefs.runnerStatusMessages); // Use correct container
+    setSystemStatus('running'); // Sentinel status pip
     // <<< --- END CHANGE --- >>>
 
     appState.isContinuousRunActive = isContinuousChecked; // Set the app's state flag immediately
@@ -394,6 +396,8 @@ export function handleRunnerFlowComplete(finalContext, results) {
     // <<< --- CHANGE HERE --- >>>
     showMessage("Flow execution finished.", "success", domRefs.runnerStatusMessages); // Use correct container
     // <<< --- END CHANGE --- >>>
+    // Sentinel status pip: reflect whether any step errored
+    setSystemStatus(document.querySelector('#runner-results .result-item.error') ? 'error' : 'success');
     renderTestSummaryPanel(); // === WAVE3 assertions === show aggregate PASS/FAIL after a run
     updateRunnerUI();
     // Leave final step highlights visible
@@ -405,6 +409,7 @@ export function handleRunnerFlowComplete(finalContext, results) {
     appState.isContinuousRunActive = false; // Ensure flag is cleared
     // <<< --- CHANGE HERE --- >>>
     showMessage("Flow execution stopped.", "warning", domRefs.runnerStatusMessages); // Changed message slightly, use correct container
+    setSystemStatus(document.querySelector('#runner-results .result-item.error') ? 'error' : 'stopped'); // Sentinel status pip
     // <<< --- END CHANGE --- >>>
 
     let stoppedStepId = null;

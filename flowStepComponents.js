@@ -66,12 +66,12 @@ export function renderStep(step, options) {
   const header = document.createElement('div');
   header.className = 'flow-step-header';
   header.innerHTML = `
-    <span class="flow-step-drag-handle" title="Drag to reorder step" tabindex="0">☰</span>
+    <span class="flow-step-drag-handle" title="Drag to reorder step" tabindex="0"><svg class="icon icon-sm icon--fill" aria-hidden="true"><use href="#i-grip"/></svg></span>
     <span class="flow-step-icon">${getStepTypeIcon(step.type)}</span>
     <div class="flow-step-title" title="${escapeHTML(step.name || 'Unnamed Step')}">${escapeHTML(step.name || 'Unnamed Step')}</div>
     <div class="flow-step-actions">
-      <button class="btn-clone" title="Clone this step">⧉</button>
-      <button class="btn-delete btn-delete-node" title="Delete this step">✕</button>
+      <button class="btn-clone" title="Clone this step"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-copy"/></svg></button>
+      <button class="btn-delete btn-delete-node" title="Delete this step"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
     </div>
   `;
 
@@ -442,10 +442,10 @@ export function createStepEditor(step, options) {
       </div>
       <div class="form-group"> <label for="step-editor-name-${localStep.id}">Step Name</label> <input type="text" id="step-editor-name-${localStep.id}" value="${escapeHTML(localStep.name || '')}" placeholder="Enter a descriptive name"> </div>
       <div class="inspector-summary" data-ref="inspectorSummary" aria-live="polite"></div>
-      <div class="step-save-message" style="display: none; color: green; margin: 0.5rem 0; font-weight: bold;"> Step changes saved! </div>
+      <div class="step-save-message" style="display: none; color: var(--run-success); margin: 0.5rem 0; font-weight: 600;"> Step changes saved! </div>
       <div class="editor-type-content"> <!-- Type-specific fields go here --> </div>
     </div>
-    <div class="step-editor-actions"> <button class="btn-save-step" title="Save changes to this step" disabled>Save Step</button> <button class="btn-cancel-step" title="Discard changes and revert">Cancel</button> </div>
+    <div class="step-editor-actions"> <button class="btn btn-primary btn-save-step" title="Save changes to this step" disabled>Save Step</button> <button class="btn btn-secondary btn-cancel-step" title="Discard changes and revert">Cancel</button> </div>
   `;
 
   // --- Get References (remains same) ---
@@ -513,7 +513,7 @@ export function createStepEditor(step, options) {
                localStep.condition = generateConditionString(localStep.conditionData);
            } else {
                 // Validation: Condition requires variable and operator
-                alert("Condition Error: Please select both a variable and an operator.");
+                document.dispatchEvent(new CustomEvent('flowrunner:toast', { detail: { message: "Condition: select both a variable and an operator.", type: 'error', title: 'Cannot save step' } }));
                 const varSelect = editorEl.querySelector(`#cond-var-${localStep.id}`);
                 if (varSelect?.value === '') varSelect.focus();
                 else editorEl.querySelector(`#cond-op-${localStep.id}`)?.focus();
@@ -523,7 +523,7 @@ export function createStepEditor(step, options) {
       if (localStep.type === 'loop') {
           const loopVar = localStep.loopVariable?.trim();
           if (!loopVar || !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(loopVar)) {
-              alert("Loop Error: Invalid 'Item Variable Name'. Please use a valid JavaScript variable name.");
+              document.dispatchEvent(new CustomEvent('flowrunner:toast', { detail: { message: "Loop: 'Item Variable Name' must be a valid JavaScript variable name.", type: 'error', title: 'Cannot save step' } }));
               const varInput = editorEl.querySelector(`#loop-variable-${localStep.id}`);
               if (varInput) { varInput.focus(); varInput.style.borderColor = 'red'; }
               return; // Prevent saving invalid state
@@ -535,7 +535,7 @@ export function createStepEditor(step, options) {
           }
           localStep.source = sourceVar;
           if (!sourceVar) {
-              alert("Loop Error: 'Source' must be a variable reference like {{arrayVariable}}.");
+              document.dispatchEvent(new CustomEvent('flowrunner:toast', { detail: { message: "Loop: 'Source' must be a variable reference like {{arrayVariable}}.", type: 'error', title: 'Cannot save step' } }));
               const sourceInput = editorEl.querySelector(`#loop-source-${localStep.id}`);
               if (sourceInput) sourceInput.focus();
               return;
@@ -557,9 +557,13 @@ export function createStepEditor(step, options) {
   });
 
   // Cancel Button
-  cancelBtn.addEventListener('click', () => {
-      if (isDirty && !confirm("Discard unsaved changes to this step?")) {
-          return; // User canceled the discard action
+  cancelBtn.addEventListener('click', async () => {
+      if (isDirty) {
+          // Lazy import avoids a static cycle (dialogs.js imports from this module).
+          const { showConfirmDialog } = await import('./dialogs.js');
+          const discard = await showConfirmDialog("Discard unsaved changes to this step?",
+              { title: 'Unsaved changes', confirmText: 'Discard', cancelText: 'Keep editing', danger: true });
+          if (!discard) return; // User canceled the discard action
       }
 
       // If discarding or wasn't dirty, reset state and UI
@@ -1491,8 +1495,9 @@ export function showStepTypeDialog(onSelect) {
         window.showAppStepTypeDialog(onSelect); // Call the function exposed by app.js
     } else {
         logger.error("App's step type dialog function (window.showAppStepTypeDialog) not found.");
-        alert("Error: Cannot open step type selector.");
-        // Fallback or alternative behavior if needed
+        document.dispatchEvent(new CustomEvent('flowrunner:toast', {
+            detail: { message: 'Cannot open the step type selector.', type: 'error' }
+        }));
     }
 }
 
@@ -1543,8 +1548,8 @@ function buildInspectorSummary(step) {
 
     switch (step.type) {
         case 'request': {
-            chips.push(chip('Method', step.method || 'GET', `method-${escapeHTML(step.method || 'GET')}`));
-            if (step.url) chips.push(chip('URL', truncateMiddle(step.url, 48)));
+            // Method and URL are visible form fields in both modes; chips here
+            // digest only the fields Basic mode hides.
             const headerKeys = Object.keys(step.headers || {});
             if (headerKeys.length) {
                 const shown = headerKeys.slice(0, 3).join(', ');
