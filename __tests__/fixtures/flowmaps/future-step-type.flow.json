@@ -1,0 +1,34 @@
+{
+    "id": "fixture-future-step-type",
+    "name": "From-the-future: unknown step type",
+    "description": "A newer FlowRunner emitted a step type this engine has never seen. The older engine must skip it with a machine-readable warning and keep running the rest of the flow.",
+    "schemaVersion": "2.0",
+    "staticVars": {
+        "baseUrl": "https://example.test"
+    },
+    "steps": [
+        {
+            "id": "s1",
+            "name": "Known request before the future step",
+            "type": "request",
+            "method": "GET",
+            "url": "{{baseUrl}}/ping",
+            "onFailure": "continue"
+        },
+        {
+            "id": "s2",
+            "name": "Quantum request (from the future)",
+            "type": "quantum_request",
+            "qubits": 12,
+            "url": "{{baseUrl}}/entangle"
+        },
+        {
+            "id": "s3",
+            "name": "Known request after the future step",
+            "type": "request",
+            "method": "GET",
+            "url": "{{baseUrl}}/pong",
+            "onFailure": "continue"
+        }
+    ]
+}
