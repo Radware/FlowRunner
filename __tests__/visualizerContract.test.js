@@ -19,6 +19,9 @@
 
 import { jest, describe, beforeEach, afterEach, test, expect } from '@jest/globals';
 import { FlowVisualizer } from '../flowVisualizer.js';
+// WAVE3 react-island: the flag-gated alternative engine must honor the SAME
+// contract as Drawflow so app.js can construct it identically. Pin it here.
+import { ReactFlowVisualizer } from '../reactFlowVisualizer.js';
 
 // --- The contract, as depended upon by the app (see docs/visualizer-contract.md) ---
 
@@ -315,6 +318,95 @@ describe('FlowVisualizer contract', () => {
                 const v = new FlowVisualizer(mount, { onNodeSelect: jest.fn() });
                 v.destroy();
             }).not.toThrow();
+        });
+    });
+
+    // WAVE3 react-island: the flag-gated ReactFlowVisualizer facade must satisfy the
+    // SAME contract so app.js -> initializeVisualizer() can construct it identically
+    // to Drawflow. The facade loads its React island bundle asynchronously (a
+    // same-origin <script> that never resolves under jsdom), so these tests assert
+    // the SYNCHRONOUS contract surface only: construction, method presence, and the
+    // safe-to-call-early / nullable tolerances the app relies on. They do NOT
+    // require the island bundle to have been built.
+    describe('ReactFlowVisualizer facade conforms to the contract', () => {
+        let mount;
+
+        beforeEach(() => {
+            mount = document.createElement('div');
+            mount.id = 'react-visualizer-contract-mount';
+            document.body.appendChild(mount);
+        });
+
+        afterEach(() => {
+            if (mount?.parentNode) mount.parentNode.removeChild(mount);
+        });
+
+        test('constructor throws without a mount point', () => {
+            expect(() => new ReactFlowVisualizer(null)).toThrow();
+        });
+
+        test('prototype exposes every contract method as a function', () => {
+            for (const method of CONTRACT_METHODS) {
+                expect(typeof ReactFlowVisualizer.prototype[method]).toBe(
+                    'function',
+                    `ReactFlowVisualizer is missing contract method: ${method}`
+                );
+            }
+        });
+
+        test('a constructed instance exposes every contract method as a function', () => {
+            const callbacks = Object.fromEntries(
+                CONTRACT_CALLBACKS.map((name) => [name, jest.fn()])
+            );
+            const vis = new ReactFlowVisualizer(mount, callbacks);
+            try {
+                for (const method of CONTRACT_METHODS) {
+                    expect(typeof vis[method]).toBe('function');
+                }
+            } finally {
+                vis.destroy();
+            }
+        });
+
+        test('accepts a subset of the callback options without throwing', () => {
+            expect(() => {
+                const v = new ReactFlowVisualizer(mount, { onNodeSelect: jest.fn() });
+                v.destroy();
+            }).not.toThrow();
+        });
+
+        test('constructing with no options object does not throw', () => {
+            expect(() => {
+                const v = new ReactFlowVisualizer(mount);
+                v.destroy();
+            }).not.toThrow();
+        });
+
+        test('contract calls before the island loads are safe (queued/no-op) with contract-correct return types', () => {
+            // The bundle never resolves under jsdom, so _impl stays null. Every
+            // method must be safe to call and return the contract-correct fallback.
+            const vis = new ReactFlowVisualizer(mount, {});
+            try {
+                expect(() => vis.render({ steps: [] }, 'a')).not.toThrow();
+                expect(() => vis.highlightNode('x', 'error')).not.toThrow();
+                expect(() => vis.clearHighlights('active-step')).not.toThrow();
+                expect(() => vis.updateNodeRuntimeInfo('x', { status: 'ok' })).not.toThrow();
+                expect(() => vis.focusNode('missing')).not.toThrow();
+                // Return-value contract: readable fallbacks before the impl exists.
+                expect(vis.getAutoLayout()).toEqual({});
+                expect(vis.isMinimapVisible()).toBe(false);
+                expect(vis.applyLayout({ a: { x: 0, y: 0 } })).toBe(0);
+                expect(vis.undoLayout()).toBe(false);
+                expect(vis.canUndoLayout()).toBe(false);
+                expect(vis.jumpToNextError()).toBeNull();
+                // Optimistic minimap mirror flips without the impl.
+                vis.showMinimap();
+                expect(vis.isMinimapVisible()).toBe(true);
+                vis.hideMinimap();
+                expect(vis.isMinimapVisible()).toBe(false);
+            } finally {
+                vis.destroy();
+            }
         });
     });
 });
