@@ -8,6 +8,13 @@
 
 ---
 
+## Unreleased — CI: Windows release ships the NSIS installer
+- **Decision:** the Windows asset (`FlowRunnerSetup-x64-win-{VERSION}.zip`) now contains the electron-builder **NSIS installer** (`FlowRunner Setup {VERSION}.exe`) instead of the zipped `win-unpacked` portable directory. **Why:** `win.target` was already `nsis`, so the installer was being built and then discarded; shipping it gives recipients a real install experience (choose dir, Start-Menu shortcut, uninstaller) — better for handing demo builds to SEs/customers.
+- **Fix:** the first CI attempt failed (`zip I/O error`, exit 15) — the zip step wrote to `../release` while two levels deep in `artifacts/windows-latest-build`; corrected to `../../release`. → [gotchas.md](gotchas.md), Build & packaging.
+- Shipped as an update to the existing **v1.2.1** release (no version bump). Note: the CI workflow has **no `paths-ignore`**, so *every* push to `main` — including docs-only — rebuilds all platforms and re-publishes the release.
+
+---
+
 ## v1.2.1 — Packaging hotfix + Linux *(current; 2026-03-23)*
 - **Hotfix:** `transformOps.js` and `harExporter.js` were imported but **missing from electron-builder `build.files`**, crashing the renderer in packaged builds (every button dead; did not reproduce in `npm start`). Fixed in two commits. → see [gotchas.md](gotchas.md) #1, the canonical lesson.
 - **Added:** Linux AppImage target + automated GitHub Release.

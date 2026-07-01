@@ -127,7 +127,7 @@ Open button → eventHandlers.handleOpenFile() → fileOperations: confirmDiscar
 
 - **electron-builder** config lives in `package.json` under `"build"`. Run `npm run dist` to build for the current platform.
 - **CRITICAL — `build.files`:** every JS module imported by the app MUST be listed here, or the packaged app crashes silently (renderer fails to load, app looks frozen). Only manifests in packaged builds, never in `npm start`. This is the project's single most repeated mistake — see [gotchas.md](gotchas.md) #1.
-- **Targets:** macOS DMG (`FlowRunnerSetup-arm64-mac-{VERSION}.dmg`), Windows NSIS-as-portable zip (`-x64-win-`), Linux AppImage (`-x64-linux-`).
+- **Targets:** macOS DMG (`FlowRunnerSetup-arm64-mac-{VERSION}.dmg`), Windows **NSIS installer** zipped (`FlowRunner Setup {VERSION}.exe` inside `FlowRunnerSetup-x64-win-{VERSION}.zip`; `win.target: nsis`), Linux AppImage (`-x64-linux-`).
 - **CI** (`.github/workflows/build.yml`): triggers on push to `main`/`master`; macOS + Windows + Ubuntu matrix; creates a GitHub Release tagged `v{VERSION}` with all installers, using `release.md` as the body.
 - **Version bump = update ALL 8 places:** `package.json` · `config.js` (`CURRENT_VERSION`) · `main.js` (`appVersion` fallback) · `help.html` · `harExporter.js` (HAR creator) · `README.md` (badge/changelog/links) · `release.md` (CI release body) · `release-v{X.Y.Z}.md`. Nothing enforces agreement — hand-sync carefully.
 

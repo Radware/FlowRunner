@@ -13,6 +13,14 @@
 ### 2. Build was publishing during build / CI action drift (v1.1.1)
 - Keep the dist build separate from the publish step (`--publish never`). GitHub Actions occasionally needs action-version bumps. The dist build should never auto-release.
 
+### 2a. Release job: the zip path to `release/` must match the `cd` depth
+- **Symptom:** release job fails at "Prepare release assets" — `zip I/O error: No such file or directory` / `Could not create output file (../release/…zip)`, exit 15.
+- **Cause:** `mkdir -p release` makes `release/` at the repo root; the Windows step `cd`s **two** levels into `artifacts/windows-latest-build` but wrote to `../release` (one level up = `artifacts/release`, which doesn't exist). Must be `../../release`. (The old portable step `cd`'d three levels and correctly used `../../../release`.)
+- **Lesson:** when editing the release-packaging step, the relative path to `release/` must track the `cd` depth. The step runs under `bash -e`, so the **first** failing command aborts it — a good place for a `ls -lh` before the zip to make failures diagnosable.
+
+### 2b. CI rebuilds + re-publishes on *every* push to `main`
+- `build.yml` triggers on any push to `main`/`master` with **no `paths-ignore`**. Docs-only commits therefore rebuild all three platforms and (via `make_latest: true`) overwrite the current release's assets. Consider `paths-ignore: ['**.md', 'docs/**']` if that noise/asset-churn is unwanted.
+
 ## Execution engine
 
 ### 3. `substituteVariablesInStep` depends on being called as a method
