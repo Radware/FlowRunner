@@ -1,0 +1,70 @@
+/*
+ * Island node styling. Every rule PREFERS the Wave-1 OKLCH design token from the
+ * app's styles.css (var(--token, fallback)); the fallbacks only apply if the
+ * island is ever rendered outside the app shell. No hardcoded colors leak to the
+ * app side — the token wins whenever styles.css is present.
+ */
+:root {
+    --surface: #0f172a;
+    --surface-raised: #1e293b;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #6366f1;
+    --border: #334155;
+    --run-success: #10b981;
+    --run-error: #ef4444;
+    --run-skipped: #f59e0b;
+    --run-running: #3b82f6;
+    --focus-ring: #818cf8;
+}
+
+.flow-node {
+    width: 260px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    overflow: hidden;
+}
+.flow-node.selected {
+    outline: 2px solid var(--focus-ring);
+}
+.flow-node .node-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: color-mix(in oklab, var(--surface-raised), var(--accent) 12%);
+    font-weight: 600;
+}
+.flow-node .node-name { flex: 1; }
+.flow-node .node-actions { display: flex; gap: 2px; }
+.flow-node .node-actions .btn-node-action {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+}
+.flow-node .node-actions .btn-node-action:hover { color: var(--text); }
+.flow-node .node-content {
+    padding: 8px 10px;
+    color: var(--text-muted);
+}
+.flow-node code { color: var(--text); }
+.flow-node .request-method { color: var(--accent); font-weight: 700; }
+.flow-node .node-runtime-details {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+}
+.node-runtime-details.status-running { color: var(--run-running); }
+.node-runtime-details.status-error { color: var(--run-error); }
+.node-runtime-details.status-success { color: var(--run-success); }
+
+/* Highlight classes applied by highlightNode(). */
+.react-flow__node.run-running .flow-node { border-color: var(--run-running); }
+.react-flow__node.run-error .flow-node { border-color: var(--run-error); }
+.react-flow__node.run-skipped .flow-node { border-color: var(--run-skipped); }

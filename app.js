@@ -58,6 +58,13 @@ import {
 // --- Component Classes & Dialog Initializers ---
 import { FlowBuilderComponent } from './flowBuilderComponent.js';
 import { FlowVisualizer } from './flowVisualizer.js';
+/* === WAVE3 react-island === */
+// Flag-gated alternative visualizer engine. Drawflow (FlowVisualizer above) stays
+// the DEFAULT; the React Flow island is opt-in via localStorage
+// 'flowrunner.visualizerEngine'==='react'. See reactFlowVisualizer.js +
+// visualizer-island/ + docs/engine-decision.md.
+import { ReactFlowVisualizer } from './reactFlowVisualizer.js';
+/* === END WAVE3 react-island === */
 import {
     initializeStepTypeDialogListeners,
     initializeVarDropdownListeners,
@@ -262,7 +269,13 @@ function initializeVisualizer() {
         logger.error("FlowVisualizer mount point not found. Cannot initialize visualizer.");
         return;
     }
-    appState.visualizerComponent = new FlowVisualizer(
+    /* === WAVE3 react-island === */
+    // Engine selection: Drawflow is the DEFAULT. The React Flow island is used
+    // ONLY when explicitly opted in via localStorage. Both engines honor the same
+    // FlowVisualizer contract (docs/visualizer-contract.md), so the callbacks and
+    // every downstream call site are identical regardless of which is chosen.
+    const VisualizerEngine = selectVisualizerEngine();
+    appState.visualizerComponent = new VisualizerEngine(
         domRefs.flowVisualizerMount,
         {
             // Callbacks handled by eventHandlers.js
@@ -276,8 +289,26 @@ function initializeVisualizer() {
             // Add other callbacks like onCloneStep if needed
         }
     );
-    logger.info("FlowVisualizer initialized in app.js.");
+    logger.info(`FlowVisualizer initialized in app.js (engine: ${VisualizerEngine === ReactFlowVisualizer ? 'react-island' : 'drawflow'}).`);
 }
+
+/* === WAVE3 react-island === */
+// Returns the visualizer constructor to use. DEFAULT is Drawflow (FlowVisualizer);
+// the React Flow island is opt-in only, and any failure to read the flag falls
+// back to Drawflow so nothing breaks. The flag can be flipped by a Settings toggle
+// that writes localStorage['flowrunner.visualizerEngine'] = 'react'.
+function selectVisualizerEngine() {
+    try {
+        if (typeof localStorage !== 'undefined'
+            && localStorage.getItem('flowrunner.visualizerEngine') === 'react') {
+            return ReactFlowVisualizer;
+        }
+    } catch (err) {
+        logger.warn('Could not read visualizerEngine flag; defaulting to Drawflow.', err);
+    }
+    return FlowVisualizer;
+}
+/* === END WAVE3 react-island === */
 
 function initializeDialogs() {
     initializeStepTypeDialogListeners();
