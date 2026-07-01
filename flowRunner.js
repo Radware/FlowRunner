@@ -469,7 +469,19 @@ export class FlowRunner {
                     result = await this._executeTransformStep(processedStep, stepContext);
                     break;
                 default:
-                    throw new Error(`Unknown step type: ${processedStep.type}`);
+                    // Graceful degradation: an unknown/newer step type is SKIPPED with a
+                    // machine-readable warning instead of throwing (which would halt the
+                    // whole run). status 'skipped' is not an error, so the flow continues.
+                    result = {
+                        status: 'skipped',
+                        output: `Skipped: unsupported step type "${processedStep.type}".`,
+                        error: null,
+                        extractionFailures: [],
+                        unsupported: true,
+                    };
+                    logger.warn(`[FlowRunner] STEP_TYPE_UNSUPPORTED id=${step.id} type=${JSON.stringify(processedStep.type)} - skipped, not executed.`);
+                    this.onMessage(`Skipped step "${step.name || step.id}": unsupported step type "${processedStep.type}".`, 'warning');
+                    break;
             }
 
             // Never overwrite the freshly-created context of a loop level when
@@ -520,6 +532,12 @@ export class FlowRunner {
         try {
             const ops = Array.isArray(step.ops) ? step.ops : [];
             const output = await executeTransformOps(ops, context, { evaluatePath: this.evaluatePathFn });
+            if (Array.isArray(output.warnings) && output.warnings.length > 0) {
+                for (const warning of output.warnings) {
+                    logger.warn(`[FlowRunner] Transform step "${step.name}" (ID: ${step.id}): ${warning.message}`);
+                    this.onMessage(`Transform step "${step.name || step.id}": ${warning.message}`, 'warning');
+                }
+            }
             return { status: 'success', output: output, error: null };
         } catch (error) {
             return { status: 'error', output: null, error: error.message || 'Transform step failed' };

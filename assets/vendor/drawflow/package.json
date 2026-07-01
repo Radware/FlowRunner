@@ -1,0 +1,4 @@
+{
+  "type": "commonjs",
+  "//": "Vendored UMD build of Drawflow. The app's root package.json is \"type\": \"module\", which would make Node treat this .js as ESM and break the Jest setup's require() of it. This marker keeps only this vendored dir CommonJS so it stays require-able in Node/Jest. The browser loads drawflow.min.js via a plain <script> tag, so this has no effect at runtime."
+}

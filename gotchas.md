@@ -38,6 +38,12 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - The `release` job is gated `if: github.event_name == 'push' && ref is main/master`, so **only a real push/merge to main publishes** — PR and manual runs never touch the live release (verified: dispatch run → `release` skipped). Build a branch without publishing: `gh workflow run "FlowRunner Build" --ref <branch>`, then `gh run download <run-id>`.
 - Trap: `workflow_dispatch`/`pull_request` only work once the workflow file defining them is on the **default branch** — you can't dispatch a trigger that exists only on a feature branch.
 
+### 2c. `npm test` was broken: vendored UMD `require()` under `"type": "module"`
+- **Symptom:** every Jest suite fails to load with `Must use import to load ES Module: .../drawflow.min.js` (0 tests run). Went unnoticed because **CI never runs `npm test`** (`build.yml` runs only `npm run dist`).
+- **Cause:** `__tests__/setup.js` `require()`s the vendored **UMD** `assets/vendor/drawflow/drawflow.min.js`; the root `package.json` `"type": "module"` makes Node treat that `.js` as ESM, so `require()` throws.
+- **Fix:** `assets/vendor/drawflow/package.json` = `{"type": "commonjs"}` scopes only that vendored dir to CJS (the browser loads Drawflow via a `<script>` tag, so runtime is unaffected; the file isn't imported by the app).
+- **Note:** fixing this unmasked **4 pre-existing failures in `flowVisualizer.test.js`** (Drawflow drag/double-click/add-step under jsdom). They pre-date the fix — treat as a known follow-up, not a regression.
+
 ## Execution engine
 
 ### 3. `substituteVariablesInStep` depends on being called as a method
