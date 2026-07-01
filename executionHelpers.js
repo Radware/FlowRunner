@@ -417,6 +417,174 @@ export function evaluateCondition(conditionData, context) {
  * @returns {FlowRunner} A new instance of FlowRunner.
  */
 export function createFlowRunner(options) {
-  return new FlowRunner(options);
+  // === WAVE3 assertions ===
+  // Default the assertion evaluator here (executionHelpers already imports
+  // FlowRunner, so wiring it from this side avoids a flowRunner→executionHelpers
+  // import cycle). Callers may still override via options.
+  const withDefaults = {
+    evaluateAssertionsFn: evaluateAssertions,
+    ...options,
+  };
+  return new FlowRunner(withDefaults);
+  // === END WAVE3 assertions ===
 }
 // <<< END ADDED FUNCTION AND EXPORT >>>
+
+
+// === WAVE3 assertions ===
+// Per-step assertions. ADDITIVE optional `step.assertions` = an array of
+// { target, operator, value, critical? }. Evaluated against a step's result by
+// REUSING evaluateCondition (the frozen conditionData operator vocabulary) and
+// evaluatePath. Targets: `status`, `duration`, `headers.<name>`, `body.<path>`.
+//
+// Cross-app: flowrunner-cli (Python) must evaluate these with the same operator
+// set (handled by the cross-repo-cli lane). Until then an older CLI IGNORES the
+// field (additive, extra='ignore') — safe. Assertions NEVER change request
+// execution; they only report pass/fail. A failed *critical* assertion is
+// surfaced (summary.criticalFailed) so the runner can optionally stop; a plain
+// failed assertion is non-blocking by default.
+
+/**
+ * Build the subject object that assertion targets are evaluated against.
+ * Mirrors the request `output` shape ({ status, headers, body }) plus `duration`
+ * so a target like `body.items[0].id` resolves through the same evaluatePath
+ * used for extraction and conditions.
+ * @param {Object|null} output - The request step output ({ status, headers, body }).
+ * @param {number} [durationMs] - Measured request duration in milliseconds.
+ * @return {{status:*, headers:Object, body:*, duration:number|undefined}}
+ */
+export function buildAssertionSubject(output, durationMs) {
+    const safeOutput = (output && typeof output === 'object') ? output : {};
+    return {
+        status: safeOutput.status,
+        headers: (safeOutput.headers && typeof safeOutput.headers === 'object') ? safeOutput.headers : {},
+        body: safeOutput.body !== undefined ? safeOutput.body : null,
+        duration: durationMs,
+    };
+}
+
+/**
+ * Resolve an assertion `target` to the { subject, path } pair that evaluatePath
+ * (and therefore evaluateCondition) resolves UNAMBIGUOUSLY.
+ *
+ * evaluatePath has body-aware semantics: a prefix-less path (e.g. `status`) is
+ * looked up INSIDE `data.body` when a `body` key exists. The full assertion
+ * subject always carries a `body` key, so bare top-level targets like `status`
+ * and `duration` would wrongly dive into the body. We therefore evaluate those
+ * against a body-less mini-subject where a prefix-less path resolves at the top
+ * level. `headers.*` and `body.*` carry explicit prefixes evaluatePath handles
+ * directly, so they use the full subject unchanged.
+ * @param {string} target - assertion target string.
+ * @param {Object} fullSubject - buildAssertionSubject output.
+ * @return {{subject: Object, path: string}}
+ */
+function resolveAssertionTarget(target, fullSubject) {
+    if (target === 'status') {
+        return { subject: { status: fullSubject.status, duration: fullSubject.duration }, path: 'status' };
+    }
+    if (target === 'duration') {
+        return { subject: { status: fullSubject.status, duration: fullSubject.duration }, path: 'duration' };
+    }
+    // headers.* and body.* (and any explicit-prefixed path) evaluate against the
+    // full subject; evaluatePath's prefix branches resolve them correctly.
+    return { subject: fullSubject, path: target };
+}
+
+/**
+ * Human-readable one-line label for an assertion (used by the test-summary UI).
+ * Pure string building — no evaluation.
+ */
+function assertionLabel(target, operator, value) {
+    const op = String(operator || '').replace(/_/g, ' ');
+    let val = value;
+    try {
+        val = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    } catch { val = String(value); }
+    return `${target} ${op} ${val}`.trim();
+}
+
+/**
+ * Evaluate a step's assertions against its result.
+ * Pure and side-effect free — does NOT mutate the step or the result.
+ * @param {Array} assertions - step.assertions (may be undefined/malformed — tolerated).
+ * @param {Object|null} output - The step's request output ({ status, headers, body }).
+ * @param {number} [durationMs] - Measured request duration in ms (for `duration` target).
+ * @return {{total:number, passed:number, failed:number, allPassed:boolean,
+ *           criticalFailed:boolean, results:Array}} Test summary.
+ */
+export function evaluateAssertions(assertions, output, durationMs) {
+    const summary = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        allPassed: true,
+        criticalFailed: false,
+        results: [],
+    };
+
+    if (!Array.isArray(assertions) || assertions.length === 0) {
+        return summary;
+    }
+
+    const subject = buildAssertionSubject(output, durationMs);
+
+    for (const assertion of assertions) {
+        // Tolerate malformed entries (null, primitives, missing target/operator).
+        if (!assertion || typeof assertion !== 'object') continue;
+        const target = typeof assertion.target === 'string' ? assertion.target.trim() : '';
+        const operator = typeof assertion.operator === 'string' ? assertion.operator.trim() : '';
+        if (!target || !operator) continue;
+
+        summary.total++;
+
+        const { subject: targetSubject, path: targetPath } = resolveAssertionTarget(target, subject);
+
+        // Resolve the actual value the assertion targets, for reporting.
+        let actual;
+        try {
+            actual = evaluatePath(targetSubject, targetPath);
+        } catch {
+            actual = undefined;
+        }
+
+        // Reuse the frozen conditionData operator vocabulary. evaluateCondition
+        // itself uses evaluatePath against the subject, so `status`, `duration`,
+        // `headers.X`, `body.path` all resolve consistently. Unknown/newer
+        // operators degrade to `false` (not-met) inside evaluateCondition rather
+        // than throwing — a failed assertion, never an aborted run.
+        let passed = false;
+        try {
+            passed = evaluateCondition(
+                { variable: targetPath, operator, value: assertion.value },
+                targetSubject
+            );
+        } catch (err) {
+            // evaluateCondition can throw on a genuine evaluation error (e.g. a
+            // broken regex path). Treat as a failed assertion, never rethrow.
+            logger.warn(`[assertions] evaluation error for "${assertionLabel(target, operator, assertion.value)}": ${err?.message}`);
+            passed = false;
+        }
+
+        const critical = assertion.critical === true;
+        if (passed) {
+            summary.passed++;
+        } else {
+            summary.failed++;
+            summary.allPassed = false;
+            if (critical) summary.criticalFailed = true;
+        }
+
+        summary.results.push({
+            target,
+            operator,
+            value: assertion.value,
+            critical,
+            actual,
+            passed,
+            label: assertionLabel(target, operator, assertion.value),
+        });
+    }
+
+    return summary;
+}
+// === END WAVE3 assertions ===

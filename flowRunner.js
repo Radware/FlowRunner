@@ -33,6 +33,13 @@ export class FlowRunner {
         this.evaluateConditionFn = options.evaluateConditionFn || (() => false); // Default false
         this.evaluatePathFn = options.evaluatePathFn; // Use imported or passed function (required for extraction)
 
+        // === WAVE3 assertions ===
+        // Injected (avoids a flowRunner→executionHelpers import cycle, since
+        // executionHelpers already imports FlowRunner). Defaulted in
+        // createFlowRunner(). No-op default ⇒ IDENTICAL behavior when unset.
+        this.evaluateAssertionsFn = options.evaluateAssertionsFn || null;
+        // === END WAVE3 assertions ===
+
         // --- NEW for Continuous Run ---
         this.isContinuousModeActive = false;
         this.continuousRunTimeoutId = null;
@@ -458,6 +465,14 @@ export class FlowRunner {
                         result.extractionFailures = failures;
                         result.extractedValues = extractedValues;
                     }
+                    // === WAVE3 assertions ===
+                    // Evaluate per-step assertions AFTER the request completed. This
+                    // NEVER changes request execution — it only annotates the result
+                    // with a test-summary and (optionally) requests a stop on a
+                    // failed *critical* assertion. Assertions run whenever the request
+                    // produced output (success OR onFailure=continue non-2xx). A step
+                    // that errored out with no output is left untouched.
+                    this._evaluateStepAssertions(step, result);
                     break;
                 case 'condition':
                     result = await this._executeConditionStep(processedStep, stepContext);
@@ -507,6 +522,15 @@ export class FlowRunner {
                     this.onMessage(`Execution stopped due to error in step "${step.name}".`, "error");
                     this.stop();
                 }
+            } else if (result.assertionSummary && result.assertionSummary.criticalFailed && !this.state.stopRequested) {
+                // === WAVE3 assertions ===
+                // A failed *critical* assertion stops the run (opt-in per assertion;
+                // default assertions are non-blocking). This is the ONLY way an
+                // assertion affects control flow — request execution is untouched.
+                logger.warn(`[FlowRunner] Critical assertion failed on step "${step.name}" (ID: ${step.id}). Requesting stop.`);
+                this.onMessage(`Execution stopped: a critical assertion failed on step "${step.name}".`, "error");
+                this.stop();
+                // === END WAVE3 assertions ===
             }
         } catch (error) {
             result = { status: 'error', output: null, error: error.message || 'Unknown execution error', extractionFailures: [] };
@@ -518,6 +542,39 @@ export class FlowRunner {
         }
     }
 
+
+    // === WAVE3 assertions ===
+    /**
+     * Evaluate a request step's `assertions` against its result and annotate the
+     * result IN PLACE with `assertionSummary` (a PASS/FAIL test-summary). Pure
+     * with respect to request execution — it never re-issues the request, never
+     * mutates context, and only reads the already-produced output.
+     * No-op when the step has no assertions or no injected evaluator.
+     * @param {Object} step - The ORIGINAL step (carries `assertions`).
+     * @param {Object} result - The step result ({ status, output, ... }); mutated.
+     */
+    _evaluateStepAssertions(step, result) {
+        if (typeof this.evaluateAssertionsFn !== 'function') return;
+        if (!Array.isArray(step?.assertions) || step.assertions.length === 0) return;
+        // Only meaningful when the request produced output to assert against.
+        if (!result || result.output == null) return;
+
+        try {
+            const duration = (result.output && typeof result.output === 'object')
+                ? result.output.duration
+                : undefined;
+            const summary = this.evaluateAssertionsFn(step.assertions, result.output, duration);
+            result.assertionSummary = summary;
+            if (summary.failed > 0) {
+                const label = summary.criticalFailed ? 'critical assertion failed' : 'assertion(s) failed';
+                this.onMessage(`Step "${step.name || step.id}": ${summary.passed}/${summary.total} assertions passed (${label}).`, summary.criticalFailed ? 'error' : 'warning');
+            }
+        } catch (err) {
+            // Assertion evaluation must never abort a run.
+            logger.error(`[FlowRunner] Assertion evaluation error on step ${step.id}:`, err);
+        }
+    }
+    // === END WAVE3 assertions ===
 
     _pushExecutionLevel(steps, context, type, parentStepId = null) {
         if (steps && steps.length > 0) {
@@ -804,6 +861,11 @@ export class FlowRunner {
             fetchOptions.signal = attemptController.signal;
             timeoutId = null;
 
+            // === WAVE3 assertions === capture per-attempt wall-clock so request
+            // output carries a `duration` (ms) for the `duration` assertion target.
+            const attemptStart = Date.now();
+            // === END WAVE3 assertions ===
+
             try {
                 // Set timeout *before* fetch call
                 timeoutId = setTimeout(() => {
@@ -838,7 +900,9 @@ export class FlowRunner {
                 }
 
                 // --- MODIFICATION START: Implement onFailure logic for HTTP status (remains the same logic) ---
-                const output = { status: responseStatus, headers: responseHeaders, body: responseBody };
+                // === WAVE3 assertions === additive `duration` (ms) on the request
+                // output; ignored everywhere except the `duration` assertion target.
+                const output = { status: responseStatus, headers: responseHeaders, body: responseBody, duration: Date.now() - attemptStart };
 
                 if (response.ok) { // Status 200-299
                     return { status: 'success', output: output, error: null };

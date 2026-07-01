@@ -221,6 +221,13 @@ export function handleClearResults() {
     if(domRefs.runnerStatusMessages) {
         domRefs.runnerStatusMessages.innerHTML = '';
     }
+    // === WAVE3 assertions === hide/clear the test-summary panel on reset
+    const testSummaryPanel = document.getElementById('runner-test-summary');
+    if (testSummaryPanel) {
+        testSummaryPanel.style.display = 'none';
+        testSummaryPanel.innerHTML = '';
+    }
+    // === END WAVE3 assertions ===
 
 
     // 4. Reset Runner's internal state
@@ -352,7 +359,8 @@ export function handleRunnerStepStart(step, executionPath) {
 export function handleRunnerStepComplete(resultIndex, step, result, context, executionPath) {
     logger.debug(`[RUNNER CALLBACK] handleRunnerStepComplete: stepId=${step.id}, status=${result.status}, error=${result.error}, failures=${result.extractionFailures?.length}`);
     // Update the result entry with final status and details
-    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || [], result.extractedValues || {});
+    // === WAVE3 assertions === thread the per-step assertion test-summary through.
+    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || [], result.extractedValues || {}, result.assertionSummary || null);
     // Update the defined variables list based on the latest context
     updateDefinedVariables(context);
 
@@ -386,6 +394,7 @@ export function handleRunnerFlowComplete(finalContext, results) {
     // <<< --- CHANGE HERE --- >>>
     showMessage("Flow execution finished.", "success", domRefs.runnerStatusMessages); // Use correct container
     // <<< --- END CHANGE --- >>>
+    renderTestSummaryPanel(); // === WAVE3 assertions === show aggregate PASS/FAIL after a run
     updateRunnerUI();
     // Leave final step highlights visible
 }
@@ -408,6 +417,8 @@ export function handleRunnerFlowComplete(finalContext, results) {
             break;
          }
     }
+
+    renderTestSummaryPanel(); // === WAVE3 assertions === reflect assertions evaluated before the stop
 
     // Update UI highlight for the stopped step, or clear if stop happened between steps
     if (stoppedStepId) {
@@ -479,6 +490,58 @@ export function handleRunnerContextUpdate(newContext) {
 }
 
 
+// === WAVE3 assertions ===
+/**
+ * Render the aggregate PASS/FAIL test-summary panel from the current run's
+ * results. Aggregates every step's `assertionSummary`. Hidden entirely when the
+ * run defined no assertions, so flows without assertions look unchanged.
+ * Purely presentational — reads appState.executionResults, never mutates it.
+ */
+export function renderTestSummaryPanel() {
+    const panel = document.getElementById('runner-test-summary');
+    if (!panel) return;
+
+    const results = Array.isArray(appState.executionResults) ? appState.executionResults : [];
+    let total = 0;
+    let passed = 0;
+    let failed = 0;
+    let criticalFailed = false;
+    let stepsWithAssertions = 0;
+
+    for (const r of results) {
+        const s = r && r.assertionSummary;
+        if (!s || !s.total) continue;
+        stepsWithAssertions++;
+        total += s.total;
+        passed += s.passed;
+        failed += s.failed;
+        if (s.criticalFailed) criticalFailed = true;
+    }
+
+    if (total === 0) {
+        // No assertions this run — keep the panel out of the way.
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+        return;
+    }
+
+    const allPassed = failed === 0;
+    const stateClass = allPassed ? 'summary-pass' : (criticalFailed ? 'summary-critical' : 'summary-fail');
+    const verdict = allPassed ? 'PASS' : 'FAIL';
+    panel.className = `runner-test-summary ${stateClass}`;
+    panel.style.display = '';
+    panel.innerHTML = `
+        <div class="test-summary-verdict">${escapeHTML(verdict)}</div>
+        <div class="test-summary-counts">
+            <span class="test-summary-count pass"><strong>${passed}</strong> passed</span>
+            <span class="test-summary-count fail"><strong>${failed}</strong> failed</span>
+            <span class="test-summary-count total">${total} assertion${total === 1 ? '' : 's'} across ${stepsWithAssertions} step${stepsWithAssertions === 1 ? '' : 's'}</span>
+            ${criticalFailed ? '<span class="test-summary-count critical">critical failure</span>' : ''}
+        </div>
+    `;
+}
+// === END WAVE3 assertions ===
+
 // --- Runner Result Rendering ---
 
 export function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = [], extractedValues = {}) {
@@ -505,6 +568,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
         executionPath: executionPath || [],
         extractionFailures: extractionFailures || [],
         extractedValues: extractedValues || {},
+        assertionSummary: null, // === WAVE3 assertions === populated on step complete
         searchText: searchText,
     };
     appState.executionResults.push(resultData);
@@ -524,7 +588,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
     return resultIndex;
 }
 
-export function updateResultEntry(index, status, output, error, extractionFailures = [], extractedValues = {}) {
+export function updateResultEntry(index, status, output, error, extractionFailures = [], extractedValues = {}, assertionSummary = null) {
     if (index < 0 || index >= appState.executionResults.length || !domRefs.runnerResultsList) return;
 
     const resultData = appState.executionResults[index];
@@ -533,6 +597,8 @@ export function updateResultEntry(index, status, output, error, extractionFailur
     resultData.error = error;
     resultData.extractionFailures = extractionFailures || [];
     resultData.extractedValues = extractedValues || {};
+    // === WAVE3 assertions === keep the per-step test-summary on the result row.
+    resultData.assertionSummary = assertionSummary || null;
     resultData.searchText = computeSearchText(resultData.stepName, output, error, extractedValues);
 
     const li = domRefs.runnerResultsList.querySelector(`li.result-item[data-result-index="${index}"]`);
@@ -555,7 +621,7 @@ export function updateResultEntry(index, status, output, error, extractionFailur
 }
 
 export function renderResultItemContent(listItem, resultData) {
-    const { stepName, stepId, status, output, error, extractionFailures, extractedValues } = resultData;
+    const { stepName, stepId, status, output, error, extractionFailures, extractedValues, assertionSummary } = resultData;
     const stepType = findStepById(appState.currentFlowModel?.steps, stepId)?.type || 'System'; // Default to System if step not found
 
     const statusClass = status === 'success' ? 'success'
@@ -614,14 +680,42 @@ export function renderResultItemContent(listItem, resultData) {
         `;
     }
 
+    // === WAVE3 assertions === per-step assertion results (PASS/FAIL rows + a header badge).
+    let assertionsHtml = '';
+    let headerBadgeHtml = '';
+    if (assertionSummary && assertionSummary.total > 0) {
+        const s = assertionSummary;
+        const badgeClass = s.allPassed ? 'assert-pass' : (s.criticalFailed ? 'assert-critical' : 'assert-fail');
+        const badgeText = s.allPassed ? `✓ ${s.passed}/${s.total}` : `✗ ${s.passed}/${s.total}`;
+        headerBadgeHtml = `<span class="result-assert-badge ${badgeClass}" title="${s.passed} of ${s.total} assertions passed">${escapeHTML(badgeText)}</span>`;
+        const rows = (s.results || []).map(r => {
+            const rowClass = r.passed ? 'assert-pass' : 'assert-fail';
+            const mark = r.passed ? '✓' : '✗';
+            let actualStr;
+            try { actualStr = typeof r.actual === 'object' ? JSON.stringify(r.actual) : String(r.actual); }
+            catch (_) { actualStr = String(r.actual); }
+            const critTag = r.critical ? '<span class="assert-crit-tag" title="Critical: a failure stops the flow">critical</span>' : '';
+            const actualHtml = r.passed ? '' : `<span class="assert-actual" title="Actual value">got ${escapeHTML(actualStr)}</span>`;
+            return `<li class="assert-row ${rowClass}"><span class="assert-mark">${mark}</span><code class="assert-label">${escapeHTML(r.label)}</code>${critTag}${actualHtml}</li>`;
+        }).join('');
+        assertionsHtml = `
+            <div class="result-assertions ${s.allPassed ? 'all-pass' : 'has-fail'}">
+                <strong>Assertions: ${s.passed}/${s.total} passed${s.allPassed ? '' : (s.criticalFailed ? ' (critical failed)' : '')}</strong>
+                <ul>${rows}</ul>
+            </div>
+        `;
+    }
+    // === END WAVE3 assertions ===
+
     listItem.className = `result-item ${statusClass}`; // Set class based on status
 
     listItem.innerHTML = `
         <div class="result-header">
             <span class="result-step-name" title="ID: ${escapeHTML(stepId)}">${escapeHTML(stepName)} (${escapeHTML(stepType)})</span>
-            <span class="result-status">${status.toUpperCase()}</span>
+            <span class="result-header-right">${headerBadgeHtml}<span class="result-status">${status.toUpperCase()}</span></span>
         </div>
         ${errorHtml}
+        ${assertionsHtml}
         ${extractionFailuresHtml}
         ${extractedValuesHtml}
         ${outputHtml}
