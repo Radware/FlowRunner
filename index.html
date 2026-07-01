@@ -156,6 +156,11 @@
                     <!-- Visualizer content injected here -->
                 </div>
 
+                <!-- WAVE2 node-features: read-only View-as-JSON panel mount (jsonView.js) -->
+                <div id="json-view-mount" class="json-view-mount" style="display: none;">
+                    <!-- JSON view panel injected here -->
+                </div>
+
                 <div class="flow-messages" id="builder-messages"></div>
             </div>
         </main>
@@ -269,6 +274,9 @@
         <div class="var-list"></div>
         <div class="no-results-msg" style="display: none;">No matching variables</div>
     </div>
+
+    <!-- WAVE2 node-features: command/search palette overlay host (palette.js) -->
+    <div id="palette-host"></div>
 
     <!-- Global Loading Overlay -->
     <div class="loading-overlay global-loading" id="global-loading-overlay" style="display: none;">

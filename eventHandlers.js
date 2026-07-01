@@ -4,7 +4,8 @@ import { appState, domRefs } from './state.js';
 import {
     handleCreateNewFlow, handleOpenFile, handleFlowListActions,
     saveCurrentFlow, handleSaveAs, confirmDiscardChanges,
-    handleCancelFlow, handleCloseFlow
+    handleCancelFlow, handleCloseFlow,
+    getRecentFiles, handleSelectFlow
 } from './fileOperations.js';
 import {
     handleRunFlow,
@@ -31,10 +32,14 @@ import {
     addNestedStepToModel, deleteStepFromModel, moveStepInModel,
     cloneStepInModel, findStepInfoRecursive, insertStepAfterInModel, moveStepToBranchStart
 } from './modelUtils.js';
-import { createNewStep, escapeHTML, findStepById } from './flowCore.js';
+import { createNewStep, escapeHTML, findStepById, jsonToFlowModel } from './flowCore.js';
 import { logger } from './logger.js';
 // WAVE2 LANE canvas: ELK/dagre auto-layout adapter powering the "Tidy Up" button.
 import { computeLayout } from './autoLayout.js';
+
+// --- WAVE2 node-features: reusable palette overlays + View-as-JSON panel ---
+import { createPalette, getStepTypeItems } from './palette.js';
+import { createJsonView, flowToPrettyJson } from './jsonView.js';
 
 // --- Initialization of Listeners ---
 
@@ -104,6 +109,9 @@ export function initializeEventListeners() {
     initializeStepTypeDialogListeners(); // Step type selection modal
     initializeVarDropdownListeners();   // Variable dropdown itself (search, close)
     initializeVariableInsertionListener(); // Global listener for {{...}} buttons
+
+    // --- WAVE2 node-features: command palette (Cmd/Ctrl+K) + add-node (Tab) ---
+    initializePaletteShortcuts();
 
     // Make step type dialog function globally accessible (if needed by other components)
     window.showAppStepTypeDialog = showAppStepTypeDialog;
@@ -844,5 +852,285 @@ export function handleBuilderEditorDirtyChange(isEditorDirty) {
         appState.stepEditorIsDirty = isEditorDirty;
         // Update overall dirty state (which affects Save/Cancel buttons)
         setDirty();
+    }
+}
+
+
+// ================================================================
+// WAVE2 node-features: command/search palette + add-node overlays
+// ================================================================
+//
+// Two consumers of the reusable palette (palette.js):
+//   - Cmd/Ctrl+K  → global command palette (actions + navigation + open-recent)
+//   - Tab / dblclick empty canvas → add-node search (pre-wired to add-step)
+//
+// The palette instance is created lazily on first use and mounted into
+// #palette-host (falls back to <body>). All wiring here is ADDITIVE.
+
+let paletteInstance = null;
+
+function getPalette() {
+    if (!paletteInstance) {
+        const host = document.getElementById('palette-host') || document.body;
+        paletteInstance = createPalette({ mount: host });
+    }
+    return paletteInstance;
+}
+
+/**
+ * Build the list of command-palette items from the app's current state.
+ * Only enabled/relevant actions are included so the palette never offers a
+ * no-op. Navigation + open-recent round out the list.
+ */
+function buildCommandItems() {
+    const items = [];
+    const hasFlow = !!appState.currentFlowModel;
+
+    const push = (label, action, hint) => items.push({ id: label, label, action, hint });
+
+    // --- File actions ---
+    push('New Flow', () => handleCreateNewFlow(), 'Create a new flow');
+    push('Open Flow…', () => handleOpenFile(), 'Open a .flow.json file');
+    if (hasFlow && domRefs.saveFlowBtn && !domRefs.saveFlowBtn.disabled) {
+        push('Save Flow', () => saveCurrentFlow(false), 'Ctrl/Cmd+S');
+    }
+    if (hasFlow && domRefs.saveAsFlowBtn && !domRefs.saveAsFlowBtn.disabled) {
+        push('Save Flow As…', () => handleSaveAs(), 'Save to a new file');
+    }
+    if (hasFlow && domRefs.closeFlowBtn && !domRefs.closeFlowBtn.disabled) {
+        push('Close Flow', () => handleCloseFlow(), 'Close the current flow');
+    }
+
+    // --- Editing ---
+    if (hasFlow) {
+        push('Add Step…', () => handleBuilderRequestAddStep(), 'Insert a new step');
+    }
+
+    // --- Inspect ---
+    if (hasFlow) {
+        push('Toggle View as JSON', () => { toggleJsonView(); }, 'Read-only flow JSON + diff');
+    }
+
+    // --- Navigation / view ---
+    if (hasFlow) {
+        push('Toggle View (List / Graph)', () => domRefs.toggleViewBtn?.click(), 'Ctrl/Cmd+3');
+        push('Toggle Flow Info', () => domRefs.toggleInfoBtn?.click(), 'Ctrl/Cmd+1');
+        push('Toggle Variables', () => domRefs.toggleVariablesBtn?.click(), 'Ctrl/Cmd+2');
+    }
+    if (appState.currentView === 'node-graph') {
+        push('Auto Arrange Nodes', () => domRefs.autoLayoutBtn?.click(), 'Layout the graph');
+        push('Toggle Minimap', () => domRefs.toggleMinimapBtn?.click(), 'Show/hide minimap');
+    }
+
+    // --- Runner ---
+    if (hasFlow && domRefs.runFlowBtn && !domRefs.runFlowBtn.disabled) {
+        push('Run Flow', () => handleRunFlow(), 'F5');
+    }
+
+    // --- Open recent ---
+    let recent = [];
+    try {
+        recent = getRecentFiles() || [];
+    } catch (err) {
+        logger.warn('[palette] failed to read recent files:', err);
+    }
+    recent.slice(0, 12).forEach((entry) => {
+        const filePath = typeof entry === 'string' ? entry : (entry?.path || entry?.filePath);
+        if (!filePath) return;
+        const base = filePath.split(/[\\/]/).pop() || filePath;
+        const label = (typeof entry === 'object' && entry?.name) ? entry.name : base;
+        push(`Open Recent: ${label}`, () => handleSelectFlow(filePath), base);
+    });
+
+    return items;
+}
+
+/**
+ * Open the global command palette (Cmd/Ctrl+K).
+ */
+export function openCommandPalette() {
+    const palette = getPalette();
+    palette.open({
+        items: buildCommandItems(),
+        placeholder: 'Type a command or search recent flows…',
+        emptyText: 'No matching commands',
+    });
+}
+
+/**
+ * Open the add-node search palette, pre-wired to the existing add-step
+ * plumbing. If `afterStepId` is provided the new step is inserted after it;
+ * otherwise it is appended at the top level.
+ *
+ * @param {string|null} [afterStepId]
+ */
+export function openAddNodePalette(afterStepId = null) {
+    if (!appState.currentFlowModel) return;
+    const palette = getPalette();
+    const items = getStepTypeItems();
+    palette.open({
+        items,
+        placeholder: 'Search step types…',
+        emptyText: 'No matching step type',
+        onSelect: (item) => {
+            if (!item || !item.type) return;
+            const newStep = createNewStep(item.type);
+
+            if (afterStepId) {
+                // Insert directly after the selected step. We call the model
+                // helper (rather than handleBuilderRequestAddStepAfter, which
+                // re-opens the step-type modal) because the palette already
+                // chose the type.
+                const inserted = insertStepAfterInModel(afterStepId, newStep);
+                if (!inserted) {
+                    showMessage('Failed to add step after the selected node.', 'error');
+                    return;
+                }
+                appState.isDirty = true;
+                appState.selectedStepId = newStep.id;
+                setDirty();
+                updateDefinedVariables();
+                renderCurrentFlow();
+                showMessage(`Step "${escapeHTML(newStep.name || 'New Step')}" added.`, 'success');
+            } else {
+                // Top-level add: reuse the central step-update handler.
+                handleBuilderStepUpdate({
+                    type: 'add',
+                    step: newStep,
+                    parentId: null,
+                    branch: null,
+                });
+            }
+        },
+    });
+}
+
+/**
+ * Install the Cmd/Ctrl+K (command palette) and Tab (add-node) shortcuts, plus
+ * a double-click-on-empty-canvas trigger for the add-node palette. All handlers
+ * are additive and defer to the palette overlay, which owns its own Escape /
+ * Enter / arrow handling once open.
+ */
+export function initializePaletteShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+
+        // Cmd/Ctrl+K → command palette (works even from inputs).
+        if (ctrlOrCmd && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            if (paletteInstance && paletteInstance.isOpen()) {
+                paletteInstance.close();
+            } else {
+                openCommandPalette();
+            }
+            return;
+        }
+
+        // Tab → add-node search. Only when a flow is open, the palette is not
+        // already up, and focus is NOT inside a text field (so Tab keeps its
+        // normal focus-navigation role in forms/editors).
+        if (e.key === 'Tab' && !ctrlOrCmd && !e.altKey) {
+            const target = e.target;
+            const tag = (target?.tagName || '').toLowerCase();
+            const inField = tag === 'input' || tag === 'textarea'
+                || tag === 'select' || target?.isContentEditable;
+            if (!inField && appState.currentFlowModel
+                && !(paletteInstance && paletteInstance.isOpen())) {
+                e.preventDefault();
+                openAddNodePalette(appState.selectedStepId || null);
+            }
+        }
+    });
+
+    // Double-click an empty area of the visualizer canvas → add-node palette.
+    const visualizerMount = domRefs.flowVisualizerMount
+        || document.getElementById('flow-visualizer-mount');
+    if (visualizerMount) {
+        visualizerMount.addEventListener('dblclick', (e) => {
+            // Only treat clicks on empty canvas (not on a node) as "add here".
+            if (e.target.closest && e.target.closest('.flow-node')) return;
+            if (!appState.currentFlowModel) return;
+            openAddNodePalette(appState.selectedStepId || null);
+        });
+    }
+
+    logger.info('[palette] command/add-node palette shortcuts initialized.');
+}
+
+
+// ================================================================
+// WAVE2 node-features: read-only View-as-JSON panel (jsonView.js)
+// ================================================================
+//
+// A read-only panel that shows the current flow's canonical .flow.json and a
+// line diff against the last-saved bytes on disk. Editing is deferred until
+// round-trip safety is proven. The panel mounts into #json-view-mount and is
+// toggled via the command palette ("Toggle View as JSON").
+
+let jsonViewInstance = null;
+let jsonViewVisible = false;
+
+function getJsonView() {
+    if (!jsonViewInstance) {
+        const mount = document.getElementById('json-view-mount');
+        if (!mount) {
+            logger.warn('[jsonView] #json-view-mount not found; cannot create panel.');
+            return null;
+        }
+        jsonViewInstance = createJsonView({ mount });
+    }
+    return jsonViewInstance;
+}
+
+/**
+ * Read the last-saved bytes for the current flow and normalize them through the
+ * same serialization the panel uses, so cosmetic formatting never shows as a
+ * diff. Returns the normalized pretty JSON string, or null when the flow has
+ * never been saved (or the file can't be read).
+ */
+async function readSavedFlowJson() {
+    const filePath = appState.currentFilePath;
+    if (!filePath || !window.electronAPI || typeof window.electronAPI.readFile !== 'function') {
+        return null;
+    }
+    try {
+        const result = await window.electronAPI.readFile(filePath);
+        if (!result || !result.success || typeof result.data !== 'string') return null;
+        const parsed = JSON.parse(result.data);
+        // Normalize via the internal model so the baseline matches what the
+        // current model would serialize to.
+        return flowToPrettyJson(jsonToFlowModel(parsed));
+    } catch (err) {
+        logger.warn('[jsonView] failed to read/normalize last-saved flow:', err);
+        return null;
+    }
+}
+
+/**
+ * Refresh the JSON view panel from the current model + last-saved bytes.
+ */
+export async function refreshJsonView() {
+    if (!jsonViewVisible) return;
+    const view = getJsonView();
+    if (!view) return;
+    const savedJson = await readSavedFlowJson();
+    view.update({ model: appState.currentFlowModel, savedJson });
+}
+
+/**
+ * Show/hide the read-only View-as-JSON panel.
+ * @param {boolean|null} [forceState]
+ */
+export async function toggleJsonView(forceState = null) {
+    const mount = document.getElementById('json-view-mount');
+    if (!mount) return;
+
+    const willShow = forceState ?? !jsonViewVisible;
+    jsonViewVisible = willShow;
+    mount.style.display = willShow ? '' : 'none';
+
+    if (willShow) {
+        await refreshJsonView();
     }
 }

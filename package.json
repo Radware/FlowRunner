@@ -77,6 +77,8 @@
       "flowStepComponents.js",
       "flowVisualizer.js",
       "modelUtils.js",
+      "palette.js",
+      "jsonView.js",
       "runnerInterface.js",
       "state.js",
       "workspaceManager.js",
