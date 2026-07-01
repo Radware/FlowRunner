@@ -14,6 +14,8 @@ import { assignNewIdsRecursive } from './modelUtils.js';
 import { showValidationErrors } from './uiUtils.js';
 import { initializeAppComponents } from './app.js'; // <-- ADDED IMPORT
 import { logger } from './logger.js'; // <-- ADDED IMPORT
+// WAVE2 file-features: rebase the undo/redo "clean" baseline on save.
+import { markFlowHistorySaved } from './flowHistory.js';
 
 
 // Simple path shim for display purposes
@@ -704,6 +706,9 @@ export async function saveCurrentFlow(forceSaveAs = false) {
             appState.isDirty = false; // Reset flow dirty flag
             // stepEditorIsDirty should already be false from commit step, ensure it is.
             appState.stepEditorIsDirty = false;
+            // WAVE2 file-features: mark the just-saved model as the clean baseline
+            // so undo/redo back to this point reports the app as not-dirty.
+            markFlowHistorySaved();
 
             updateWorkspaceTitle(); // Update title (removes asterisk, shows new filename if Save As)
             addRecentFile(targetFilePath); // Update recent files list

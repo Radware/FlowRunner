@@ -8,6 +8,10 @@ import { handleBuilderFlowUpdate, handleBuilderHeadersUpdate, handleBuilderFlowV
 // Import adjustCollapsibleHeight from app.js (assuming it's exported there)
 import { adjustCollapsibleHeight as appAdjustCollapsibleHeight } from './app.js';
 import { logger } from './logger.js';
+// WAVE2 file-features: Fuse.js-backed fuzzy search (files + steps).
+import { searchFiles, searchSteps } from './fuzzySearch.js';
+// WAVE2 file-features: undo/redo history reconciliation on (re)render.
+import { syncFlowHistoryOnRender } from './flowHistory.js';
 
 // Simple path shim for display purposes
 const path = {
@@ -212,6 +216,10 @@ export function clearMessages(container = domRefs.builderMessages) {
 }
 
 export function renderCurrentFlow() {
+    // WAVE2 file-features: reconcile undo/redo history with the model about to be
+    // rendered (auto-resets the stack when a NEW flow is loaded).
+    syncFlowHistoryOnRender();
+
     if (!appState.currentFlowModel) {
         clearWorkspace(true); // Full clear if no model
         return;
@@ -258,6 +266,10 @@ export function renderCurrentFlow() {
 
     // Sync visibility of toggle buttons and panels
     syncPanelVisibility();
+
+    // WAVE2 file-features: show/hide the steps-search box for the active view
+    // and re-apply any active step filter against the freshly rendered rows.
+    syncStepsSearchVisibility();
 
     // Update button states based on dirty status, etc.
     setDirty();
@@ -701,6 +713,126 @@ export function syncPanelVisibility() {
     if (toggleMinimapBtn) {
         const shouldShow = shouldShowButtons && appState.currentView === 'node-graph';
         toggleMinimapBtn.style.display = shouldShow ? '' : 'none';
+    }
+}
+
+// ============================================================================
+// WAVE2 file-features: fuzzy search over recent files + steps
+// ----------------------------------------------------------------------------
+// These filter EXISTING rendered rows by toggling a `.search-hidden` class,
+// rather than re-rendering. That preserves drag-order, selection state and any
+// in-flight step editors, and keeps this lane out of fileOperations' render path
+// (avoiding a uiUtils <-> fileOperations import cycle). Ranking from Fuse is
+// applied by reordering the surviving rows to match match-relevance.
+// ============================================================================
+
+/**
+ * Filter the recent-files sidebar list against the file-search box. Rows that do
+ * not match get `.search-hidden`; matching rows are reordered by relevance.
+ * A blank query restores every row in its original (drag) order.
+ */
+export function applyFileSearch() {
+    const listEl = domRefs.flowList;
+    const input = domRefs.fileSearchInput;
+    if (!listEl) return;
+
+    const query = (input?.value || '').trim();
+    const rows = Array.from(listEl.querySelectorAll('.recent-file-item'));
+    if (rows.length === 0) return;
+
+    // Clear any prior "no matches" placeholder we injected.
+    listEl.querySelector('.search-no-matches')?.remove();
+
+    if (!query) {
+        rows.forEach(row => row.classList.remove('search-hidden'));
+        return;
+    }
+
+    const paths = rows.map(row => row.dataset.filePath);
+    const ranked = searchFiles(query, paths); // ordered subset
+    const rankIndex = new Map(ranked.map((p, i) => [p, i]));
+
+    rows.forEach(row => {
+        const matched = rankIndex.has(row.dataset.filePath);
+        row.classList.toggle('search-hidden', !matched);
+    });
+
+    // Reorder surviving rows to reflect relevance ranking.
+    ranked.forEach(path => {
+        const row = rows.find(r => r.dataset.filePath === path);
+        if (row) listEl.appendChild(row);
+    });
+
+    if (ranked.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'search-no-matches';
+        li.textContent = 'No matching recent files.';
+        listEl.appendChild(li);
+    }
+}
+
+/**
+ * Filter the current flow's steps against the steps-search box. Matching steps
+ * (including nested ones) stay visible; the rest get `.search-hidden`. Ancestor
+ * containers of a match are kept visible so nested hits remain reachable.
+ * Updates the small "N / M" match counter. Blank query clears all filtering.
+ */
+export function applyStepsSearch() {
+    const mount = domRefs.flowBuilderMount;
+    const input = domRefs.stepsSearchInput;
+    const countEl = domRefs.stepsSearchCount;
+    if (!mount) return;
+
+    const query = (input?.value || '').trim();
+    const stepEls = Array.from(mount.querySelectorAll('.flow-step'));
+    const total = stepEls.length;
+
+    if (!query) {
+        stepEls.forEach(el => el.classList.remove('search-hidden', 'search-match'));
+        if (countEl) countEl.textContent = '';
+        return;
+    }
+
+    const steps = appState.currentFlowModel?.steps || [];
+    const matches = searchSteps(query, steps);
+    const matchIds = new Set(matches.map(s => s.id));
+
+    // A step is visible if it matches OR it is an ancestor of a match (so the
+    // path to a nested hit is preserved).
+    stepEls.forEach(el => {
+        const id = el.dataset.stepId;
+        const isMatch = matchIds.has(id);
+        const containsMatch = !isMatch
+            && Array.from(el.querySelectorAll('.flow-step'))
+                .some(child => matchIds.has(child.dataset.stepId));
+        const visible = isMatch || containsMatch;
+        el.classList.toggle('search-hidden', !visible);
+        el.classList.toggle('search-match', isMatch);
+    });
+
+    if (countEl) {
+        countEl.textContent = `${matchIds.size} / ${total}`;
+    }
+}
+
+/**
+ * Show or hide the steps-search box depending on whether a flow with steps is
+ * loaded in the list-editor view, and clear a stale query when hidden. Called
+ * from renderCurrentFlow so the box tracks the active view.
+ */
+export function syncStepsSearchVisibility() {
+    const wrap = domRefs.stepsSearchWrap;
+    if (!wrap) return;
+    const hasSteps = !!appState.currentFlowModel?.steps?.length;
+    const inListView = appState.currentView === 'list-editor';
+    const shouldShow = hasSteps && inListView;
+    wrap.style.display = shouldShow ? '' : 'none';
+    if (shouldShow) {
+        // Re-apply an active query against freshly rendered rows.
+        if (domRefs.stepsSearchInput?.value) applyStepsSearch();
+    } else if (domRefs.stepsSearchInput) {
+        domRefs.stepsSearchInput.value = '';
+        if (domRefs.stepsSearchCount) domRefs.stepsSearchCount.textContent = '';
     }
 }
 

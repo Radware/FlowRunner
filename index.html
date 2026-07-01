@@ -42,6 +42,12 @@
                     <button id="import-har-btn" class="btn btn-secondary" title="Import request steps from a HAR file">Import HAR</button>
                     <input id="import-har-file-input" type="file" accept=".har,application/json" style="display: none;" />
                 </div>
+                <!-- WAVE2 file-features: fuzzy search over recent files -->
+                <div class="sidebar-search" id="file-search-wrap">
+                    <input type="search" id="file-search-input" class="sidebar-search-input"
+                        placeholder="Search recent files…" autocomplete="off" spellcheck="false"
+                        aria-label="Search recent files">
+                </div>
                 <div class="flow-list-container">
                     <ul id="flow-list" class="flow-list">
                         <li class="loading-flows">Loading recent files...</li>
@@ -146,6 +152,14 @@
                     <div class="variables-container" data-ref="variablesContainer">
                         <!-- Variables content rendered here -->
                     </div>
+                </div>
+
+                <!-- WAVE2 file-features: fuzzy search over the current flow's steps -->
+                <div class="steps-search" id="steps-search-wrap" style="display: none;">
+                    <input type="search" id="steps-search-input" class="steps-search-input"
+                        placeholder="Search steps…" autocomplete="off" spellcheck="false"
+                        aria-label="Search steps in this flow">
+                    <span class="steps-search-count" id="steps-search-count" aria-live="polite"></span>
                 </div>
 
                 <div id="flow-builder-mount" class="view-mode list-editor-view">
