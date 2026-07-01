@@ -2275,6 +2275,62 @@ body.flow-step-dragging { cursor: grabbing !important; }
 }
 
 .inspector-disclosure-btn:focus-visible {
+/* === WAVE2 LANE canvas ===
+   "Tidy Up" relayout animation + on-node run-error badges.
+   Consumes semantic tokens only (docs/design-tokens.md); no hardcoded colors.
+   The relayout animation touches transform/opacity ONLY (FLIP), so it stays on
+   the compositor and never triggers layout thrash during the ~200ms ease-out. */
+
+.drawflow-node.flow-node.tidy-relayout {
+    transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 200ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .drawflow-node.flow-node.tidy-relayout {
+        transition: none;
+    }
+}
+
+/* --- On-node error badges (surface per-step run failures on the node) --- */
+.drawflow-node.flow-node.has-run-error {
+    border-color: var(--run-error);
+    box-shadow: 0 0 0 1px var(--run-error);
+}
+
+/* The node header hosts the badge; anchor it to the top-right corner pip. */
+.drawflow-node.flow-node.has-run-error .node-header {
+    position: relative;
+}
+
+.node-error-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid var(--surface-raised);
+    border-radius: 50%;
+    background: var(--run-error);
+    color: var(--accent-contrast);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 5;
+    box-shadow: 0 1px 3px var(--focus-ring);
+}
+
+.node-error-badge:hover {
+    filter: brightness(1.08);
+}
+
+.node-error-badge:focus-visible {
     outline: 2px solid var(--focus-ring);
     outline-offset: 1px;
 }
@@ -2348,3 +2404,6 @@ body.flow-step-dragging { cursor: grabbing !important; }
     border-color: var(--border-strong);
 }
 /* === /WAVE2 LANE inspector === */
+.node-error-badge-icon {
+    pointer-events: none;
+}

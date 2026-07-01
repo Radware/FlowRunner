@@ -39,6 +39,11 @@ const CONTRACT_METHODS = [
     'zoomOut',
     'resetZoom',
     'destroy',
+    // WAVE2 LANE canvas: "Tidy Up" apply/undo + jump-to-next-failed navigation.
+    'applyLayout',
+    'undoLayout',
+    'canUndoLayout',
+    'jumpToNextError',
 ];
 
 // Option callbacks the app wires in app.js -> initializeVisualizer(). All optional;
@@ -135,6 +140,28 @@ class FakeVisualizer {
 
     destroy() {
         this.destroyed = true;
+    }
+
+    // WAVE2 LANE canvas additions. A replacement engine may no-op these if it
+    // does not support auto-layout / error navigation; the app guards each call.
+    applyLayout(positions, _options) {
+        this.appliedLayout = positions;
+        this._undoAvailable = true;
+        return positions ? Object.keys(positions).length : 0;
+    }
+
+    undoLayout() {
+        if (!this._undoAvailable) return false;
+        this._undoAvailable = false;
+        return true;
+    }
+
+    canUndoLayout() {
+        return !!this._undoAvailable;
+    }
+
+    jumpToNextError() {
+        return null;
     }
 }
 

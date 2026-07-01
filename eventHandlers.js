@@ -33,6 +33,8 @@ import {
 } from './modelUtils.js';
 import { createNewStep, escapeHTML, findStepById } from './flowCore.js';
 import { logger } from './logger.js';
+// WAVE2 LANE canvas: ELK/dagre auto-layout adapter powering the "Tidy Up" button.
+import { computeLayout } from './autoLayout.js';
 
 // --- Initialization of Listeners ---
 
@@ -64,6 +66,9 @@ export function initializeEventListeners() {
     domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
     domRefs.zoomResetBtn?.addEventListener('click', () => appState.visualizerComponent?.resetZoom());
     domRefs.autoLayoutBtn?.addEventListener('click', handleAutoArrangeLayout);
+    // WAVE2 LANE canvas: Tidy Up (Alt-click = tidy only the selected step) + jump-to-next-failed.
+    domRefs.tidyUpBtn?.addEventListener('click', (event) => handleTidyUp({ selectionOnly: !!event.altKey }));
+    domRefs.nextErrorBtn?.addEventListener('click', handleJumpToNextError);
     domRefs.toggleMinimapBtn?.addEventListener('click', () => handleToggleMinimap());
 
     // Info Panel Close Button (Inside Panel) - Explicitly closes
@@ -193,6 +198,14 @@ export function initializeEventListeners() {
             e.preventDefault();
             domRefs.toggleMinimapBtn?.click();
         }
+
+        // WAVE2 LANE canvas: single-key Cmd/Ctrl+Z undo for the last "Tidy Up".
+        if (ctrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'z'
+            && appState.currentView === 'node-graph'
+            && appState.visualizerComponent?.canUndoLayout?.()) {
+            e.preventDefault();
+            handleUndoTidyUp();
+        }
     });
 
     logger.info("All core event listeners initialized.");
@@ -230,6 +243,121 @@ export function handleAutoArrangeLayout() {
         requestAnimationFrame(() => {
             appState.visualizerComponent?.focusNode(firstStepId);
         });
+    }
+}
+
+// ================= WAVE2 LANE canvas: "Tidy Up" + error navigation =================
+
+/**
+ * Read the real rendered node bounding boxes so the auto-layout respects the
+ * actual card sizes (per the auto-layout spike handoff notes). Falls back to
+ * the visualizer defaults for any node that isn't measurable yet.
+ */
+function collectNodeSizes(visualizer) {
+    const sizes = {};
+    if (!visualizer?.nodes) return sizes;
+    visualizer.nodes.forEach((nodeData, stepId) => {
+        const el = nodeData?.element;
+        const width = el?.offsetWidth || nodeData?.width;
+        const height = el?.offsetHeight || nodeData?.height;
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+            sizes[stepId] = { width, height };
+        }
+    });
+    return sizes;
+}
+
+/**
+ * "Tidy Up": run the ELK/dagre adapter and apply the resulting {x,y} to the
+ * graph, animating the relayout and persisting into visualLayout. Honours a
+ * Tidy-all vs Tidy-selection distinction so manually-placed nodes can be kept:
+ * with `selectionOnly` and a selected step, only that step (and its subtree if
+ * it is a container) is repositioned. The move is undoable with a single
+ * Cmd/Ctrl+Z (applyLayout snapshots the pre-tidy positions).
+ *
+ * @param {{ selectionOnly?: boolean }} [options]
+ */
+export async function handleTidyUp({ selectionOnly = false } = {}) {
+    const visualizer = appState.visualizerComponent;
+    if (!appState.currentFlowModel || !visualizer) return;
+
+    const steps = appState.currentFlowModel.steps || [];
+    if (steps.length === 0) {
+        showMessage('No steps available to tidy.', 'warning');
+        return;
+    }
+
+    let onlyStepIds = null;
+    if (selectionOnly) {
+        const selectedId = appState.selectedStepId;
+        if (!selectedId) {
+            showMessage('Select a step first to tidy just that part of the flow.', 'warning');
+            return;
+        }
+        // Tidy-selection: only the selected step (and its descendants, if any).
+        onlyStepIds = [selectedId];
+        const collect = visualizer.nodes; // rendered nodes only
+        const info = findStepInfoRecursive(steps, selectedId);
+        const selectedStep = info?.step;
+        if (selectedStep) {
+            const gatherDescendants = (branchArrays) => {
+                branchArrays.forEach((arr) => {
+                    (arr || []).forEach((child) => {
+                        if (child?.id && collect.has(child.id)) onlyStepIds.push(child.id);
+                        gatherDescendants([
+                            child?.thenSteps, child?.elseSteps, child?.loopSteps,
+                        ]);
+                    });
+                });
+            };
+            gatherDescendants([
+                selectedStep.thenSteps, selectedStep.elseSteps, selectedStep.loopSteps,
+            ]);
+        }
+    }
+
+    try {
+        const nodeSizes = collectNodeSizes(visualizer);
+        const { positions } = await computeLayout(steps, { nodeSizes, direction: 'DOWN' });
+        if (!positions || Object.keys(positions).length === 0) {
+            showMessage('Auto-layout produced no positions.', 'warning');
+            return;
+        }
+
+        const applied = visualizer.applyLayout(positions, { animate: true, onlyStepIds });
+        if (applied > 0) {
+            appState.isDirty = true;
+            setDirty();
+            showMessage(
+                selectionOnly ? 'Tidied the selected step.' : 'Tidied up the flow. Press Cmd/Ctrl+Z to undo.',
+                'success',
+            );
+        }
+    } catch (err) {
+        logger.error('[HANDLER handleTidyUp] Auto-layout failed:', err);
+        showMessage('Could not compute an auto-layout.', 'error');
+    }
+}
+
+/** Revert the last "Tidy Up" in a single keystroke (Cmd/Ctrl+Z). */
+export function handleUndoTidyUp() {
+    const visualizer = appState.visualizerComponent;
+    if (!visualizer?.canUndoLayout?.()) return;
+    const undone = visualizer.undoLayout();
+    if (undone) {
+        appState.isDirty = true;
+        setDirty();
+        showMessage('Reverted the last Tidy Up.', 'info');
+    }
+}
+
+/** Jump the viewport to the next failed step, cycling in document order. */
+export function handleJumpToNextError() {
+    const visualizer = appState.visualizerComponent;
+    if (!visualizer?.jumpToNextError) return;
+    const stepId = visualizer.jumpToNextError();
+    if (!stepId) {
+        showMessage('No failed steps to jump to.', 'info');
     }
 }
 

@@ -81,6 +81,17 @@ export class FlowVisualizer {
         this.nodeEditorDirty = false;
         this.activeEditorStepId = null;
 
+        // --- WAVE2 LANE canvas: Tidy Up undo + on-node error state ---
+        // nodeErrors: stepId -> error message string. Survives re-render (the
+        // records are the source of truth; badges are re-applied after render).
+        this.nodeErrors = new Map();
+        // Single-level undo snapshot for "Tidy Up": { [id]: {x, y} }.
+        this._layoutUndo = null;
+        // Rotating cursor for "jump to next failed step".
+        this._errorJumpIndex = -1;
+        // Pending timers that strip the transient relayout-animation class.
+        this._relayoutTimers = new Set();
+
         this._createBaseStructure();
         this._initializeEditor();
         this._bindMinimapListeners();
@@ -529,6 +540,7 @@ export class FlowVisualizer {
         this._renderConnections();
         this._applyCollapsedVisibility();
         this._applySelection();
+        this._reapplyErrorBadges();
 
         this.isRendering = false;
         this._scheduleMinimapRefresh();
@@ -1204,6 +1216,11 @@ export class FlowVisualizer {
 
         nodeData.element.classList.add(highlightClass);
 
+        // Surface an on-node error badge whenever a step is highlighted as failed.
+        if (highlightType === 'error') {
+            this.setNodeError(stepId, this.nodeErrors.get(stepId) || 'Step failed');
+        }
+
         const connectorPaths = Array.from(
             this.editor.precanvas?.querySelectorAll(`.connector-path[data-to="${stepId}"]`) || []
         );
@@ -1230,6 +1247,9 @@ export class FlowVisualizer {
         connectorPaths.forEach((path) => {
             path.classList.remove(CONNECTOR_ACTIVE_CLASS, ...statusClasses);
         });
+
+        // A fresh run/clear also resets on-node error badges.
+        this.clearNodeErrors();
     }
 
     updateNodeRuntimeInfo(stepId, result) {
@@ -1247,6 +1267,16 @@ export class FlowVisualizer {
 
         runtimeInfoDiv.innerHTML = '';
         const detailsParts = [];
+
+        // Surface an on-node error badge from the run result the visualizer
+        // already receives. Reuse the same status field the list view keys on.
+        if (result && result.status === 'error') {
+            const message = result.error
+                || (result.output && result.output.status >= 400
+                    ? `HTTP ${result.output.status}`
+                    : 'Step failed');
+            this.setNodeError(stepId, String(message));
+        }
 
         if (nodeData.step.type === 'request') {
             let requestInfoHtml = '';
@@ -1340,6 +1370,273 @@ export class FlowVisualizer {
         return acc;
     }
 
+    // ================= WAVE2 LANE canvas: "Tidy Up" apply/undo =================
+
+    /**
+     * Apply a computed { [stepId]: { x, y } } position map to the graph nodes,
+     * persist it into flowModel.visualLayout, and (by default) animate the move.
+     *
+     * Contract:
+     *  - Positions for step ids that are not currently rendered are ignored
+     *    (stale/unknown ids never throw and never create phantom layout entries).
+     *  - `options.onlyStepIds` (array) restricts the apply to a subset — this is
+     *    how "Tidy selection" preserves manually-placed nodes: only the selected
+     *    ids move; everything else keeps its current position.
+     *  - Pushes a single-level undo snapshot of the PRE-apply positions of the
+     *    nodes it is about to move, so Cmd/Ctrl+Z can revert in one keystroke.
+     *  - Idempotent: applying the same map twice leaves the same state.
+     *
+     * @param {Object<string,{x:number,y:number}>} positions
+     * @param {{ animate?: boolean, onlyStepIds?: string[] }} [options]
+     * @returns {number} how many nodes were actually moved
+     */
+    applyLayout(positions, options = {}) {
+        if (!positions || typeof positions !== 'object') return 0;
+        const animate = options.animate !== false;
+        const restrict = Array.isArray(options.onlyStepIds)
+            ? new Set(options.onlyStepIds.map(String))
+            : null;
+
+        // Resolve the set of ids we will actually move: present in the map,
+        // rendered as a node, and (if restricting) in the selection.
+        const targets = [];
+        for (const rawId of Object.keys(positions)) {
+            const id = String(rawId);
+            const pos = positions[rawId];
+            if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) continue;
+            if (!this.nodes.has(id)) continue;
+            if (restrict && !restrict.has(id)) continue;
+            targets.push(id);
+        }
+        if (targets.length === 0) return 0;
+
+        // Snapshot pre-apply positions for single-level undo.
+        const snapshot = {};
+        targets.forEach((id) => {
+            const nodeData = this.nodes.get(id);
+            snapshot[id] = { x: nodeData.x, y: nodeData.y };
+        });
+        this._layoutUndo = snapshot;
+
+        this._writePositions(
+            targets.map((id) => ({ id, x: positions[id].x, y: positions[id].y })),
+            animate,
+        );
+        return targets.length;
+    }
+
+    /**
+     * Revert the most recent applyLayout() in a single step. Returns false when
+     * there is nothing to undo.
+     * @returns {boolean}
+     */
+    undoLayout() {
+        if (!this._layoutUndo) return false;
+        const snapshot = this._layoutUndo;
+        this._layoutUndo = null;
+        const moves = Object.keys(snapshot)
+            .filter((id) => this.nodes.has(id))
+            .map((id) => ({ id, x: snapshot[id].x, y: snapshot[id].y }));
+        this._writePositions(moves, true);
+        return true;
+    }
+
+    /** @returns {boolean} whether an applyLayout can currently be undone. */
+    canUndoLayout() {
+        return !!this._layoutUndo;
+    }
+
+    /**
+     * Write a batch of { id, x, y } moves: update node data, DOM position, the
+     * persisted visualLayout, and (optionally) run the ~200ms ease-out relayout
+     * animation via a transient class. Only transform/opacity-safe properties
+     * are animated (see the .tidy-relayout CSS block).
+     */
+    _writePositions(moves, animate) {
+        if (!Array.isArray(moves) || moves.length === 0) return;
+        if (this.flowModel) {
+            this.flowModel.visualLayout = this.flowModel.visualLayout || {};
+        }
+
+        moves.forEach(({ id, x, y }) => {
+            const nodeData = this.nodes.get(id);
+            if (!nodeData) return;
+            nodeData.x = x;
+            nodeData.y = y;
+
+            const drawflowId = this.nodeIdByStepId.get(id);
+            if (drawflowId != null) {
+                this._moveDrawflowNode(drawflowId, x, y, animate);
+            }
+
+            if (this.flowModel) {
+                const current = this.flowModel.visualLayout[id] || {};
+                this.flowModel.visualLayout[id] = { ...current, x, y };
+            }
+
+            this.options.onNodeLayoutUpdate?.(id, x, y);
+        });
+
+        this._scheduleMinimapRefresh();
+    }
+
+    /**
+     * Move a single Drawflow node to (x, y), keeping Drawflow's internal data
+     * model and the DOM element in lock-step (mirrors Drawflow.position()).
+     */
+    _moveDrawflowNode(drawflowId, x, y, animate) {
+        const nodeEl = this.editor?.container?.querySelector(`#node-${drawflowId}`);
+        if (!nodeEl) return;
+
+        // FLIP: the final position is committed to left/top immediately (so
+        // Drawflow's geometry + connection routing stay correct), then the
+        // *visual* delta is animated with `transform` only — never left/top —
+        // to keep the ~200ms ease-out relayout on the compositor.
+        const prevLeft = parseFloat(nodeEl.style.left) || 0;
+        const prevTop = parseFloat(nodeEl.style.top) || 0;
+
+        nodeEl.style.left = `${x}px`;
+        nodeEl.style.top = `${y}px`;
+
+        if (animate) {
+            const dx = prevLeft - x;
+            const dy = prevTop - y;
+            if (dx !== 0 || dy !== 0) {
+                // Start from the old spot (no transition), then transition to 0.
+                nodeEl.style.transition = 'none';
+                nodeEl.style.transform = `translate(${dx}px, ${dy}px)`;
+                // Force a reflow so the starting transform is committed.
+                void nodeEl.offsetWidth;
+                nodeEl.classList.add('tidy-relayout');
+                nodeEl.style.transition = '';
+                nodeEl.style.transform = '';
+            } else {
+                nodeEl.classList.add('tidy-relayout');
+            }
+            const timer = setTimeout(() => {
+                nodeEl.classList.remove('tidy-relayout');
+                this._relayoutTimers.delete(timer);
+            }, 240); // just past the ~200ms ease-out transition
+            this._relayoutTimers.add(timer);
+        }
+
+        // Keep Drawflow's data model consistent so subsequent drags/exports read
+        // the tidied coordinates.
+        const df = this.editor?.drawflow?.drawflow?.Home?.data?.[drawflowId];
+        if (df) {
+            df.pos_x = x;
+            df.pos_y = y;
+        }
+        this.editor?.updateConnectionNodes?.(`node-${drawflowId}`);
+    }
+
+    // ============= WAVE2 LANE canvas: on-node error badges + jump =============
+
+    /**
+     * Record + surface a per-step run error on its node (red border/pip + icon;
+     * the message is exposed via the badge title and click). No-ops for unknown
+     * step ids (idempotent / null-safe, per the visualizer contract).
+     * @param {string} stepId
+     * @param {string} message
+     */
+    setNodeError(stepId, message) {
+        if (!stepId) return;
+        const msg = message == null ? 'Step failed' : String(message);
+        this.nodeErrors.set(stepId, msg);
+        this._renderErrorBadge(stepId, msg);
+    }
+
+    /** @returns {string|null} the recorded error message for a step, if any. */
+    getNodeError(stepId) {
+        return this.nodeErrors.has(stepId) ? this.nodeErrors.get(stepId) : null;
+    }
+
+    /** @returns {string[]} ids of steps currently flagged as failed, doc order. */
+    getErrorStepIds() {
+        // Preserve document order (nodes Map is insertion-ordered by layout walk)
+        // so "jump to next" and any listing are stable.
+        const ordered = [];
+        this.nodes.forEach((_nodeData, id) => {
+            if (this.nodeErrors.has(id)) ordered.push(id);
+        });
+        // Include any recorded errors for ids not currently rendered (defensive).
+        this.nodeErrors.forEach((_msg, id) => {
+            if (!ordered.includes(id)) ordered.push(id);
+        });
+        return ordered;
+    }
+
+    /** Clear all on-node error badges and reset the jump cursor. */
+    clearNodeErrors() {
+        this.nodeErrors.forEach((_msg, id) => this._removeErrorBadge(id));
+        this.nodeErrors.clear();
+        this._errorJumpIndex = -1;
+    }
+
+    /**
+     * Focus the next failed step, cycling in document order. Returns the focused
+     * step id, or null when there are no errors.
+     * @returns {string|null}
+     */
+    jumpToNextError() {
+        const ids = this.getErrorStepIds();
+        if (ids.length === 0) {
+            this._errorJumpIndex = -1;
+            return null;
+        }
+        this._errorJumpIndex = (this._errorJumpIndex + 1) % ids.length;
+        const targetId = ids[this._errorJumpIndex];
+        this.focusNode(targetId);
+        return targetId;
+    }
+
+    /** Re-apply error badges after a full render() rebuilt the node elements. */
+    _reapplyErrorBadges() {
+        this.nodeErrors.forEach((msg, id) => {
+            this._renderErrorBadge(id, msg);
+        });
+    }
+
+    /** Attach the error class + badge element to a node (idempotent). */
+    _renderErrorBadge(stepId, message) {
+        const nodeData = this.nodes.get(stepId);
+        const nodeEl = nodeData?.element;
+        if (!nodeEl) return;
+
+        nodeEl.classList.add('has-run-error');
+
+        let badge = nodeEl.querySelector('.node-error-badge');
+        if (!badge) {
+            badge = document.createElement('button');
+            badge.type = 'button';
+            badge.className = 'node-error-badge';
+            badge.setAttribute('aria-label', 'Show step error');
+            badge.innerHTML = '<span class="node-error-badge-icon" aria-hidden="true">!</span>';
+            badge.addEventListener('mousedown', (event) => {
+                event.stopPropagation();
+                event.preventDefault();
+            });
+            badge.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const current = this.nodeErrors.get(stepId);
+                if (current) alert(current);
+            });
+            const header = nodeEl.querySelector('.node-header') || nodeEl;
+            header.appendChild(badge);
+        }
+        badge.setAttribute('title', message);
+    }
+
+    /** Remove the error class + badge element from a node. */
+    _removeErrorBadge(stepId) {
+        const nodeData = this.nodes.get(stepId);
+        const nodeEl = nodeData?.element;
+        if (!nodeEl) return;
+        nodeEl.classList.remove('has-run-error');
+        const badge = nodeEl.querySelector('.node-error-badge');
+        if (badge) badge.remove();
+    }
+
     destroy() {
         this.mountPoint.removeEventListener('mousedown', this._handleCanvasPanStart, true);
         this.mountPoint.removeEventListener('keydown', this._handleKeydown, true);
@@ -1354,6 +1651,11 @@ export class FlowVisualizer {
         if (this.editor) {
             this.editor.clear();
         }
+
+        this._relayoutTimers.forEach((timer) => clearTimeout(timer));
+        this._relayoutTimers.clear();
+        this.nodeErrors.clear();
+        this._layoutUndo = null;
 
         this.nodes.clear();
         this.nodeIdByStepId.clear();

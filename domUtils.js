@@ -35,6 +35,9 @@ export function initializeDOMReferences() {
         zoomInBtn: document.getElementById('zoom-in-btn'),
         zoomResetBtn: document.getElementById('zoom-reset-btn'),
         autoLayoutBtn: document.getElementById('auto-layout-btn'),
+        // WAVE2 LANE canvas: Tidy Up + jump-to-next-failed toolbar buttons
+        tidyUpBtn: document.getElementById('tidy-up-btn'),
+        nextErrorBtn: document.getElementById('next-error-btn'),
         toggleMinimapBtn: document.getElementById('toggle-minimap-btn'),
 
         // Panels relative to Workspace
