@@ -24,6 +24,7 @@ export function generateUniqueId() {
  */
 export function flowModelToJson(flowModel) {
   const json = {
+    schemaVersion: flowModel.schemaVersion || '1.0', // additive: absence is read as "1.0"; never gates the wire format. See docs/schema-versioning.md.
     id: flowModel.id, // Include ID if present (for updates)
     name: flowModel.name || '',
     description: flowModel.description || '',
@@ -180,6 +181,7 @@ export function jsonToFlowModel(json) {
   }
 
   const flowModel = {
+    schemaVersion: json.schemaVersion, // preserve for lossless round-trip; absence (undefined) is stamped "1.0" on save
     id: json.id, // Keep the ID
     name: json.name || 'New Flow',
     description: json.description || '',

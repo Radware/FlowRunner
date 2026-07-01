@@ -17,7 +17,9 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const loadFlow = (name) => JSON.parse(readFileSync(join(repoRoot, name), 'utf8'));
 
 // Real flows authored before the sprint — the golden baseline.
-const GOLDEN_FLOWS = ['jwt-manipulation-attacks.flow.json', 'httpbin-flow.flow.json'];
+// Must be GIT-TRACKED so this guard runs in clean checkouts / worktrees / CI
+// (jwt-manipulation-attacks.flow.json is gitignored, so it is deliberately not used here).
+const GOLDEN_FLOWS = ['httpbin-flow.flow.json', 'random-ip-example.flow.json'];
 
 // Execution-relevant projection of a parsed model (ignores UI-only extras).
 const executionShape = (model) => JSON.stringify({
