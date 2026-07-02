@@ -1577,8 +1577,7 @@ button:disabled {
 .input-with-vars .btn-insert-var { flex-shrink: 0; min-width: 44px; background: var(--light-bg-color); color: var(--primary-color); border: 1px solid var(--border-color-medium); padding: 5px 8px; font-size: 12px; font-weight: bold; border-radius: 3px; height: auto; line-height: 1.5; text-align: center; }
 .input-with-vars .btn-insert-var:hover { background-color: var(--medium-bg-color); }
 .body-actions { margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.body-actions .btn-format-json { background: var(--success-color); color: var(--accent-contrast); border: 1px solid var(--success-color); padding: 5px 10px; }
-.body-actions .btn-format-json:hover { background: var(--success-hover-color); border-color: var(--success-hover-color); }
+.body-actions { display: flex; gap: 8px; margin-top: 10px; }
 
 /* --- Drag and Drop Indicators --- */
 .flow-step.dragging { opacity: 0.4; background: var(--medium-bg-color); box-shadow: 0 4px 10px color-mix(in oklab, var(--text) 20%, transparent); border-style: dashed !important; }
@@ -4077,3 +4076,49 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
     border-color: var(--accent);
 }
 .form-tabs .form-hint { margin-top: 10px; line-height: 1.55; }
+
+
+/* Step editor code fields: data looks like data. */
+.step-editor textarea,
+.runner-content .flow-info-overlay textarea.code,
+.step-editor .tab-content textarea {
+    font-family: var(--font-family-code);
+    font-size: var(--fs-body);
+    line-height: 1.5;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    color: var(--text);
+    transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.step-editor textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.step-editor textarea::placeholder { color: var(--text-faint, var(--text-muted)); }
+.step-editor .raw-body-markers { background: var(--surface-sunken); color: var(--text-muted); }
+
+/* Key/value editor rows: quiet, consistent micro-controls. */
+.header-row .btn-insert-var, .extract-row .btn-insert-var,
+.global-header-row .btn-insert-var, .flow-var-row .btn-insert-var {
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    border-radius: var(--radius-xs);
+    color: var(--accent);
+    transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.header-row .btn-insert-var:hover, .extract-row .btn-insert-var:hover,
+.global-header-row .btn-insert-var:hover, .flow-var-row .btn-insert-var:hover {
+    background: color-mix(in oklab, var(--accent) 8%, transparent);
+    border-color: color-mix(in oklab, var(--accent) 40%, var(--border));
+}
+.btn-remove-header, .btn-remove-extract, .btn-remove-flow-var, .btn-remove-global-header {
+    border-radius: var(--radius-xs);
+    transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.btn-remove-header:hover, .btn-remove-extract:hover,
+.btn-remove-flow-var:hover, .btn-remove-global-header:hover {
+    background: color-mix(in oklab, var(--run-error) 10%, transparent);
+}

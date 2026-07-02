@@ -15,6 +15,7 @@
 - **Inspector collapse was broken in the new shell** (no desktop `.collapsed` rule existed: the panel kept its 400px width showing a giant empty pane). Now collapses to a 46px strip, tab rack/content hidden, chevron flips.
 - **Power tab panes joined the design language:** dashed-affordance add-buttons (accent), styled empty-state boxes ("No headers defined"), helper-text rhythm — the last dated corner of the editor.
 - **Microcopy (P2):** "Execution stopped: ... (onFailure=stop)" → 'Stopped: "step" failed and its On Failure setting is Stop.'; network errors now state cause + next step ("Could not resolve the host. Check the URL or your connection.") with no double "Error: Network error:" prefixing.
+- **Body tab de-dated (user catch):** the Format button was SOLID GREEN (run-success spent on a formatting action) beside an unstyled Insert Var button and a plain textarea. Now: quiet secondary "Format JSON" + "{{…}} Insert variable", mono code textarea on tokens with focus ring, styled key/value row micro-controls ({{…}} inserts, remove buttons) across Headers/Extract/Config panes.
 - **Scope:** uiUtils.js, runnerInterface.js, flowVisualizer.js, flowRunner.js, index.html, styles.css, docs/visualizer-contract.md, e2e/flow-execution.e2e.test.js. Jest 478/29 + e2e 20/20. Validated live: failing run (red row persists + FAILED pill), passing run (PASSED pill), collapse/expand, Power panes.
 
 ## Unreleased — step editor v2 + retries surfaced end-to-end (Wave 3.9)
