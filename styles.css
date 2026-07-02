@@ -1726,7 +1726,7 @@ body.flow-step-dragging { cursor: grabbing !important; }
 @keyframes toast-rise { 0% { transform: translateY(10px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
 .flow-message .message-icon { padding: 14px 16px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: var(--msg, var(--accent)); background: color-mix(in oklab, var(--msg, var(--accent)) 14%, var(--surface-overlay)); }
 .flow-message .message-icon .icon { width: 18px; height: 18px; }
-.flow-message .message-body { flex: 1; min-width: 0; padding: 10px 15px 10px 0; }
+.flow-message .message-body { flex: 1; min-width: 0; padding: 10px 36px 10px 14px; display: flex; flex-direction: column; justify-content: center; }
 .flow-message .message-content { overflow-wrap: anywhere; }
 .flow-message .message-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
 .flow-message .message-header strong { font-size: 1.05em; font-weight: 600; }
@@ -1735,7 +1735,6 @@ body.flow-step-dragging { cursor: grabbing !important; }
 .flow-message .validation-errors li { margin-bottom: 3px; }
 .flow-message { position: relative; }
 .flow-message .btn-close-message { position: absolute; top: 8px; right: 8px; background: transparent; border: none; cursor: pointer; color: inherit; opacity: 0.6; padding: 2px; line-height: 0; border-radius: var(--radius-xs); }
-.flow-message .message-body { padding-right: 32px; }
 .flow-message .btn-close-message:hover { opacity: 1; }
 /* --- End Flash Messages (Builder Area) --- */
 
@@ -3697,8 +3696,6 @@ html.demo-mode .flow-node-inner {
 
 /* --- Demo mode adjustments for the new shell --- */
 html.demo-mode #app-rail #sidebar-toggle-btn,
-html.demo-mode #app-rail #import-curl-btn,
-html.demo-mode #app-rail #import-har-btn,
 html.demo-mode #app-rail #rail-palette-btn { display: none; }
 html.demo-mode .app-topbar { padding-block: 6px; }
 html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }

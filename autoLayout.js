@@ -184,6 +184,14 @@ const ELK_DIRECTION = { DOWN: 'DOWN', UP: 'UP', RIGHT: 'RIGHT', LEFT: 'LEFT' };
  * worker URL — this is what keeps it CSP-clean in the packaged renderer.
  */
 async function loadElk() {
+    // Vendored copy first (assets/vendor, like fuse/immer/drawflow): bare
+    // specifiers only resolve under Node — they fail in the packaged renderer
+    // and in a browser (gotchas: "works in npm start, breaks packaged").
+    try {
+        const mod = await import('./assets/vendor/elk/elk.bundled.js');
+        const ELK = mod.default || mod.ELK || globalThis.ELK;
+        if (ELK) return ELK;
+    } catch { /* fall through to node resolution (Jest/Node) */ }
     const mod = await import('elkjs/lib/elk.bundled.js');
     return mod.default || mod;
 }
@@ -192,6 +200,13 @@ async function loadElk() {
  * Lazily import @dagrejs/dagre and normalise its default/namespace interop.
  */
 async function loadDagre() {
+    // Vendored UMD copy first (see loadElk). In a browser the UMD build
+    // attaches to globalThis.dagre; under Node import() exposes module.exports.
+    try {
+        const mod = await import('./assets/vendor/dagre/dagre.min.js');
+        const dagre = mod.default || mod.dagre || globalThis.dagre;
+        if (dagre && dagre.graphlib) return dagre;
+    } catch { /* fall through to node resolution (Jest/Node) */ }
     const mod = await import('@dagrejs/dagre');
     const dagre = mod.default || mod;
     // Some interop shapes nest the API one level deeper.

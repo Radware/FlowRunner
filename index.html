@@ -73,13 +73,6 @@
                 <svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>
             </button>
             <span class="rail-divider" aria-hidden="true"></span>
-            <button id="import-curl-btn" class="rail-btn" title="Import a cURL command as a request step">
-                <svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>
-            </button>
-            <button id="import-har-btn" class="rail-btn" title="Import request steps from a HAR file">
-                <svg class="icon" aria-hidden="true"><use href="#i-download"/></svg>
-            </button>
-            <input id="import-har-file-input" type="file" accept=".har,application/json" style="display: none;" />
             <button id="rail-palette-btn" class="rail-btn" title="Command palette (Ctrl/Cmd+K)">
                 <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
             </button>
@@ -170,6 +163,9 @@
                 <div class="sidebar-actions">
                     <button id="add-flow-btn" class="btn btn-primary"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>New Flow</span></button>
                     <button id="open-flow-btn" class="btn btn-ghost"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span>Open Flow</span></button>
+                    <button id="import-curl-btn" class="btn btn-ghost" title="Import a cURL command as a request step"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg><span>Import cURL</span></button>
+                    <button id="import-har-btn" class="btn btn-ghost" title="Import request steps from a HAR file"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Import HAR</span></button>
+                    <input id="import-har-file-input" type="file" accept=".har,application/json" style="display: none;" />
                 </div>
                 <!-- WAVE2 file-features: fuzzy search over recent files -->
                 <div class="sidebar-search search-field" id="file-search-wrap">

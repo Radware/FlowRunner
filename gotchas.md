@@ -49,6 +49,10 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Symptom:** minimap glared near-white in dark mode. Canvas pixels are painted once; they don't re-resolve `var(--…)` on theme change, and the node fill was hardcoded `#ffffff`.
 - **Fix/lesson:** resolve theme tokens at paint time (`getComputedStyle`) and repaint on theme toggle (`visualizer.refreshMinimap()` from `toggleTheme()` in app.js).
 
+### 2k. Bare `import('pkg')` specifiers in renderer modules — work in `npm start`, fail packaged
+- **Symptom:** Tidy Up threw "Could not compute an auto-layout" ONLY in the installed app. `autoLayout.js` dynamic-imported `elkjs`/`@dagrejs/dagre` by bare specifier — Node resolution makes that work in dev and Jest, but the packaged renderer (and a served browser) cannot resolve bare specifiers.
+- **Fix/lesson:** vendor renderer-facing deps under `assets/vendor/` (the fuse/immer/drawflow pattern) and import them by relative path first, falling back to the bare specifier for Node/Jest. Cousin of gotcha #1: anything that resolves via node_modules at runtime must be treated as suspect in the renderer.
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*
