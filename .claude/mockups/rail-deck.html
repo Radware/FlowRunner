@@ -1,0 +1,1275 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowRunner · Sentinel v2 · Rail + Deck</title>
+<style>
+/* =====================================================================
+   SENTINEL v2 — "RAIL + DECK" shell mockup
+   Tokens copied verbatim from styles.css :root (same names, so mapping
+   back into the app is 1:1). LIGHT theme is the projector default.
+   ===================================================================== */
+:root {
+    /* ---- Tier 1 primitives (styles.css --ramp-*) ---- */
+    --ramp-neutral-0:   oklch(0.995 0.004 262);
+    --ramp-neutral-50:  oklch(0.985 0.006 262);
+    --ramp-neutral-100: oklch(0.965 0.008 262);
+    --ramp-neutral-200: oklch(0.925 0.010 262);
+    --ramp-neutral-300: oklch(0.870 0.012 262);
+    --ramp-neutral-400: oklch(0.740 0.014 262);
+    --ramp-neutral-500: oklch(0.620 0.016 262);
+    --ramp-neutral-600: oklch(0.520 0.018 262);
+    --ramp-neutral-700: oklch(0.400 0.020 262);
+    --ramp-neutral-800: oklch(0.300 0.022 262);
+    --ramp-neutral-900: oklch(0.210 0.022 262);
+    --ramp-neutral-1000: oklch(0.150 0.020 262);
+    --ramp-accent-400: oklch(0.680 0.170 262);
+    --ramp-accent-500: oklch(0.600 0.190 262);
+    --ramp-accent-600: oklch(0.530 0.195 262);
+    --ramp-success-500: oklch(0.640 0.170 150);
+    --ramp-success-600: oklch(0.560 0.160 150);
+    --ramp-error-500:   oklch(0.620 0.230 27);
+    --ramp-running-500: oklch(0.720 0.180 60);
+    --ramp-skipped-500: oklch(0.620 0.014 262);
+
+    /* ---- Tier 2 semantics (styles.css, LIGHT) ---- */
+    --surface: var(--ramp-neutral-50);
+    --surface-raised: var(--ramp-neutral-0);
+    --surface-sunken: var(--ramp-neutral-100);
+    --surface-overlay: var(--ramp-neutral-0);
+    --text: var(--ramp-neutral-900);
+    --text-muted: var(--ramp-neutral-600);
+    --text-faint: var(--ramp-neutral-500);
+    --accent: var(--ramp-accent-500);
+    --accent-hover: var(--ramp-accent-600);
+    --accent-contrast: var(--ramp-neutral-0);
+    --accent-soft:   color-mix(in oklab, var(--accent) 14%, var(--surface-raised));
+    --accent-softer: color-mix(in oklab, var(--accent) 8%,  var(--surface));
+    --border: var(--ramp-neutral-200);
+    --border-strong: var(--ramp-neutral-300);
+    --focus-ring: oklch(0.600 0.190 262 / 0.35);
+    --run-success: var(--ramp-success-500);
+    --run-error: var(--ramp-error-500);
+    --run-running: var(--ramp-running-500);
+    --run-skipped: var(--ramp-skipped-500);
+    --run-success-bg:   color-mix(in oklab, var(--run-success) 15%, var(--surface));
+    --run-error-bg:     color-mix(in oklab, var(--run-error)   15%, var(--surface));
+    --run-running-bg:   color-mix(in oklab, var(--run-running) 16%, var(--surface));
+    --run-success-line: color-mix(in oklab, var(--run-success) 42%, var(--border));
+    --status-idle: var(--text-faint);
+
+    /* ---- Structural scales (styles.css) ---- */
+    --radius-xs: 4px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-pill: 999px;
+    --shadow-xs: 0 1px 2px oklch(0.40 0.04 262 / 0.06);
+    --shadow-sm: 0 1px 3px oklch(0.40 0.04 262 / 0.09), 0 1px 2px oklch(0.40 0.04 262 / 0.06);
+    --shadow-md: 0 4px 10px oklch(0.40 0.05 262 / 0.10), 0 2px 4px oklch(0.40 0.05 262 / 0.06);
+    --shadow-lg: 0 12px 28px oklch(0.35 0.05 262 / 0.14), 0 4px 8px oklch(0.35 0.05 262 / 0.08);
+    --shadow-overlay: 0 20px 56px oklch(0.28 0.06 262 / 0.24), 0 6px 16px oklch(0.28 0.06 262 / 0.14);
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-1: 120ms; --dur-2: 200ms; --dur-3: 320ms;
+    --fs-caption: 12px; --fs-body: 13px; --fs-base: 14px; --fs-label: 15px;
+    --fs-h4: 16px; --fs-h3: 19px; --fs-h2: 24px;
+    --fw-normal: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+    --eyebrow-tracking: 0.06em;
+    --pip-size: 8px;
+
+    /* ---- Identity hues (styles.css --type-* / --method-*) ---- */
+    --type-request: oklch(0.605 0.132 205);
+    --method-get:   oklch(0.600 0.135 150);
+    --method-post:  oklch(0.600 0.150 250);
+
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-family-code: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", "Courier New", Courier, monospace;
+
+    /* ---- Sentinel v2 shell dimensions (new) ---- */
+    --topbar-h: 52px;
+    --rail-w: 52px;
+    --inspector-w: 372px;
+}
+/* Dark remap (opt-in via the rail theme toggle; identical to styles.css) */
+[data-theme="dark"] {
+    --surface: var(--ramp-neutral-1000);
+    --surface-raised: var(--ramp-neutral-900);
+    --surface-sunken: var(--ramp-neutral-800);
+    --surface-overlay: var(--ramp-neutral-800);
+    --text: var(--ramp-neutral-50);
+    --text-muted: var(--ramp-neutral-400);
+    --text-faint: var(--ramp-neutral-500);
+    --accent: var(--ramp-accent-400);
+    --accent-hover: var(--ramp-accent-500);
+    --accent-contrast: var(--ramp-neutral-1000);
+    --border: var(--ramp-neutral-800);
+    --border-strong: var(--ramp-neutral-700);
+    --focus-ring: oklch(0.680 0.170 262 / 0.45);
+    --run-success: oklch(0.720 0.170 150);
+    --run-error:   oklch(0.700 0.220 27);
+    --run-running: oklch(0.780 0.170 60);
+    --run-skipped: var(--ramp-neutral-500);
+    --shadow-xs: 0 1px 2px oklch(0 0 0 / 0.34);
+    --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.40), 0 1px 2px oklch(0 0 0 / 0.30);
+    --shadow-md: 0 4px 10px oklch(0 0 0 / 0.44), 0 2px 4px oklch(0 0 0 / 0.32);
+    --shadow-lg: 0 12px 28px oklch(0 0 0 / 0.52), 0 4px 8px oklch(0 0 0 / 0.34);
+    --shadow-overlay: 0 20px 56px oklch(0 0 0 / 0.64), 0 6px 16px oklch(0 0 0 / 0.40);
+}
+
+/* ================= Reset ================= */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    font-family: var(--font-family);
+    font-size: var(--fs-base);
+    line-height: 1.5;
+    color: var(--text);
+    background: var(--surface);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+[hidden] { display: none !important; }
+button { font-family: inherit; cursor: pointer; color: inherit; background: none; border: none; }
+input, select, textarea { font-family: inherit; font-size: var(--fs-body); color: var(--text); }
+button, input, select, textarea { transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out); }
+:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+ul { list-style: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+
+/* Icons: inline SVG sprite, currentColor, stroke 2 */
+.ic { width: 16px; height: 16px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; display: inline-block; vertical-align: -3px; }
+.ic-lg { width: 18px; height: 18px; }
+.ic-sm { width: 14px; height: 14px; }
+.ic-xs { width: 12px; height: 12px; }
+.ic-fill { fill: currentColor; stroke: none; }
+
+kbd {
+    font-family: var(--font-family-code); font-size: 10px; line-height: 1;
+    padding: 3px 5px; border-radius: var(--radius-xs);
+    background: var(--surface-sunken); border: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+/* ================= App frame ================= */
+.app { display: flex; flex-direction: column; height: 100vh; }
+.shell { flex: 1; display: flex; min-height: 0; }
+
+/* ================= Top app bar ================= */
+.topbar {
+    height: var(--topbar-h); flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 12px 0 10px;
+    background: var(--surface-raised);            /* --surface-raised */
+    border-bottom: 1px solid var(--border);
+    position: relative; z-index: 40;
+}
+.brand { display: flex; align-items: center; gap: 9px; padding-right: 4px; }
+.brand-glyph {
+    width: 27px; height: 27px; border-radius: 8px;
+    background: var(--accent); color: var(--accent-contrast);
+    display: grid; place-items: center;
+    box-shadow: var(--shadow-xs);
+}
+.wordmark { font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: -0.01em; }
+.wordmark b { font-weight: var(--fw-bold); }
+
+/* System Status Pip: THE signal. data-state = idle|running|passed|failed */
+.status-pip {
+    width: var(--pip-size); height: var(--pip-size); border-radius: 50%;
+    background: var(--status-idle); flex: 0 0 auto;
+    transition: background-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+}
+.status-pip[data-state="passed"]  { background: var(--run-success); box-shadow: 0 0 0 4px color-mix(in oklab, var(--run-success) 22%, transparent); }
+.status-pip[data-state="failed"]  { background: var(--run-error);   box-shadow: 0 0 0 4px color-mix(in oklab, var(--run-error) 22%, transparent); }
+.status-pip[data-state="running"] { background: var(--run-running); box-shadow: 0 0 0 4px color-mix(in oklab, var(--run-running) 26%, transparent); }
+
+.topbar-sep { width: 1px; height: 22px; background: var(--border); flex: 0 0 auto; }
+
+/* Flow context cluster */
+.flowctx { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.flow-title-btn {
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 8px; border-radius: var(--radius-sm);
+    max-width: 340px;
+}
+.flow-title-btn:hover { background: var(--accent-softer); }
+.flow-title { font-size: var(--fs-base); font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-title-btn .ic { color: var(--text-faint); }
+.dirty-pill {
+    font-size: 10px; font-weight: var(--fw-bold); letter-spacing: var(--eyebrow-tracking);
+    padding: 2.5px 7px; border-radius: var(--radius-pill);
+    color: color-mix(in oklab, var(--run-running) 62%, var(--text));
+    background: var(--run-running-bg);
+    border: 1px solid color-mix(in oklab, var(--run-running) 36%, var(--border));
+    flex: 0 0 auto;
+}
+.iconbtn {
+    width: 30px; height: 30px; border-radius: var(--radius-sm);
+    display: inline-grid; place-items: center; color: var(--text-muted);
+}
+.iconbtn:hover { background: var(--surface-sunken); color: var(--text); }
+.iconbtn[disabled] { opacity: 0.38; cursor: default; }
+.iconbtn[disabled]:hover { background: none; color: var(--text-muted); }
+.save-quick {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 30px; padding: 0 10px; border-radius: var(--radius-sm);
+    font-size: var(--fs-body); font-weight: var(--fw-medium);
+    color: var(--accent-hover);
+}
+.save-quick:hover { background: var(--accent-softer); }
+
+/* View tabs: dead center, first-class segmented control */
+.viewtabs {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    display: flex; gap: 2px; padding: 3px;
+    background: var(--surface-sunken); border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+.viewtab {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 28px; padding: 0 13px; border-radius: 7px;
+    font-size: var(--fs-body); font-weight: var(--fw-medium); color: var(--text-muted);
+}
+.viewtab:hover { color: var(--text); }
+.viewtab[aria-selected="true"] {
+    background: var(--surface-raised); color: var(--text);
+    box-shadow: var(--shadow-xs); border: 1px solid var(--border);
+    padding: 0 12px; height: 28px;
+}
+
+/* Hero run cluster (right) */
+.runcluster { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.run-inline-status { display: flex; align-items: center; gap: 8px; padding-right: 6px; }
+.run-verdict { font-size: var(--fs-caption); font-weight: var(--fw-bold); letter-spacing: var(--eyebrow-tracking); }
+.run-verdict[data-state="passed"] { color: color-mix(in oklab, var(--run-success) 75%, var(--text)); }
+.run-meta { font-size: var(--fs-caption); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 32px; padding: 0 13px;
+    border-radius: var(--radius-sm); border: 1px solid transparent;
+    font-size: var(--fs-body); font-weight: var(--fw-medium); white-space: nowrap;
+}
+.btn:active:not([disabled]) { transform: translateY(0.5px) scale(0.992); }
+.btn-primary { background: var(--accent); color: var(--accent-contrast); box-shadow: var(--shadow-xs); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary kbd { background: oklch(1 0 0 / 0.16); border-color: transparent; color: var(--accent-contrast); }
+.btn-quiet { background: var(--surface-raised); border-color: var(--border); color: var(--text); box-shadow: var(--shadow-xs); }
+.btn-quiet:hover { background: var(--surface-sunken); border-color: var(--border-strong); }
+.btn-ghost { color: var(--text-muted); }
+.btn-ghost:hover { background: var(--surface-sunken); color: var(--text); }
+.btn[disabled] { opacity: 0.42; cursor: default; box-shadow: none; }
+.btn[disabled]:hover { background: var(--surface-raised); }
+.btn-sm { height: 27px; padding: 0 10px; font-size: var(--fs-caption); }
+.btn-run { padding: 0 15px; font-weight: var(--fw-semibold); }
+
+/* ================= Icon rail ================= */
+.rail {
+    width: var(--rail-w); flex: 0 0 auto;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 10px 0;
+    background: var(--surface-raised);
+    border-right: 1px solid var(--border);
+    z-index: 30;
+}
+.railbtn {
+    width: 36px; height: 36px; border-radius: var(--radius-md);
+    display: grid; place-items: center; color: var(--text-muted);
+    position: relative;
+}
+.railbtn:hover { background: var(--accent-softer); color: var(--text); }
+.railbtn[aria-pressed="true"], .railbtn[aria-expanded="true"] {
+    background: var(--accent-soft); color: var(--accent-hover);
+}
+.rail-gap { flex: 1; }
+.rail-rule { width: 24px; height: 1px; background: var(--border); margin: 5px 0; }
+/* CSS tooltip so the rail stays learnable */
+.railbtn::after {
+    content: attr(data-tip);
+    position: absolute; left: calc(100% + 10px); top: 50%; transform: translateY(-50%) translateX(-2px);
+    background: var(--ramp-neutral-900); color: var(--ramp-neutral-0);
+    font-size: var(--fs-caption); font-weight: var(--fw-medium); white-space: pre;
+    padding: 5px 9px; border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+    z-index: 90;
+}
+.railbtn:hover::after { opacity: 1; transform: translateY(-50%) translateX(0); }
+
+/* ================= Deck (sunken dotted canvas) ================= */
+.deck {
+    flex: 1; min-width: 0; position: relative; overflow: hidden;
+    background-color: var(--surface-sunken);       /* --surface-sunken */
+    background-image: radial-gradient(color-mix(in oklab, var(--border-strong) 62%, transparent) 1px, transparent 1px);
+    background-size: 22px 22px;
+}
+.deck > section { position: absolute; inset: 0; }
+.deck[data-view="list"]   .deck-visual, .deck[data-view="list"]   .deck-json  { display: none; }
+.deck[data-view="visual"] .deck-list,   .deck[data-view="visual"] .deck-json  { display: none; }
+.deck[data-view="json"]   .deck-list,   .deck[data-view="json"]   .deck-visual{ display: none; }
+
+/* ---- List view: floating Steps + Editor panels ---- */
+.deck-list { display: grid; grid-template-columns: 344px 1fr; gap: 14px; padding: 14px; }
+.panel {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);               /* --radius-lg 14px */
+    box-shadow: var(--shadow-md);                  /* --elev-2 */
+    display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+}
+.panel-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px 10px;
+}
+.eyebrow {
+    font-size: 11px; font-weight: var(--fw-semibold); letter-spacing: var(--eyebrow-tracking);
+    text-transform: uppercase; color: var(--text-muted);
+}
+.count-chip {
+    font-size: 11px; font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums;
+    padding: 1px 7px; border-radius: var(--radius-pill);
+    background: var(--surface-sunken); color: var(--text-muted); border: 1px solid var(--border);
+}
+
+/* Search field (steps fuzzy search / results search / drawer filter) */
+.search-wrap { position: relative; }
+.search-wrap .ic {
+    position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+    color: var(--text-faint); pointer-events: none;
+}
+.search-input {
+    width: 100%; height: 30px; padding: 0 10px 0 30px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface);                    /* input posture: quiet fill */
+}
+.search-input::placeholder { color: var(--text-faint); }
+.search-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.steps-toolbar { display: flex; gap: 8px; padding: 0 14px 10px; }
+.steps-toolbar .search-wrap { flex: 1; }
+
+/* Step rows */
+.steps-list { flex: 1; overflow-y: auto; padding: 2px 8px 8px; display: flex; flex-direction: column; gap: 4px; }
+.step-row {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+    column-gap: 10px; row-gap: 1px;
+    padding: 9px 10px; border-radius: var(--radius-md);
+    border: 1px solid transparent; text-align: left; width: 100%;
+    cursor: pointer;
+}
+.step-row:hover { background: var(--accent-softer); }
+.step-row[aria-selected="true"] { background: var(--accent-soft); border-color: color-mix(in oklab, var(--accent) 38%, var(--border)); }
+.step-type-ic {
+    grid-column: 1; grid-row: 1 / 3; width: 30px; height: 30px; border-radius: 8px;
+    display: grid; place-items: center;
+    background: color-mix(in oklab, var(--type-request) 14%, var(--surface-raised)); /* --type-request wash */
+    color: color-mix(in oklab, var(--type-request) 78%, var(--text));
+}
+.step-main { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.step-name { font-size: var(--fs-body); font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-url {
+    grid-column: 2 / 4; grid-row: 2; font-family: var(--font-family-code); font-size: 11px;
+    color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.step-state { grid-column: 3; grid-row: 1; justify-self: end; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; }
+.step-state[data-state="success"] { color: var(--run-success); background: var(--run-success-bg); }
+.method-chip {
+    font-family: var(--font-family-code); font-size: 10px; font-weight: var(--fw-bold); letter-spacing: 0.04em;
+    padding: 1.5px 6px; border-radius: var(--radius-xs); flex: 0 0 auto;
+}
+.method-chip[data-m="GET"] {
+    color: color-mix(in oklab, var(--method-get) 72%, var(--text));
+    background: color-mix(in oklab, var(--method-get) 15%, var(--surface-raised));
+}
+.add-step {
+    width: 100%; height: 34px; margin-top: 2px; border-radius: var(--radius-md);
+    border: 1px dashed var(--border-strong); color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    font-size: var(--fs-body); font-weight: var(--fw-medium);
+}
+.add-step:hover { border-color: var(--accent); color: var(--accent-hover); background: var(--accent-softer); }
+
+/* ---- Step editor panel ---- */
+.editor-head { border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+.editor-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.editor-title h2 { font-size: var(--fs-h4); font-weight: var(--fw-semibold); letter-spacing: -0.01em; white-space: nowrap; }
+.type-chip {
+    font-size: 11px; font-weight: var(--fw-semibold);
+    padding: 2px 8px; border-radius: var(--radius-pill);
+    color: color-mix(in oklab, var(--type-request) 74%, var(--text));
+    background: color-mix(in oklab, var(--type-request) 13%, var(--surface-raised));
+}
+.segmented {
+    display: inline-flex; gap: 2px; padding: 2.5px;
+    background: var(--surface-sunken); border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.segmented button {
+    height: 23px; padding: 0 11px; border-radius: 4.5px;
+    font-size: var(--fs-caption); font-weight: var(--fw-medium); color: var(--text-muted);
+}
+.segmented button[aria-selected="true"] { background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-xs); }
+.editor-body { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+.field label {
+    display: block; font-size: var(--fs-caption); font-weight: var(--fw-medium);
+    color: var(--text-muted); margin-bottom: 5px;
+}
+.field input[type="text"], .field select {
+    width: 100%; height: 34px; padding: 0 11px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+}
+.field input:focus, .field select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.field-row { display: flex; gap: 10px; }
+.field-method { width: 118px; flex: 0 0 auto; }
+.field-url { flex: 1; min-width: 0; }
+.url-wrap { position: relative; }
+.url-wrap input { font-family: var(--font-family-code); font-size: var(--fs-body); padding-right: 40px !important; }
+.var-insert {
+    position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+    width: 28px; height: 26px; border-radius: var(--radius-xs);
+    display: grid; place-items: center;
+    color: var(--text-faint); font-family: var(--font-family-code); font-size: 11px; font-weight: var(--fw-bold);
+}
+.var-insert:hover { background: var(--accent-soft); color: var(--accent-hover); }
+.var-chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.var-chips .hint { font-size: var(--fs-caption); color: var(--text-faint); margin-right: 2px; }
+.var-chip {
+    font-family: var(--font-family-code); font-size: 11px;
+    padding: 3px 8px; border-radius: var(--radius-pill);
+    background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-muted);
+}
+.var-chip:hover { border-color: var(--accent); color: var(--accent-hover); background: var(--accent-softer); }
+.editor-rule { height: 1px; background: var(--border); margin: 2px 0; }
+.label-hint { font-weight: var(--fw-normal); color: var(--text-faint); }
+.extract-row { display: flex; align-items: center; gap: 8px; }
+.extract-row input {
+    height: 32px; padding: 0 11px; flex: 1;
+    font-family: var(--font-family-code); font-size: var(--fs-caption);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised);
+}
+.extract-row input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.extract-arrow { color: var(--text-faint); flex: 0 0 auto; }
+.field-onfail { max-width: 260px; }
+.editor-foot {
+    border-top: 1px solid var(--border); padding: 11px 16px;
+    display: flex; align-items: center; gap: 8px;
+}
+.editor-foot .spacer { flex: 1; }
+
+/* ---- Visual view ---- */
+.deck-visual { overflow: hidden; }
+.edges { position: absolute; inset: 0; width: 100%; height: 100%; }
+.node {
+    position: absolute; width: 262px;
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-md);
+    padding: 11px 13px 10px; cursor: grab;
+}
+.node[aria-selected="true"] { border-color: color-mix(in oklab, var(--accent) 55%, var(--border)); box-shadow: var(--shadow-lg), 0 0 0 3px var(--focus-ring); }
+.node-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.node-head .step-type-ic { width: 24px; height: 24px; border-radius: 6px; grid-row: auto; }
+.node-name { font-size: var(--fs-body); font-weight: var(--fw-semibold); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-url { font-family: var(--font-family-code); font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-status {
+    margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-variant-numeric: tabular-nums;
+    color: color-mix(in oklab, var(--run-success) 65%, var(--text));
+}
+.start-pill {
+    position: absolute; display: flex; align-items: center; gap: 7px;
+    padding: 6px 13px; border-radius: var(--radius-pill);
+    background: var(--surface-raised); border: 1px solid var(--border); box-shadow: var(--shadow-sm);
+    font-size: var(--fs-caption); font-weight: var(--fw-semibold); color: var(--text-muted);
+}
+.graph-toolbar {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 2px; padding: 4px;
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+}
+.graph-toolbar .gt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+.gtbtn {
+    height: 28px; min-width: 28px; padding: 0 8px; border-radius: var(--radius-sm);
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: var(--fs-caption); font-weight: var(--fw-medium); color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.gtbtn:hover { background: var(--surface-sunken); color: var(--text); }
+.gtbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-hover); }
+.minimap {
+    position: absolute; right: 16px; bottom: 18px; width: 148px; height: 92px;
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-md); overflow: hidden;
+}
+.minimap .mm-node { position: absolute; border-radius: 2px; background: var(--ramp-neutral-300); }
+.minimap .mm-view { position: absolute; border: 1px solid var(--accent); border-radius: 3px; background: color-mix(in oklab, var(--accent) 7%, transparent); }
+
+/* ---- JSON view ---- */
+.deck-json { padding: 14px; }
+.json-panel { height: 100%; }
+.json-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.ro-badge {
+    font-size: 10px; font-weight: var(--fw-bold); letter-spacing: var(--eyebrow-tracking);
+    padding: 2.5px 8px; border-radius: var(--radius-pill);
+    background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-muted);
+}
+.json-body { flex: 1; overflow: auto; padding: 16px 20px; }
+.json-body pre { font-family: var(--font-family-code); font-size: var(--fs-body); line-height: 1.65; color: var(--text); }
+.j-k { color: var(--accent-hover); }
+.j-s { color: var(--text); }
+.j-p { color: var(--text-faint); }
+
+/* ================= Inspector (Results | Variables | Info) ================= */
+.inspector {
+    width: var(--inspector-w); flex: 0 0 auto;
+    background: var(--surface-raised);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; min-height: 0;
+    z-index: 20;
+}
+.inspector-tabs { display: flex; gap: 2px; padding: 10px 12px 0; }
+.itab {
+    height: 30px; padding: 0 12px; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    font-size: var(--fs-body); font-weight: var(--fw-medium); color: var(--text-muted);
+    position: relative;
+}
+.itab:hover { color: var(--text); background: var(--accent-softer); }
+.itab[aria-selected="true"] { color: var(--text); font-weight: var(--fw-semibold); }
+.itab[aria-selected="true"]::after {
+    content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 2px;
+    border-radius: 2px; background: var(--accent);
+}
+.inspector-tabrule { height: 1px; background: var(--border); }
+.ipanel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* Run summary */
+.run-summary {
+    margin: 12px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 12px;
+    background: var(--run-success-bg); border: 1px solid var(--run-success-line);
+    border-radius: var(--radius-md);
+}
+.run-summary .verdict-ic { color: var(--run-success); }
+.verdict-word { font-size: var(--fs-h3); font-weight: var(--fw-bold); letter-spacing: 0.01em; line-height: 1.15;
+    color: color-mix(in oklab, var(--run-success) 72%, var(--text)); }
+.verdict-sub { font-size: var(--fs-caption); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.run-summary .spacer { flex: 1; }
+
+/* Run options strip */
+.run-options {
+    margin: 0 12px 10px; padding: 7px 10px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 11px; color: var(--text-muted);
+}
+.run-options label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; white-space: nowrap; }
+.run-options input[type="checkbox"] { width: 13px; height: 13px; accent-color: var(--accent); }
+.delay-wrap { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+.delay-wrap input {
+    width: 54px; height: 22px; padding: 0 5px; text-align: right;
+    font-family: var(--font-family-code); font-size: 11px;
+    border: 1px solid var(--border); border-radius: var(--radius-xs); background: var(--surface-raised);
+}
+
+/* Results toolbar */
+.results-toolbar { display: flex; gap: 6px; padding: 0 12px 10px; align-items: center; }
+.results-toolbar .search-wrap { flex: 1; }
+.results-toolbar select {
+    height: 30px; padding: 0 8px; font-size: var(--fs-caption);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+    color: var(--text-muted);
+}
+.export-group { display: flex; }
+.export-group .btn-sm { height: 30px; border-radius: 0; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); }
+.export-group .btn-sm:hover { background: var(--surface-sunken); color: var(--text); }
+.export-group .btn-sm:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.export-group .btn-sm:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none; }
+
+/* Results feed */
+.results-feed { flex: 1; overflow-y: auto; padding: 2px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
+.result-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-xs); overflow: hidden; }
+.result-head { display: flex; align-items: center; gap: 8px; padding: 9px 11px 7px; }
+.result-idx {
+    width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto;
+    display: grid; place-items: center;
+    font-size: 10px; font-weight: var(--fw-bold); font-variant-numeric: tabular-nums;
+    background: var(--surface-sunken); color: var(--text-muted); border: 1px solid var(--border);
+}
+.result-name { font-size: var(--fs-body); font-weight: var(--fw-semibold); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: var(--fw-bold); letter-spacing: var(--eyebrow-tracking);
+    padding: 2.5px 8px; border-radius: var(--radius-pill);
+}
+.status-chip[data-state="success"] { color: color-mix(in oklab, var(--run-success) 70%, var(--text)); background: var(--run-success-bg); border: 1px solid var(--run-success-line); }
+.status-chip[data-state="error"]   { color: color-mix(in oklab, var(--run-error) 70%, var(--text)); background: var(--run-error-bg); }
+.result-meta { padding: 0 11px 7px; font-size: 11px; color: var(--text-muted); font-family: var(--font-family-code); font-variant-numeric: tabular-nums; }
+.result-json {
+    margin: 0 8px 8px; padding: 9px 11px;
+    background: var(--surface-sunken); border-radius: var(--radius-sm);
+    font-family: var(--font-family-code); font-size: 11px; line-height: 1.6;
+    color: var(--text); overflow-x: auto; white-space: pre;
+}
+.result-json .j-p { color: var(--text-faint); }
+.result-extract {
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 11px 9px; font-size: 11px; color: var(--text-muted);
+}
+.result-extract code {
+    font-family: var(--font-family-code); font-size: 10.5px;
+    background: var(--accent-soft); color: var(--accent-hover);
+    padding: 1px 6px; border-radius: var(--radius-xs);
+}
+/* Transient runner status line */
+.runner-console {
+    border-top: 1px solid var(--border); padding: 8px 14px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: var(--fs-caption); color: var(--text-muted); font-variant-numeric: tabular-nums;
+    background: var(--surface);
+}
+
+/* Variables tab */
+.vars-list { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.var-row {
+    display: grid; grid-template-columns: 1fr auto; row-gap: 2px; column-gap: 8px;
+    padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface);
+}
+.var-name { font-family: var(--font-family-code); font-size: var(--fs-caption); font-weight: var(--fw-semibold); color: var(--accent-hover); }
+.var-src { font-size: 10.5px; color: var(--text-faint); justify-self: end; align-self: center; }
+.var-val { grid-column: 1 / 3; font-family: var(--font-family-code); font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ipanel-foot { border-top: 1px solid var(--border); padding: 10px 12px; }
+
+/* Info tab */
+.info-body { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 14px; }
+.info-body textarea {
+    width: 100%; min-height: 64px; padding: 8px 11px; resize: vertical;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised);
+}
+.info-body textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+.hdr-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.hdr-row input { flex: 1; height: 30px; padding: 0 10px; font-family: var(--font-family-code); font-size: 11.5px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }
+
+/* ================= Overlays: drawer + menus ================= */
+.scrim-layer { position: fixed; inset: 0; z-index: 60; }
+.drawer {
+    position: fixed; left: calc(var(--rail-w) + 10px); top: calc(var(--topbar-h) + 10px); bottom: 14px;
+    width: 316px; z-index: 70;
+    background: var(--surface-overlay);            /* --surface-overlay */
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-overlay);
+    display: flex; flex-direction: column; overflow: hidden;
+}
+.drawer-head { padding: 14px 14px 10px; display: flex; align-items: center; gap: 8px; }
+.drawer-head h2 { font-size: var(--fs-h4); font-weight: var(--fw-semibold); flex: 1; }
+.drawer-search { padding: 0 14px 10px; }
+.drawer-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+.drawer-eyebrow { padding: 8px 8px 6px; }
+.flow-item {
+    width: 100%; text-align: left;
+    display: grid; grid-template-columns: 1fr auto; column-gap: 8px; row-gap: 1px;
+    padding: 8px 10px; border-radius: var(--radius-md); border: 1px solid transparent;
+}
+.flow-item:hover { background: var(--accent-softer); }
+.flow-item[aria-current="true"] { background: var(--accent-soft); border-color: color-mix(in oklab, var(--accent) 38%, var(--border)); }
+.flow-item .fi-name { font-size: var(--fs-body); font-weight: var(--fw-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flow-item .fi-time { font-size: 10.5px; color: var(--text-faint); align-self: center; }
+.flow-item .fi-path { grid-column: 1 / 3; font-family: var(--font-family-code); font-size: 10.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drawer-foot { border-top: 1px solid var(--border); padding: 10px; display: flex; gap: 6px; }
+.drawer-foot .btn { flex: 1; }
+
+.menu {
+    position: fixed; z-index: 70; min-width: 246px;
+    background: var(--surface-overlay); border: 1px solid var(--border);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-overlay);
+    padding: 5px;
+}
+.menu-item {
+    display: flex; align-items: center; gap: 9px; width: 100%;
+    padding: 7px 9px; border-radius: var(--radius-sm);
+    font-size: var(--fs-body); color: var(--text); text-align: left;
+}
+.menu-item .ic { color: var(--text-muted); }
+.menu-item:hover { background: var(--accent-softer); }
+.menu-item kbd { margin-left: auto; }
+.menu-rule { height: 1px; background: var(--border); margin: 5px 7px; }
+.menu-label { padding: 6px 9px 3px; }
+#flow-menu { top: calc(var(--topbar-h) + 4px); left: 200px; }
+#import-menu { left: calc(var(--rail-w) + 10px); top: 148px; }
+
+/* Theme icon swap */
+[data-theme="dark"] .show-light { display: none; }
+:root:not([data-theme="dark"]) .show-dark { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ======== Icon sprite (24x24, stroke-width 2) ======== -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.8 12.2l2.3 2.3 4.1-4.6"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.3l2.4 2.4 4.6-5.2"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4a1 1 0 0 1 1-1h10l4 4v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 3v5h7"/><path d="M8 21v-6h8v6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 4v6h6"/><path d="M4 14a8 8 0 1 0 2-8L3 10"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M21 4v6h-6"/><path d="M20 14a8 8 0 1 1-2-8l3 4"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="i-graph" viewBox="0 0 24 24"><path d="M6 15V3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+    <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></symbol>
+    <symbol id="i-step" viewBox="0 0 24 24"><path d="M6 5l9 7-9 7z"/><path d="M18 5v14"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-presentation" viewBox="0 0 24 24"><path d="M2 4h20"/><path d="M4 4v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4"/><path d="M12 16v4M9 20h6"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"/></symbol>
+    <symbol id="i-alert-triangle" viewBox="0 0 24 24"><path d="M12 3l9.5 17H2.5z"/><path d="M12 9v5"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-command" viewBox="0 0 24 24"><path d="M18 3a3 3 0 0 0-3 3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0 3-3"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-rotate-ccw" viewBox="0 0 24 24"><path d="M3 4v6h6"/><path d="M4 14a8 8 0 1 0 2-8L3 10"/></symbol>
+</svg>
+
+<div class="app">
+
+    <!-- ================= TOP APP BAR ================= -->
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-glyph"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span>
+            <span class="wordmark">Flow<b>Runner</b></span>
+            <span class="status-pip" id="system-pip" data-state="passed" role="status" aria-label="Engine state: passed" title="Engine: PASSED"></span>
+        </div>
+
+        <span class="topbar-sep" aria-hidden="true"></span>
+
+        <div class="flowctx">
+            <button class="flow-title-btn" id="flow-menu-btn" aria-haspopup="menu" aria-expanded="false" title="Flow actions">
+                <span class="flow-title">BLA Demo — Login Abuse</span>
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+            </button>
+            <span class="dirty-pill" title="Unsaved changes">UNSAVED</span>
+            <button class="save-quick" title="Save flow">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-save"/></svg>Save <kbd>&#8984;S</kbd>
+            </button>
+            <button class="iconbtn" title="Undo" aria-label="Undo"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-undo"/></svg></button>
+            <button class="iconbtn" disabled title="Redo" aria-label="Redo"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-redo"/></svg></button>
+        </div>
+
+        <!-- View switch: first-class, dead center -->
+        <nav class="viewtabs" role="tablist" aria-label="Editor view">
+            <button class="viewtab" role="tab" data-view="list" aria-selected="true"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-list"/></svg>List</button>
+            <button class="viewtab" role="tab" data-view="visual" aria-selected="false"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-graph"/></svg>Visual</button>
+            <button class="viewtab" role="tab" data-view="json" aria-selected="false"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-braces"/></svg>JSON</button>
+        </nav>
+
+        <!-- Hero run cluster -->
+        <div class="runcluster">
+            <div class="run-inline-status">
+                <span class="status-pip" data-state="passed" aria-hidden="true"></span>
+                <span class="run-verdict" data-state="passed">PASSED</span>
+                <span class="run-meta">2/2 steps &middot; 0.84 s</span>
+            </div>
+            <button class="btn btn-quiet" title="Execute a single step">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-step"/></svg>Step
+            </button>
+            <button class="btn btn-quiet" disabled title="Stop the run">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-stop"/></svg>Stop
+            </button>
+            <button class="btn btn-primary btn-run" title="Run flow">
+                <svg class="ic ic-sm ic-fill" aria-hidden="true"><use href="#i-play"/></svg>Run <kbd>&#8984;&#9166;</kbd>
+            </button>
+        </div>
+    </header>
+
+    <div class="shell">
+
+        <!-- ================= ICON RAIL ================= -->
+        <nav class="rail" aria-label="App navigation">
+            <button class="railbtn" id="drawer-btn" data-tip="Flows" aria-expanded="false" aria-label="Flows drawer">
+                <svg class="ic ic-lg" aria-hidden="true"><use href="#i-folder"/></svg>
+            </button>
+            <button class="railbtn" id="import-btn" data-tip="Import cURL / HAR" aria-expanded="false" aria-label="Import">
+                <svg class="ic ic-lg" aria-hidden="true"><use href="#i-download"/></svg>
+            </button>
+            <button class="railbtn" data-tip="Command Palette &#8984;K" aria-label="Command palette">
+                <svg class="ic ic-lg" aria-hidden="true"><use href="#i-command"/></svg>
+            </button>
+            <span class="rail-gap"></span>
+            <span class="rail-rule" aria-hidden="true"></span>
+            <button class="railbtn" id="theme-btn" data-tip="Theme: light" aria-label="Toggle theme" aria-pressed="false">
+                <svg class="ic ic-lg show-light" aria-hidden="true"><use href="#i-sun"/></svg>
+                <svg class="ic ic-lg show-dark" aria-hidden="true"><use href="#i-moon"/></svg>
+            </button>
+            <button class="railbtn" data-tip="Demo Mode" aria-label="Demo mode" aria-pressed="false">
+                <svg class="ic ic-lg" aria-hidden="true"><use href="#i-presentation"/></svg>
+            </button>
+        </nav>
+
+        <!-- ================= DECK ================= -->
+        <main class="deck" id="deck" data-view="list">
+
+            <!-- ---- LIST VIEW: floating Steps + Editor ---- -->
+            <section class="deck-list" aria-label="List view">
+
+                <div class="panel" aria-label="Steps">
+                    <div class="panel-head">
+                        <span class="eyebrow">Steps</span>
+                        <span class="count-chip">2</span>
+                    </div>
+                    <div class="steps-toolbar">
+                        <div class="search-wrap">
+                            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-search"/></svg>
+                            <input class="search-input" type="search" placeholder="Filter steps" aria-label="Fuzzy search steps">
+                        </div>
+                    </div>
+                    <div class="steps-list" role="listbox" aria-label="Flow steps">
+                        <div class="step-row" role="option" aria-selected="false" tabindex="0">
+                            <span class="step-type-ic"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                            <span class="step-main">
+                                <span class="step-name">List Users</span>
+                                <span class="method-chip" data-m="GET">GET</span>
+                            </span>
+                            <span class="step-state" data-state="success" title="Last run: success"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span>
+                            <span class="step-url">https://jsonplaceholder.typicode.com/users</span>
+                        </div>
+                        <div class="step-row" role="option" aria-selected="true" tabindex="0">
+                            <span class="step-type-ic"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                            <span class="step-main">
+                                <span class="step-name">Get First User</span>
+                                <span class="method-chip" data-m="GET">GET</span>
+                            </span>
+                            <span class="step-state" data-state="success" title="Last run: success"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg></span>
+                            <span class="step-url">https://jsonplaceholder.typicode.com/users/1</span>
+                        </div>
+                        <button class="add-step"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus"/></svg>Add Step</button>
+                    </div>
+                </div>
+
+                <div class="panel" aria-label="Step editor">
+                    <div class="editor-head">
+                        <div class="editor-title">
+                            <h2>Get First User</h2>
+                            <span class="type-chip">Request</span>
+                        </div>
+                        <span style="flex:1"></span>
+                        <div class="segmented" role="tablist" aria-label="Editor mode">
+                            <button role="tab" aria-selected="true">Basic</button>
+                            <button role="tab" aria-selected="false">Power</button>
+                        </div>
+                    </div>
+                    <div class="editor-body">
+                        <div class="field">
+                            <label for="step-name">Step Name</label>
+                            <input type="text" id="step-name" value="Get First User">
+                        </div>
+                        <div class="field-row">
+                            <div class="field field-method">
+                                <label for="step-method">Method</label>
+                                <select id="step-method">
+                                    <option selected>GET</option><option>POST</option><option>PUT</option>
+                                    <option>PATCH</option><option>DELETE</option>
+                                </select>
+                            </div>
+                            <div class="field field-url">
+                                <label for="step-url">URL</label>
+                                <div class="url-wrap">
+                                    <input type="text" id="step-url" value="https://jsonplaceholder.typicode.com/users/1" spellcheck="false">
+                                    <button class="var-insert" title="Insert {{variable}}"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-braces"/></svg></button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="var-chips" aria-label="Insert a variable">
+                            <span class="hint">Insert variable</span>
+                            <button class="var-chip">{{baseUrl}}</button>
+                            <button class="var-chip">{{userId}}</button>
+                            <button class="var-chip">{{userName}}</button>
+                        </div>
+
+                        <div class="editor-rule" aria-hidden="true"></div>
+
+                        <div class="field">
+                            <label>Extract Variables <span class="label-hint">saved from the response, usable as {{name}} downstream</span></label>
+                            <div class="extract-row">
+                                <input type="text" value="userName" aria-label="Variable name">
+                                <span class="extract-arrow" aria-hidden="true">&larr;</span>
+                                <input type="text" value="body.name" aria-label="Extraction path">
+                                <button class="iconbtn" title="Remove extraction" aria-label="Remove extraction"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-x"/></svg></button>
+                            </div>
+                            <button class="btn btn-ghost btn-sm" style="margin-top:6px"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-plus"/></svg>Add extraction</button>
+                        </div>
+
+                        <div class="field field-onfail">
+                            <label for="on-fail">On Failure</label>
+                            <select id="on-fail">
+                                <option selected>Stop flow</option>
+                                <option>Continue to next step</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="editor-foot">
+                        <button class="btn btn-ghost"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-terminal"/></svg>Copy cURL</button>
+                        <span class="spacer"></span>
+                        <button class="btn btn-ghost">Cancel</button>
+                        <button class="btn btn-primary">Save Step</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---- VISUAL VIEW: node graph ---- -->
+            <section class="deck-visual" aria-label="Visual view">
+                <svg class="edges" aria-hidden="true">
+                    <defs>
+                        <marker id="arrow-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                            <path d="M0 0 L10 5 L0 10 z" fill="var(--run-success)"/>
+                        </marker>
+                    </defs>
+                    <path d="M 134 174 C 178 174, 180 200, 224 200" fill="none" stroke="var(--run-success)" stroke-width="2" marker-end="url(#arrow-ok)"/>
+                    <path d="M 488 200 C 562 200, 558 348, 630 348" fill="none" stroke="var(--run-success)" stroke-width="2" marker-end="url(#arrow-ok)"/>
+                </svg>
+                <span class="start-pill" style="left:48px; top:160px;">
+                    <svg class="ic ic-xs ic-fill" style="color:var(--run-success)" aria-hidden="true"><use href="#i-play"/></svg>Start
+                </span>
+                <div class="node" style="left:226px; top:150px;" tabindex="0">
+                    <div class="node-head">
+                        <span class="step-type-ic"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                        <span class="node-name">List Users</span>
+                        <span class="method-chip" data-m="GET">GET</span>
+                    </div>
+                    <div class="node-url">https://jsonplaceholder.typicode.com/users</div>
+                    <div class="node-status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check-circle"/></svg>200 OK &middot; 231 ms</div>
+                </div>
+                <div class="node" style="left:632px; top:298px;" aria-selected="true" tabindex="0">
+                    <div class="node-head">
+                        <span class="step-type-ic"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                        <span class="node-name">Get First User</span>
+                        <span class="method-chip" data-m="GET">GET</span>
+                    </div>
+                    <div class="node-url">https://jsonplaceholder.typicode.com/users/1</div>
+                    <div class="node-status"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check-circle"/></svg>200 OK &middot; 96 ms</div>
+                </div>
+
+                <div class="graph-toolbar" role="toolbar" aria-label="Graph tools">
+                    <button class="gtbtn" title="Zoom out" aria-label="Zoom out"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-minus"/></svg></button>
+                    <button class="gtbtn" title="Reset zoom">100%</button>
+                    <button class="gtbtn" title="Zoom in" aria-label="Zoom in"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus"/></svg></button>
+                    <span class="gt-sep" aria-hidden="true"></span>
+                    <button class="gtbtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-sparkles"/></svg>Tidy Up</button>
+                    <button class="gtbtn"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-alert-triangle"/></svg>Next Error</button>
+                    <button class="gtbtn" aria-pressed="true"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-map"/></svg>Minimap</button>
+                </div>
+
+                <div class="minimap" aria-hidden="true">
+                    <span class="mm-node" style="left:24px; top:26px;  width:26px; height:9px;"></span>
+                    <span class="mm-node" style="left:64px; top:44px;  width:26px; height:9px; background:var(--accent)"></span>
+                    <span class="mm-view" style="left:12px; top:12px; width:96px; height:60px;"></span>
+                </div>
+            </section>
+
+            <!-- ---- JSON VIEW: read-only ---- -->
+            <section class="deck-json" aria-label="JSON view">
+                <div class="panel json-panel">
+                    <div class="json-head">
+                        <span class="eyebrow">Flow Source</span>
+                        <span class="ro-badge">Read-only</span>
+                        <span style="flex:1"></span>
+                        <button class="btn btn-ghost btn-sm"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-copy"/></svg>Copy JSON</button>
+                    </div>
+                    <div class="json-body">
+<pre>{
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"BLA Demo — Login Abuse"</span><span class="j-p">,</span>
+  <span class="j-k">"description"</span><span class="j-p">:</span> <span class="j-s">"Two-step user enumeration probe used in the BLA protection demo."</span><span class="j-p">,</span>
+  <span class="j-k">"headers"</span><span class="j-p">:</span> { <span class="j-k">"Accept"</span><span class="j-p">:</span> <span class="j-s">"application/json"</span> }<span class="j-p">,</span>
+  <span class="j-k">"staticVars"</span><span class="j-p">:</span> { <span class="j-k">"baseUrl"</span><span class="j-p">:</span> <span class="j-s">"https://jsonplaceholder.typicode.com"</span> }<span class="j-p">,</span>
+  <span class="j-k">"steps"</span><span class="j-p">:</span> [
+    {
+      <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"step-1"</span><span class="j-p">,</span>
+      <span class="j-k">"type"</span><span class="j-p">:</span> <span class="j-s">"request"</span><span class="j-p">,</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"List Users"</span><span class="j-p">,</span>
+      <span class="j-k">"method"</span><span class="j-p">:</span> <span class="j-s">"GET"</span><span class="j-p">,</span>
+      <span class="j-k">"url"</span><span class="j-p">:</span> <span class="j-s">"{{baseUrl}}/users"</span><span class="j-p">,</span>
+      <span class="j-k">"extract"</span><span class="j-p">:</span> { <span class="j-k">"userId"</span><span class="j-p">:</span> <span class="j-s">"body[0].id"</span> }
+    }<span class="j-p">,</span>
+    {
+      <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"step-2"</span><span class="j-p">,</span>
+      <span class="j-k">"type"</span><span class="j-p">:</span> <span class="j-s">"request"</span><span class="j-p">,</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Get First User"</span><span class="j-p">,</span>
+      <span class="j-k">"method"</span><span class="j-p">:</span> <span class="j-s">"GET"</span><span class="j-p">,</span>
+      <span class="j-k">"url"</span><span class="j-p">:</span> <span class="j-s">"{{baseUrl}}/users/1"</span><span class="j-p">,</span>
+      <span class="j-k">"extract"</span><span class="j-p">:</span> { <span class="j-k">"userName"</span><span class="j-p">:</span> <span class="j-s">"body.name"</span> }
+    }
+  ]
+}</pre>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- ================= INSPECTOR ================= -->
+        <aside class="inspector" aria-label="Inspector">
+            <div class="inspector-tabs" role="tablist" aria-label="Inspector sections">
+                <button class="itab" role="tab" data-tab="results" aria-selected="true">Results</button>
+                <button class="itab" role="tab" data-tab="variables" aria-selected="false">Variables</button>
+                <button class="itab" role="tab" data-tab="info" aria-selected="false">Info</button>
+            </div>
+            <div class="inspector-tabrule" aria-hidden="true"></div>
+
+            <!-- ---- Results tab ---- -->
+            <div class="ipanel" id="ipanel-results" role="tabpanel">
+                <div class="run-summary">
+                    <svg class="ic verdict-ic" style="width:26px;height:26px" aria-hidden="true"><use href="#i-check-circle"/></svg>
+                    <div>
+                        <div class="verdict-word">Passed</div>
+                        <div class="verdict-sub">2/2 steps &middot; 0.84 s &middot; Run #12</div>
+                    </div>
+                    <span class="spacer"></span>
+                    <button class="btn btn-ghost btn-sm" title="Clear results">Clear</button>
+                </div>
+
+                <div class="run-options" aria-label="Run options">
+                    <label><input type="checkbox">Continuous</label>
+                    <label><input type="checkbox" checked>Encode URL vars</label>
+                    <span class="delay-wrap">Delay<input type="number" value="1000" min="0" step="100" aria-label="Delay in milliseconds">ms</span>
+                </div>
+
+                <div class="results-toolbar">
+                    <div class="search-wrap">
+                        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-search"/></svg>
+                        <input class="search-input" type="search" placeholder="Search" aria-label="Search results">
+                    </div>
+                    <select aria-label="Filter by status">
+                        <option>All statuses</option><option>Success</option><option>Error</option><option>Skipped</option>
+                    </select>
+                    <div class="export-group" role="group" aria-label="Export results">
+                        <button class="btn btn-sm" title="Export results as JSON">JSON</button>
+                        <button class="btn btn-sm" title="Export results as CSV">CSV</button>
+                    </div>
+                </div>
+
+                <div class="results-feed" aria-label="Execution results">
+                    <article class="result-card">
+                        <div class="result-head">
+                            <span class="result-idx">1</span>
+                            <span class="result-name">List Users</span>
+                            <span class="status-chip" data-state="success"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg>SUCCESS</span>
+                        </div>
+                        <div class="result-meta">GET &middot; 200 OK &middot; 231 ms &middot; 5.4 KB</div>
+                        <div class="result-json">[
+  { <span class="j-p">"id":</span> 1, <span class="j-p">"name":</span> "Leanne Graham" },
+  { <span class="j-p">"id":</span> 2, <span class="j-p">"name":</span> "Ervin Howell" },
+  { <span class="j-p">"id":</span> 3, <span class="j-p">"name":</span> "Clementine Bauch" },
+  <span class="j-p">&hellip; 7 more items</span>
+]</div>
+                        <div class="result-extract">
+                            <svg class="ic ic-xs" aria-hidden="true"><use href="#i-zap"/></svg>
+                            Extracted <code>{{userId}} = 1</code>
+                        </div>
+                    </article>
+
+                    <article class="result-card">
+                        <div class="result-head">
+                            <span class="result-idx">2</span>
+                            <span class="result-name">Get First User</span>
+                            <span class="status-chip" data-state="success"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-check"/></svg>SUCCESS</span>
+                        </div>
+                        <div class="result-meta">GET &middot; 200 OK &middot; 96 ms &middot; 509 B</div>
+                        <div class="result-json">{
+  <span class="j-p">"id":</span> 1,
+  <span class="j-p">"name":</span> "Leanne Graham",
+  <span class="j-p">"username":</span> "Bret",
+  <span class="j-p">"email":</span> "Sincere@april.biz",
+  <span class="j-p">"phone":</span> "1-770-736-8031 x56442"
+}</div>
+                        <div class="result-extract">
+                            <svg class="ic ic-xs" aria-hidden="true"><use href="#i-zap"/></svg>
+                            Extracted <code>{{userName}} = "Leanne Graham"</code>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="runner-console" role="status">
+                    <span class="status-pip" data-state="passed" style="--pip-size:6px" aria-hidden="true"></span>
+                    Flow finished 14:32:18 &middot; 2 passed, 0 failed
+                </div>
+            </div>
+
+            <!-- ---- Variables tab ---- -->
+            <div class="ipanel" id="ipanel-variables" role="tabpanel" hidden>
+                <div class="vars-list">
+                    <div class="var-row">
+                        <span class="var-name">{{baseUrl}}</span>
+                        <span class="var-src">Static &middot; flow</span>
+                        <span class="var-val">https://jsonplaceholder.typicode.com</span>
+                    </div>
+                    <div class="var-row">
+                        <span class="var-name">{{userId}}</span>
+                        <span class="var-src">Extracted &middot; List Users</span>
+                        <span class="var-val">1</span>
+                    </div>
+                    <div class="var-row">
+                        <span class="var-name">{{userName}}</span>
+                        <span class="var-src">Extracted &middot; Get First User</span>
+                        <span class="var-val">"Leanne Graham"</span>
+                    </div>
+                </div>
+                <div class="ipanel-foot">
+                    <button class="btn btn-quiet btn-sm" style="width:100%"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-plus"/></svg>New Variable</button>
+                </div>
+            </div>
+
+            <!-- ---- Info tab ---- -->
+            <div class="ipanel" id="ipanel-info" role="tabpanel" hidden>
+                <div class="info-body">
+                    <div class="field">
+                        <label for="flow-name">Flow Name</label>
+                        <input type="text" id="flow-name" value="BLA Demo — Login Abuse">
+                    </div>
+                    <div class="field">
+                        <label for="flow-desc">Description</label>
+                        <textarea id="flow-desc">Two-step user enumeration probe used in the BLA protection demo.</textarea>
+                    </div>
+                    <div class="field">
+                        <label>Global Headers</label>
+                        <div class="hdr-row"><input value="Accept" aria-label="Header name"><input value="application/json" aria-label="Header value"></div>
+                        <div class="hdr-row"><input value="X-Demo-Session" aria-label="Header name"><input value="bla-2026-07" aria-label="Header value"></div>
+                        <button class="btn btn-ghost btn-sm"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-plus"/></svg>Add header</button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- ================= OVERLAYS ================= -->
+<div class="scrim-layer" id="scrim" hidden></div>
+
+<!-- Flows drawer (flyout from the rail) -->
+<aside class="drawer" id="drawer" hidden aria-label="Flows">
+    <div class="drawer-head">
+        <h2>Flows</h2>
+        <button class="btn btn-quiet btn-sm" title="Open a flow file"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-folder"/></svg>Open</button>
+        <button class="btn btn-primary btn-sm"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-plus"/></svg>New Flow</button>
+    </div>
+    <div class="drawer-search">
+        <div class="search-wrap">
+            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-search"/></svg>
+            <input class="search-input" type="search" placeholder="Filter recent flows" aria-label="Filter recent flows">
+        </div>
+    </div>
+    <div class="drawer-list">
+        <div class="drawer-eyebrow"><span class="eyebrow">Recent</span></div>
+        <button class="flow-item" aria-current="true">
+            <span class="fi-name">BLA Demo — Login Abuse</span><span class="fi-time">now</span>
+            <span class="fi-path">~/Flows/bla-demo-login-abuse.flow.json</span>
+        </button>
+        <button class="flow-item">
+            <span class="fi-name">Account Takeover Replay</span><span class="fi-time">2 h</span>
+            <span class="fi-path">~/Flows/ato-replay.flow.json</span>
+        </button>
+        <button class="flow-item">
+            <span class="fi-name">Inventory Hoarding Check</span><span class="fi-time">1 d</span>
+            <span class="fi-path">~/Flows/inventory-hoarding.flow.json</span>
+        </button>
+        <button class="flow-item">
+            <span class="fi-name">Price Scraping Baseline</span><span class="fi-time">3 d</span>
+            <span class="fi-path">~/Flows/price-scraping-baseline.flow.json</span>
+        </button>
+        <button class="flow-item">
+            <span class="fi-name">Checkout Race Condition</span><span class="fi-time">1 w</span>
+            <span class="fi-path">~/Demos/checkout-race.flow.json</span>
+        </button>
+    </div>
+    <div class="drawer-foot">
+        <button class="btn btn-quiet btn-sm"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-terminal"/></svg>Import cURL</button>
+        <button class="btn btn-quiet btn-sm"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-download"/></svg>Import HAR</button>
+    </div>
+</aside>
+
+<!-- Flow actions menu (from the title) -->
+<div class="menu" id="flow-menu" hidden role="menu" aria-label="Flow actions">
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-save"/></svg>Save<kbd>&#8984;S</kbd></button>
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-file"/></svg>Save As&hellip;<kbd>&#8679;&#8984;S</kbd></button>
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-rotate-ccw"/></svg>Revert to Saved</button>
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x"/></svg>Close Flow<kbd>&#8984;W</kbd></button>
+    <div class="menu-rule" aria-hidden="true"></div>
+    <div class="menu-label"><span class="eyebrow">Export</span></div>
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-upload"/></svg>Export Flow as HAR</button>
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-upload"/></svg>Export Results &middot; JSON</button>
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-upload"/></svg>Export Results &middot; CSV</button>
+</div>
+
+<!-- Import menu (from the rail) -->
+<div class="menu" id="import-menu" hidden role="menu" aria-label="Import">
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-terminal"/></svg>Import cURL as step</button>
+    <button class="menu-item" role="menuitem"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download"/></svg>Import HAR file&hellip;</button>
+</div>
+
+<script>
+/* Minimal state toggles: view tabs, inspector tabs, drawer + menus, theme. */
+(function () {
+    var deck = document.getElementById('deck');
+    document.querySelectorAll('.viewtab').forEach(function (t) {
+        t.addEventListener('click', function () {
+            document.querySelectorAll('.viewtab').forEach(function (x) { x.setAttribute('aria-selected', x === t ? 'true' : 'false'); });
+            deck.dataset.view = t.dataset.view;
+        });
+    });
+
+    document.querySelectorAll('.itab').forEach(function (t) {
+        t.addEventListener('click', function () {
+            document.querySelectorAll('.itab').forEach(function (x) { x.setAttribute('aria-selected', x === t ? 'true' : 'false'); });
+            ['results', 'variables', 'info'].forEach(function (name) {
+                document.getElementById('ipanel-' + name).hidden = (name !== t.dataset.tab);
+            });
+        });
+    });
+
+    var scrim = document.getElementById('scrim');
+    var overlays = [
+        { btn: document.getElementById('drawer-btn'), el: document.getElementById('drawer') },
+        { btn: document.getElementById('import-btn'), el: document.getElementById('import-menu') },
+        { btn: document.getElementById('flow-menu-btn'), el: document.getElementById('flow-menu') }
+    ];
+    function closeAll() {
+        overlays.forEach(function (o) { o.el.hidden = true; o.btn.setAttribute('aria-expanded', 'false'); });
+        scrim.hidden = true;
+    }
+    overlays.forEach(function (o) {
+        o.btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var open = o.el.hidden;
+            closeAll();
+            if (open) { o.el.hidden = false; o.btn.setAttribute('aria-expanded', 'true'); scrim.hidden = false; }
+        });
+    });
+    scrim.addEventListener('click', closeAll);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeAll(); });
+
+    /* Deep-link a starting state for screenshots: #visual #json #drawer #dark */
+    var hash = location.hash.replace('#', '');
+    if (hash === 'visual' || hash === 'json') {
+        document.querySelector('.viewtab[data-view="' + hash + '"]').click();
+    } else if (hash === 'drawer') {
+        document.getElementById('drawer-btn').click();
+    } else if (hash === 'dark') {
+        document.documentElement.dataset.theme = 'dark';
+    }
+
+    document.getElementById('theme-btn').addEventListener('click', function () {
+        var root = document.documentElement;
+        var dark = root.dataset.theme === 'dark';
+        root.dataset.theme = dark ? 'light' : 'dark';
+        this.setAttribute('aria-pressed', String(!dark));
+        this.dataset.tip = 'Theme: ' + (dark ? 'light' : 'dark');
+    });
+}());
+</script>
+</body>
+</html>

@@ -165,7 +165,7 @@ describe('FlowVisualizer (Drawflow)', () => {
         visualizer.updateNodeRuntimeInfo('step1', { status: 'success', output: { status: 200 } });
         const node = container.querySelector('.drawflow-node.flow-node[data-step-id="step1"]');
         const runtimeInfo = node.querySelector('.node-runtime-details');
-        expect(runtimeInfo.textContent).toContain('Status: 200');
+        expect(runtimeInfo.textContent).toContain('200'); // Wave 3.11: instrument chips (code + ms), not 'Status:' prose
         expect(runtimeInfo.querySelector('.status-success')).toBeTruthy();
     });
 

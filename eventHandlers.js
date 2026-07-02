@@ -27,7 +27,8 @@ import {
 } from './appFeatures.js';
 import {
     renderCurrentFlow, setDirty, syncPanelVisibility, showMessage,
-    updateWorkspaceTitle, updateViewToggle, updateDefinedVariables
+    updateWorkspaceTitle, updateViewToggle, updateDefinedVariables,
+    renderBackgroundRunsUI
 } from './uiUtils.js';
 import {
     addNestedStepToModel, deleteStepFromModel, moveStepInModel,
@@ -49,6 +50,7 @@ import { applyFileSearch, applyStepsSearch } from './uiUtils.js';
 /* === WAVE3 demo-mode === presentation toggle + guided first-run onboarding. */
 import { initDemoMode } from './demoMode.js';
 import { maybeShowOnboarding, renderEmptyState } from './firstRun.js';
+import { startBackgroundRun, stopBackgroundRun, removeBackgroundRun, getBackgroundRuns } from './backgroundRuns.js';
 
 // Controller for the Demo-Mode toggle, created in initializeEventListeners so
 // the keyboard shortcut and the toolbar button drive the SAME state machine.
@@ -97,7 +99,8 @@ export function initializeEventListeners() {
     document.getElementById('inspector-tabs')?.addEventListener('click', (e) => {
         const tab = e.target.closest('.inspector-tab');
         if (!tab) return;
-        if (tab.dataset.tab === 'results') {
+        appState.inspectorRunsOpen = tab.dataset.tab === 'runs';
+        if (tab.dataset.tab === 'results' || tab.dataset.tab === 'runs') {
             handleToggleInfoOverlay(false);
             handleToggleVariablesPanel(false);
         } else if (tab.dataset.tab === 'variables') {
@@ -105,6 +108,46 @@ export function initializeEventListeners() {
         } else if (tab.dataset.tab === 'info') {
             handleToggleInfoOverlay(true);
         }
+        syncPanelVisibility();
+    });
+
+    // --- Background runs ---
+    // Launcher: snapshot the CURRENT flow with the current Continuous/Delay
+    // settings; the foreground runner stays free for authoring test-runs.
+    document.getElementById('bg-run-btn')?.addEventListener('click', () => {
+        if (!appState.currentFlowModel) return;
+        const continuous = !!domRefs.continuousRunCheckbox?.checked;
+        const delayMs = Math.max(0, Number(domRefs.requestDelayInput?.value) || 1000);
+        startBackgroundRun({
+            model: appState.currentFlowModel,
+            name: appState.currentFlowModel.name,
+            continuous,
+            delayMs,
+            encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked,
+        });
+        appState.inspectorRunsOpen = true;
+        handleToggleInfoOverlay(false);
+        handleToggleVariablesPanel(false);
+        syncPanelVisibility();
+        showMessage(`Background run started${continuous ? ' (continuous)' : ''}. You can keep working.`, 'success');
+    });
+    // Live re-render + delegated card actions.
+    document.addEventListener('flowrunner:bgruns-changed', () => renderBackgroundRunsUI(getBackgroundRuns()));
+    document.getElementById('bg-runs-list')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-bg-action]');
+        if (!btn) return;
+        const id = btn.closest('.bg-run-card')?.dataset.runId;
+        if (!id) return;
+        if (btn.dataset.bgAction === 'stop') stopBackgroundRun(id);
+        else if (btn.dataset.bgAction === 'remove') removeBackgroundRun(id);
+    });
+    // Topbar chip click focuses the Runs tab.
+    document.getElementById('bg-runs-strip')?.addEventListener('click', (e) => {
+        if (!e.target.closest('.bg-run-chip')) return;
+        appState.inspectorRunsOpen = true;
+        handleToggleInfoOverlay(false);
+        handleToggleVariablesPanel(false);
+        syncPanelVisibility();
     });
 
     // Zoom Controls

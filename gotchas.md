@@ -53,6 +53,10 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Symptom:** Tidy Up threw "Could not compute an auto-layout" ONLY in the installed app. `autoLayout.js` dynamic-imported `elkjs`/`@dagrejs/dagre` by bare specifier — Node resolution makes that work in dev and Jest, but the packaged renderer (and a served browser) cannot resolve bare specifiers.
 - **Fix/lesson:** vendor renderer-facing deps under `assets/vendor/` (the fuse/immer/drawflow pattern) and import them by relative path first, falling back to the bare specifier for Node/Jest. Cousin of gotcha #1: anything that resolves via node_modules at runtime must be treated as suspect in the renderer.
 
+### 2l. FlowRunner.stop() during the continuous wait window used to hang callers
+- **Symptom:** stopping a continuous run between iterations (with short flows, ~95% of wall-time) cancelled the next iteration but never fired `onFlowStopped` — any UI tracking the run showed "running" forever.
+- **Fix/lesson:** stop() now completes the stop itself when it clears a pending iteration while nothing is executing. If you add engine callers (like backgroundRuns.js), remember: continuous iterations are delimited by `onIterationStart`; `onFlowComplete` only fires for single runs / the very end.
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*

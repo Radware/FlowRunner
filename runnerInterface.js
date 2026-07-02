@@ -177,6 +177,15 @@ export function updateRunnerUI() {
     if(domRefs.clearResultsBtn) {
         domRefs.clearResultsBtn.disabled = controlsDisabled;
     }
+    // Background launcher: independent of the foreground runner's business —
+    // it only needs a flow with steps.
+    {
+        const bgBtn = document.getElementById('bg-run-btn');
+        if (bgBtn) {
+            const model = appState.currentFlowModel;
+            bgBtn.disabled = !model || !(model.steps && model.steps.length);
+        }
+    }
     if(domRefs.continuousRunCheckbox) {
         domRefs.continuousRunCheckbox.disabled = !flowLoaded || controlsDisabled;
         // Reflect the app's state, not the runner's internal flag (which might be briefly false between iterations)
@@ -718,17 +727,61 @@ export function renderResultItemContent(listItem, resultData) {
 
     listItem.className = `result-item ${statusClass}`; // Set class based on status
 
+    // Console-grammar header: pip · name · method/code/duration meta · status.
+    const step = findStepById(appState.currentFlowModel?.steps, stepId);
+    const method = step?.method || null;
+    const httpStatus = output?.status ?? null;
+    const duration = output?.duration ?? null;
+    const metaHtml = [
+        method ? `<span class="request-method ${escapeHTML(method)}">${escapeHTML(method)}</span>` : '',
+        httpStatus != null ? `<span class="result-code ${httpStatus >= 400 ? 'bad' : httpStatus >= 300 ? 'warn' : 'ok'}">${escapeHTML(String(httpStatus))}</span>` : '',
+        duration != null ? `<span class="result-ms">${Math.round(duration)} ms</span>` : '',
+    ].filter(Boolean).join('');
+
+    // Detail is expanded when the row is NOTABLE (error, extraction issues or
+    // extracted values); plain 2xx rows collapse to a line. Manual toggles win.
+    const hasDetail = Boolean(error || outputHtml || assertionsHtml || extractionFailuresHtml || extractedValuesHtml);
+    let expanded;
+    if (listItem.dataset.userExpanded === 'true') expanded = true;
+    else if (listItem.dataset.userExpanded === 'false') expanded = false;
+    else expanded = Boolean(error
+        || (extractionFailures && extractionFailures.length)
+        || (extractedValues && Object.keys(extractedValues).length)
+        || (assertionSummary && assertionSummary.total > 0 && !assertionSummary.allPassed));
+
+    listItem.classList.toggle('collapsed', hasDetail && !expanded);
+    listItem.classList.toggle('no-detail', !hasDetail);
+
     listItem.innerHTML = `
-        <div class="result-header">
-            <span class="result-step-name" title="ID: ${escapeHTML(stepId)}">${escapeHTML(stepName)} (${escapeHTML(stepType)})</span>
-            <span class="result-header-right">${headerBadgeHtml}<span class="result-status">${status.toUpperCase()}</span></span>
+        <div class="result-header" role="button" tabindex="0" title="${escapeHTML(stepName)} — ID: ${escapeHTML(stepId)}${hasDetail ? ' (click to expand)' : ''}">
+            <span class="result-step-name">${escapeHTML(stepName)}</span>
+            <span class="result-meta">${metaHtml}</span>
+            <span class="result-header-right">${headerBadgeHtml}<span class="result-status">${status.toUpperCase()}</span>${hasDetail ? '<svg class="icon icon-sm result-chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg>' : ''}</span>
         </div>
+        <div class="result-detail">
         ${errorHtml}
         ${assertionsHtml}
         ${extractionFailuresHtml}
         ${extractedValuesHtml}
         ${outputHtml}
+        </div>
     `;
+
+    if (hasDetail) {
+        const header = listItem.querySelector('.result-header');
+        const toggle = () => {
+            const nowCollapsed = listItem.classList.toggle('collapsed');
+            listItem.dataset.userExpanded = String(!nowCollapsed);
+        };
+        header.addEventListener('click', (e) => {
+            if (e.target.closest('button')) return; // copy buttons etc.
+            toggle();
+        });
+        header.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+        });
+    }
+
 
     if (outputHtml) {
         const resultBody = listItem.querySelector('.result-body');

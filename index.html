@@ -140,6 +140,7 @@
                     <span class="toggle-icon" hidden>-</span>
                 </button>
             </div>
+            <div class="bg-runs-strip" id="bg-runs-strip" aria-label="Background runs"></div>
             <!-- Hero run cluster: the run is the single most projected signal -->
             <div class="topbar-run" id="topbar-run">
                 <span class="run-verdict" id="run-verdict" data-state="idle" hidden aria-live="polite">
@@ -242,6 +243,7 @@
             <div class="runner-header">
                 <div class="inspector-tabs" id="inspector-tabs" role="tablist" aria-label="Inspector panes">
                     <button class="inspector-tab" data-tab="results" role="tab" aria-selected="true">Results</button>
+                    <button class="inspector-tab" data-tab="runs" role="tab" aria-selected="false">Runs<span class="runs-tab-badge" id="runs-tab-badge" hidden></span></button>
                     <button class="inspector-tab" data-tab="variables" role="tab" aria-selected="false">Variables</button>
                     <button class="inspector-tab" data-tab="info" role="tab" aria-selected="false">Config</button>
                 </div>
@@ -271,6 +273,9 @@
                             <input type="number" id="request-delay" value="1000" min="0" step="100">
                             <span class="runner-option-unit">ms</span>
                         </label>
+                        <button id="bg-run-btn" class="btn btn-secondary btn-sm" disabled
+                            title="Run this flow in the background (a snapshot: keep editing while it runs; uses Continuous + Delay above)">
+                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-repeat"/></svg><span>Background</span></button>
                         <button id="clear-results-btn" class="btn btn-secondary btn-sm" title="Clear execution results" disabled>Clear</button>
                     </div>
                     <div class="runner-results-container">
@@ -293,6 +298,11 @@
                             <li class="no-results">Run a flow to see results here.</li>
                         </ul>
                     </div>
+                </section>
+
+                <section class="inspector-pane inspector-pane-runs" id="inspector-pane-runs" style="display: none;">
+                    <div class="runs-pane-hint">Background runs execute a snapshot of a flow so you can keep editing. Launch one from the Results tab.</div>
+                    <ul class="bg-runs-list" id="bg-runs-list"></ul>
                 </section>
 
                 <div class="flow-info-overlay" data-ref="infoOverlay">

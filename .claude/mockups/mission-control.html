@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light" data-engine="passed" data-stage="editor">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowRunner · Mission Control (Sentinel v2 mockup)</title>
+<style>
+/* =====================================================================
+   TOKENS — copied verbatim from FlowRunner styles.css :root (LIGHT tier)
+   Token names preserved so mapping back to the app is 1:1.
+   ===================================================================== */
+:root {
+    /* Tier 1: primitive OKLCH ramp (brand-tinted neutrals, hue 262) */
+    --ramp-neutral-0:  oklch(0.995 0.004 262);
+    --ramp-neutral-50: oklch(0.985 0.006 262);
+    --ramp-neutral-100: oklch(0.965 0.008 262);
+    --ramp-neutral-200: oklch(0.925 0.010 262);
+    --ramp-neutral-300: oklch(0.870 0.012 262);
+    --ramp-neutral-400: oklch(0.740 0.014 262);
+    --ramp-neutral-500: oklch(0.620 0.016 262);
+    --ramp-neutral-600: oklch(0.520 0.018 262);
+    --ramp-neutral-700: oklch(0.400 0.020 262);
+    --ramp-neutral-800: oklch(0.300 0.022 262);
+    --ramp-neutral-900: oklch(0.210 0.022 262);
+    --ramp-neutral-1000: oklch(0.150 0.020 262);
+
+    --ramp-accent-400: oklch(0.680 0.170 262);
+    --ramp-accent-500: oklch(0.600 0.190 262);
+    --ramp-accent-600: oklch(0.530 0.195 262);
+    --ramp-accent-700: oklch(0.470 0.180 262);
+
+    --ramp-success-500: oklch(0.640 0.170 150);
+    --ramp-success-600: oklch(0.560 0.160 150);
+    --ramp-error-500:   oklch(0.620 0.230 27);
+    --ramp-error-600:   oklch(0.550 0.220 27);
+    --ramp-warning-500: oklch(0.780 0.170 75);
+    --ramp-running-500: oklch(0.720 0.180 60);
+    --ramp-skipped-500: oklch(0.620 0.014 262);
+
+    /* Tier 2: semantic tokens (LIGHT / projector default) */
+    --surface: var(--ramp-neutral-50);
+    --surface-raised: var(--ramp-neutral-0);
+    --surface-sunken: var(--ramp-neutral-100);
+    --text: var(--ramp-neutral-900);
+    --text-muted: var(--ramp-neutral-600);
+    --accent: var(--ramp-accent-500);
+    --accent-hover: var(--ramp-accent-600);
+    --accent-contrast: var(--ramp-neutral-0);
+    --border: var(--ramp-neutral-200);
+    --border-strong: var(--ramp-neutral-300);
+    --run-success: var(--ramp-success-500);
+    --run-error: var(--ramp-error-500);
+    --run-skipped: var(--ramp-skipped-500);
+    --run-running: var(--ramp-running-500);
+    --focus-ring: oklch(0.600 0.190 262 / 0.35);
+
+    --surface-overlay: var(--ramp-neutral-0);
+    --accent-soft:   color-mix(in oklab, var(--accent) 14%, var(--surface-raised));
+    --accent-softer: color-mix(in oklab, var(--accent) 8%,  var(--surface));
+    --text-faint:    var(--ramp-neutral-500);
+    --scrim:         oklch(0.16 0.02 262 / 0.55);
+
+    --run-success-bg:   color-mix(in oklab, var(--run-success) 15%, var(--surface));
+    --run-error-bg:     color-mix(in oklab, var(--run-error)   15%, var(--surface));
+    --run-running-bg:   color-mix(in oklab, var(--run-running) 16%, var(--surface));
+    --run-skipped-bg:   color-mix(in oklab, var(--run-skipped) 12%, var(--surface));
+    --run-success-line: color-mix(in oklab, var(--run-success) 42%, var(--border));
+    --run-error-line:   color-mix(in oklab, var(--run-error)   42%, var(--border));
+    --run-running-line: color-mix(in oklab, var(--run-running) 42%, var(--border));
+
+    --radius-xs: 4px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+    --radius-pill: 999px;
+
+    --shadow-xs: 0 1px 2px oklch(0.40 0.04 262 / 0.06);
+    --shadow-sm: 0 1px 3px oklch(0.40 0.04 262 / 0.09), 0 1px 2px oklch(0.40 0.04 262 / 0.06);
+    --shadow-md: 0 4px 10px oklch(0.40 0.05 262 / 0.10), 0 2px 4px oklch(0.40 0.05 262 / 0.06);
+    --shadow-lg: 0 12px 28px oklch(0.35 0.05 262 / 0.14), 0 4px 8px oklch(0.35 0.05 262 / 0.08);
+    --shadow-overlay: 0 20px 56px oklch(0.28 0.06 262 / 0.24), 0 6px 16px oklch(0.28 0.06 262 / 0.14);
+
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --dur-1: 120ms; --dur-2: 200ms; --dur-3: 320ms;
+
+    --fs-caption: 12px; --fs-body: 13px; --fs-base: 14px; --fs-label: 15px;
+    --fs-h4: 16px; --fs-h3: 19px; --fs-h2: 24px;
+    --fw-normal: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+
+    /* Step-type + method identity hues (from styles.css, verbatim) */
+    --type-request:   oklch(0.605 0.132 205);
+    --type-condition: oklch(0.700 0.150 75);
+    --type-loop:      oklch(0.590 0.165 305);
+    --type-transform: oklch(0.620 0.140 262);
+    --method-get:     oklch(0.600 0.135 150);
+    --method-post:    oklch(0.600 0.150 250);
+    --method-delete:  oklch(0.600 0.225 27);
+
+    --status-idle: var(--ramp-neutral-500);         /* --status-idle */
+    --eyebrow-tracking: 0.06em;                     /* --eyebrow-tracking */
+
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-family-code: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", "Courier New", monospace;
+}
+
+/* ====================== reset / base ====================== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+    font-family: var(--font-family);
+    font-size: var(--fs-body);
+    line-height: 1.45;
+    color: var(--text);
+    background: var(--surface);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, select, textarea { font: inherit; color: inherit; }
+ul, ol { list-style: none; }
+svg.ic { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+svg.ic-sm { width: 14px; height: 14px; }
+svg.ic-xs { width: 12px; height: 12px; }
+svg.ic-fill { fill: currentColor; stroke: none; }
+:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
+::placeholder { color: var(--text-faint); }
+
+/* ====================== primitives ====================== */
+.btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 30px; padding: 0 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12.5px; font-weight: var(--fw-medium);
+    border: 1px solid transparent;
+    transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+    white-space: nowrap;
+}
+.btn-quiet { color: var(--text-muted); }
+.btn-quiet:hover { background: var(--accent-softer); color: var(--text); }
+.btn-outline { background: var(--surface-raised); border-color: var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--border-strong); background: var(--surface-raised); }
+.btn-primary { background: var(--accent); color: var(--accent-contrast); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-icon { width: 30px; padding: 0; justify-content: center; }
+.btn[disabled] { opacity: 0.45; pointer-events: none; }
+.btn.pressed { background: var(--accent-soft); color: var(--ramp-accent-700); }
+
+kbd {
+    font-family: var(--font-family-code); font-size: 10.5px; font-weight: var(--fw-medium);
+    color: var(--text-faint);
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    padding: 1px 5px; line-height: 1.4;
+}
+
+.eyebrow {
+    font-size: 11px; font-weight: var(--fw-semibold);
+    letter-spacing: var(--eyebrow-tracking); text-transform: uppercase;
+    color: var(--text-faint);
+}
+
+.chip-method {
+    font-family: var(--font-family-code); font-size: 10px; font-weight: var(--fw-bold);
+    letter-spacing: 0.05em; line-height: 1;
+    padding: 3px 6px; border-radius: var(--radius-xs); flex: none;
+}
+.chip-get {
+    color: color-mix(in oklab, var(--method-get) 75%, var(--text));
+    background: color-mix(in oklab, var(--method-get) 13%, var(--surface-raised));
+    border: 1px solid color-mix(in oklab, var(--method-get) 30%, var(--border));
+}
+.chip-status {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; font-weight: var(--fw-bold); letter-spacing: 0.06em;
+    padding: 3px 8px; border-radius: var(--radius-pill); line-height: 1.3; flex: none;
+}
+.chip-success { color: var(--ramp-success-600); background: var(--run-success-bg); border: 1px solid var(--run-success-line); }
+.chip-unsaved {
+    font-size: 9.5px; font-weight: var(--fw-bold); letter-spacing: 0.07em; line-height: 1.2;
+    padding: 2px 5px; border-radius: var(--radius-xs); flex: none;
+    color: color-mix(in oklab, var(--run-running) 58%, var(--text));
+    background: var(--run-running-bg);
+    border: 1px solid var(--run-running-line);
+}
+
+.tglyph {
+    width: 26px; height: 26px; border-radius: 8px; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: color-mix(in oklab, var(--type-request) 80%, var(--text));
+    background: color-mix(in oklab, var(--type-request) 15%, var(--surface-raised));
+}
+.tglyph.t-cond { color: color-mix(in oklab, var(--type-condition) 70%, var(--text)); background: color-mix(in oklab, var(--type-condition) 16%, var(--surface-raised)); }
+.tglyph.t-loop { color: color-mix(in oklab, var(--type-loop) 80%, var(--text)); background: color-mix(in oklab, var(--type-loop) 14%, var(--surface-raised)); }
+.tglyph.t-xform { color: color-mix(in oklab, var(--type-transform) 80%, var(--text)); background: color-mix(in oklab, var(--type-transform) 14%, var(--surface-raised)); }
+
+.tfield {
+    display: flex; align-items: center; gap: 8px;
+    height: 32px; padding: 0 10px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+}
+.tfield input { flex: 1; min-width: 0; border: none; background: none; outline: none; font-size: 12.5px; }
+.tfield:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.tfield > svg { color: var(--text-faint); }
+
+.mono { font-family: var(--font-family-code); }
+.sep-v { width: 1px; height: 18px; background: var(--border); flex: none; }
+
+/* Popovers (menus, switcher, options) */
+.pop-wrap { position: relative; }
+.popover {
+    position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+    min-width: 240px;
+    background: var(--surface-overlay);          /* --surface-overlay */
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
+    padding: 6px;
+}
+.popover[hidden] { display: none; }
+.pop-right { left: auto; right: 0; }
+.pop-up { top: auto; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); }
+.menu-group { padding: 6px 10px 3px; }
+.menu-item {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    height: 32px; padding: 0 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12.5px; font-weight: var(--fw-medium); color: var(--text);
+    text-align: left;
+}
+.menu-item:hover { background: var(--accent-softer); }
+.menu-item svg { color: var(--text-muted); }
+.menu-item .grow { flex: 1; }
+.menu-sep { height: 1px; background: var(--border); margin: 6px 8px; }
+.dot-dirty { width: 6px; height: 6px; border-radius: 50%; background: var(--run-running); flex: none; }
+
+/* ====================== app frame ====================== */
+.app { display: flex; flex-direction: column; height: 100vh; }
+.shell { display: grid; grid-template-columns: 280px minmax(0, 1fr) 360px; flex: 1; min-height: 0; }
+
+/* ====================== top bar ====================== */
+.topbar {
+    height: 52px; flex: none;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: 0 16px;
+    background: var(--surface-raised);
+    border-bottom: 1px solid var(--border);
+    position: relative; z-index: 40;
+}
+.tb-left { display: flex; align-items: center; gap: 12px; }
+.tb-right { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.wordmark { display: flex; align-items: center; gap: 8px; }
+.logo-mark {
+    width: 24px; height: 24px; border-radius: 7px;
+    background: var(--accent); color: var(--accent-contrast);
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.wordmark strong { font-size: var(--fs-label); font-weight: var(--fw-bold); letter-spacing: -0.01em; }
+
+/* System Status Pip: the room-legible engine state signal */
+.pip-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 28px; padding: 0 12px;
+    border-radius: var(--radius-pill);
+    font-size: 12px; font-weight: var(--fw-bold); letter-spacing: 0.08em;
+    border: 1px solid transparent; cursor: pointer;
+    transition: transform var(--dur-2) var(--ease-out);
+}
+.pip-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.pip-pill .st { display: none; }
+html[data-engine="idle"]    .pip-pill { color: var(--text-muted); background: var(--surface-sunken); border-color: var(--border); }
+html[data-engine="idle"]    .pip-dot  { background: var(--status-idle); }
+html[data-engine="idle"]    .st-idle  { display: inline; }
+html[data-engine="running"] .pip-pill { color: color-mix(in oklab, var(--run-running) 55%, var(--text)); background: var(--run-running-bg); border-color: var(--run-running-line); }
+html[data-engine="running"] .pip-dot  { background: var(--run-running); animation: pulse 1.3s var(--ease-out) infinite; }
+html[data-engine="running"] .st-running { display: inline; }
+html[data-engine="passed"]  .pip-pill { color: var(--ramp-success-600); background: var(--run-success-bg); border-color: var(--run-success-line); }
+html[data-engine="passed"]  .pip-dot  { background: var(--run-success); }
+html[data-engine="passed"]  .st-passed { display: inline; }
+html[data-engine="failed"]  .pip-pill { color: var(--ramp-error-600); background: var(--run-error-bg); border-color: var(--run-error-line); }
+html[data-engine="failed"]  .pip-dot  { background: var(--run-error); }
+html[data-engine="failed"]  .st-failed { display: inline; }
+@keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in oklab, var(--run-running) 45%, transparent); }
+    100% { box-shadow: 0 0 0 9px transparent; }
+}
+
+/* Cmd+K affordance */
+.cmdk {
+    display: flex; align-items: center; gap: 8px;
+    width: 320px; height: 32px; padding: 0 10px;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    color: var(--text-faint); font-size: 12.5px;
+    transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out);
+}
+.cmdk:hover { border-color: var(--border-strong); background: var(--surface-raised); }
+.cmdk .grow { flex: 1; text-align: left; }
+
+/* ====================== left rail: flow outline ====================== */
+.rail {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--surface-raised);
+    border-right: 1px solid var(--border);
+}
+.switcher {
+    display: flex; align-items: center; gap: 10px;
+    margin: 10px; padding: 8px 10px; width: calc(100% - 20px);
+    border-radius: var(--radius-md);
+    text-align: left;
+    transition: background var(--dur-1) var(--ease-out);
+}
+.switcher:hover { background: var(--accent-softer); }
+.sw-icn {
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: var(--accent-soft); color: var(--ramp-accent-700);
+}
+.sw-txt { flex: 1; min-width: 0; }
+.sw-name { display: block; font-size: 13.5px; font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sw-meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; color: var(--text-faint); font-family: var(--font-family-code); margin-top: 2px; }
+.sw-file { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.switcher > svg { color: var(--text-faint); }
+
+.rail-search { margin: 0 12px 10px; }
+.rail-search .tfield { height: 30px; background: var(--surface-sunken); border-color: transparent; }
+.rail-search .tfield:hover { border-color: var(--border); }
+.rail-search .tfield:focus-within { background: var(--surface-raised); border-color: var(--accent); }
+
+.rail-cap { display: flex; align-items: baseline; justify-content: space-between; padding: 4px 16px 6px; }
+.rail-cap .count { font-size: 11px; font-weight: var(--fw-semibold); color: var(--ramp-success-600); }
+
+.steps { flex: 1; overflow-y: auto; padding: 0 8px; position: relative; }
+.steps::before {
+    /* the execution spine: navigation and run state fused */
+    content: ""; position: absolute; left: 22.5px; top: 30px; bottom: auto; height: 56px;
+    width: 2px; border-radius: 1px;
+    background: var(--run-success-line);
+}
+.step-btn {
+    position: relative; display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 8px 8px 8px 30px; margin-bottom: 2px;
+    border-radius: var(--radius-md);
+    text-align: left;
+    transition: background var(--dur-1) var(--ease-out);
+}
+.step-btn:hover { background: var(--accent-softer); }
+.step-btn[data-selected="true"] { background: var(--accent-soft); }
+.spine-dot {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--run-success);
+    box-shadow: 0 0 0 2px var(--surface-raised);
+}
+.step-main { flex: 1; min-width: 0; }
+.step-row1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.step-name { font-size: 13px; font-weight: var(--fw-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-btn[data-selected="true"] .step-name { font-weight: var(--fw-semibold); }
+.step-url {
+    display: block; margin-top: 1px;
+    font-family: var(--font-family-code); font-size: 11px; color: var(--text-faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rail-foot { padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.add-step {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    height: 34px; padding: 0 12px;
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    font-size: 12.5px; font-weight: var(--fw-medium); color: var(--text-muted);
+    transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.add-step:hover { background: var(--accent-softer); border-color: var(--border-strong); color: var(--text); }
+.add-step .grow { flex: 1; text-align: left; }
+
+/* Flow switcher popover */
+.pop-switcher { width: 312px; left: 10px; top: calc(100% + 2px); }
+.pop-switcher .tfield { height: 30px; margin: 4px 4px 6px; background: var(--surface-sunken); border-color: transparent; }
+.recent {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 7px 10px; border-radius: var(--radius-sm); text-align: left;
+}
+.recent:hover { background: var(--accent-softer); }
+.recent svg { color: var(--text-faint); }
+.recent .r-main { flex: 1; min-width: 0; }
+.recent .r-name { display: block; font-size: 12.5px; font-weight: var(--fw-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent .r-path { display: block; font-family: var(--font-family-code); font-size: 10.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent .r-when { font-size: 11px; color: var(--text-faint); flex: none; }
+.recent.current { background: var(--accent-soft); }
+.recent.current .r-name { font-weight: var(--fw-semibold); }
+.pop-foot { display: flex; gap: 6px; padding: 6px 4px 2px; border-top: 1px solid var(--border); margin-top: 6px; }
+.pop-foot .btn { flex: 1; justify-content: center; }
+
+/* ====================== center stage ====================== */
+.stage { position: relative; min-width: 0; background: var(--surface-sunken); overflow: hidden; }
+.stage-head {
+    position: absolute; top: 14px; left: 0; right: 0; z-index: 30;
+    display: flex; align-items: center; padding: 0 20px; pointer-events: none;
+}
+.stage-head > * { pointer-events: auto; }
+.sh-left { display: flex; gap: 4px; }
+.seg-views {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 2px; padding: 3px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-xs);
+}
+.seg-views button {
+    display: flex; align-items: center; gap: 6px;
+    height: 28px; padding: 0 14px;
+    border-radius: var(--radius-pill);
+    font-size: 12.5px; font-weight: var(--fw-medium); color: var(--text-muted);
+    transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.seg-views button:hover { color: var(--text); }
+/* Active tab is driven by data-stage so it always matches the visible view. */
+html[data-stage="editor"] .seg-views [data-view="editor"],
+html[data-stage="visual"] .seg-views [data-view="visual"],
+html[data-stage="json"]   .seg-views [data-view="json"] { background: var(--accent-soft); color: var(--ramp-accent-700); font-weight: var(--fw-semibold); }
+
+.stage-view { position: absolute; inset: 0; display: none; overflow: auto; }
+html[data-stage="editor"] #view-editor { display: block; }
+html[data-stage="visual"] #view-visual { display: block; }
+html[data-stage="json"]   #view-json   { display: block; }
+
+/* graph toolbar: visual mode only */
+.graph-tools {
+    position: absolute; top: 58px; right: 20px; z-index: 30;
+    display: none; align-items: center; gap: 2px; padding: 3px;
+    background: var(--surface-raised); border: 1px solid var(--border);
+    border-radius: var(--radius-pill); box-shadow: var(--shadow-xs);
+}
+html[data-stage="visual"] .graph-tools { display: flex; }
+.graph-tools .btn { height: 26px; border-radius: var(--radius-pill); font-size: 12px; }
+.graph-tools .zoom-pct { font-family: var(--font-family-code); font-size: 11.5px; color: var(--text-muted); padding: 0 4px; }
+.graph-tools .sep-v { margin: 0 4px; }
+.graph-tools .btn.on { background: var(--accent-soft); color: var(--ramp-accent-700); }
+
+/* --- editor view --- */
+#view-editor { padding: 72px 40px 96px; }
+.edcard {
+    max-width: 660px; margin: 0 auto;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);              /* --elev-2: the active step */
+    overflow: hidden;
+}
+.ed-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; }
+.ed-title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.ed-title h2 { font-size: var(--fs-label); font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg-mode { display: flex; gap: 2px; padding: 2px; background: var(--surface-sunken); border-radius: var(--radius-pill); }
+.seg-mode button { height: 24px; padding: 0 12px; border-radius: var(--radius-pill); font-size: 11.5px; font-weight: var(--fw-medium); color: var(--text-muted); }
+.seg-mode button[aria-selected="true"] { background: var(--surface-raised); color: var(--text); font-weight: var(--fw-semibold); box-shadow: var(--shadow-xs); }
+.ed-body { padding: 4px 18px 16px; display: flex; flex-direction: column; gap: 14px; border-top: 1px solid var(--border); padding-top: 16px; }
+.field label:not(.tfield) { display: block; font-size: 12px; font-weight: var(--fw-medium); color: var(--text-muted); margin-bottom: 5px; }
+.field .tfield { height: 34px; }
+.row-url { display: grid; grid-template-columns: 108px 1fr; gap: 8px; }
+.msel { position: relative; }
+.msel select {
+    width: 100%; height: 34px; padding: 0 26px 0 10px;
+    appearance: none; -webkit-appearance: none;
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-family: var(--font-family-code); font-size: 12px; font-weight: var(--fw-bold);
+    color: color-mix(in oklab, var(--method-get) 75%, var(--text));
+    cursor: pointer;
+}
+.msel svg { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text-faint); }
+.url-field input { font-family: var(--font-family-code); font-size: 12px; }
+.varbtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 24px; border-radius: var(--radius-xs); flex: none;
+    color: var(--text-muted); background: var(--surface-sunken);
+}
+.varbtn:hover { background: var(--accent-soft); color: var(--ramp-accent-700); }
+.field-hint { font-size: 11.5px; color: var(--text-faint); margin-top: 5px; }
+.field-hint .mono { font-size: 10.5px; background: var(--surface-sunken); border-radius: var(--radius-xs); padding: 1px 4px; }
+.disclosure {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    height: 36px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    font-size: 12.5px; font-weight: var(--fw-medium); color: var(--text);
+    transition: background var(--dur-1) var(--ease-out);
+}
+.disclosure:hover { background: var(--accent-softer); }
+.disclosure svg { color: var(--text-faint); }
+.disclosure .grow { flex: 1; text-align: left; }
+.disclosure .cnt { font-size: 11px; color: var(--text-faint); font-family: var(--font-family-code); }
+.power-only { display: none; }
+.edcard[data-emode="power"] .power-only { display: flex; }
+.ed-foot {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 18px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+}
+.ed-foot .grow { flex: 1; }
+
+/* --- run pill bar: bottom-center command deck --- */
+.runpill {
+    position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    z-index: 35;
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    box-shadow: var(--shadow-lg);
+    transition: transform var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
+}
+.rp-run {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 36px; padding: 0 18px;
+    border-radius: var(--radius-pill);
+    background: var(--accent); color: var(--accent-contrast);
+    font-size: 13px; font-weight: var(--fw-semibold);
+    transition: background var(--dur-1) var(--ease-out);
+}
+.rp-run:hover { background: var(--accent-hover); }
+.rp-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    height: 36px; padding: 0 14px;
+    border-radius: var(--radius-pill);
+    font-size: 12.5px; font-weight: var(--fw-medium); color: var(--text-muted);
+    transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.rp-btn:hover { background: var(--accent-softer); color: var(--text); }
+.rp-btn[disabled] { opacity: 0.4; pointer-events: none; }
+.rp-status { display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+.rp-status .pip-dot { width: 8px; height: 8px; }
+.rp-status .st { display: none; font-size: 12px; }
+.rp-status .st b { font-weight: var(--fw-bold); letter-spacing: 0.06em; }
+.rp-status .st span { color: var(--text-muted); font-weight: var(--fw-normal); }
+html[data-engine="idle"]    .rp-status .st-idle    { display: inline; color: var(--text-muted); }
+html[data-engine="running"] .rp-status .st-running { display: inline; color: color-mix(in oklab, var(--run-running) 55%, var(--text)); }
+html[data-engine="passed"]  .rp-status .st-passed  { display: inline; color: var(--ramp-success-600); }
+html[data-engine="failed"]  .rp-status .st-failed  { display: inline; color: var(--ramp-error-600); }
+.rp-opts {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 36px; padding: 0 14px;
+    border-radius: var(--radius-pill);
+    font-size: 12px; color: var(--text-muted); font-weight: var(--fw-medium);
+}
+.rp-opts:hover { background: var(--accent-softer); color: var(--text); }
+.pop-opts { min-width: 232px; }
+.opt-row { display: flex; align-items: center; gap: 9px; padding: 7px 10px; font-size: 12.5px; border-radius: var(--radius-sm); }
+.opt-row:hover { background: var(--accent-softer); }
+.opt-row input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--accent); }
+.opt-row .grow { flex: 1; }
+.opt-delay { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12.5px; }
+.opt-delay input {
+    width: 64px; height: 26px; padding: 0 8px; text-align: right;
+    font-family: var(--font-family-code); font-size: 12px;
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-xs);
+}
+.opt-delay .unit { color: var(--text-faint); font-size: 11px; }
+
+/* --- visual view --- */
+#view-visual { overflow: hidden; }
+.canvas {
+    position: absolute; inset: 0;
+    background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
+    background-size: 22px 22px;
+    background-position: 11px 11px;
+}
+.node {
+    position: absolute; width: 232px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    padding: 10px 12px;
+    cursor: pointer; text-align: left;
+    transition: box-shadow var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.node:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md); }
+.node.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring), var(--shadow-md); }
+.node-r1 { display: flex; align-items: center; gap: 8px; }
+.node-r1 .nname { flex: 1; min-width: 0; font-size: 13px; font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-ok { width: 14px; height: 14px; border-radius: 50%; background: var(--run-success); color: var(--accent-contrast); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.node-r2 { display: flex; align-items: center; gap: 7px; margin-top: 7px; }
+.node-url { font-family: var(--font-family-code); font-size: 10.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.node-start {
+    position: absolute; width: auto; padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-raised); border: 1px solid var(--border-strong);
+    font-size: 11px; font-weight: var(--fw-bold); letter-spacing: 0.07em; color: var(--text-muted);
+    box-shadow: var(--shadow-xs);
+}
+.edges { position: absolute; inset: 0; pointer-events: none; }
+.minimap {
+    position: absolute; right: 20px; bottom: 88px;
+    width: 148px; height: 92px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+.minimap .mm-node { position: absolute; width: 26px; height: 12px; border-radius: 3px; background: var(--run-success-bg); border: 1px solid var(--run-success-line); }
+.minimap .mm-view { position: absolute; inset: 8px 30px 14px 10px; border: 1.5px solid var(--accent); border-radius: 4px; opacity: 0.55; }
+
+/* --- json view --- */
+#view-json { padding: 72px 40px 96px; }
+.jsonwrap { max-width: 760px; margin: 0 auto; }
+.json-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.chip-ro {
+    font-size: 10.5px; font-weight: var(--fw-bold); letter-spacing: 0.06em;
+    padding: 3px 8px; border-radius: var(--radius-pill);
+    color: var(--text-muted); background: var(--surface-sunken); border: 1px solid var(--border);
+}
+.json-bar .grow { flex: 1; }
+.jsonblock {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 18px 22px;
+    font-family: var(--font-family-code); font-size: 12px; line-height: 1.7;
+    overflow-x: auto; white-space: pre;
+}
+.j-k { color: var(--ramp-accent-700); }
+.j-s { color: color-mix(in oklab, var(--type-request) 75%, var(--text)); }
+.j-n { color: color-mix(in oklab, var(--type-loop) 75%, var(--text)); }
+.j-p { color: var(--text-faint); }
+
+/* ====================== right rail: inspector ====================== */
+.inspector {
+    display: flex; flex-direction: column; min-height: 0;
+    background: var(--surface-raised);
+    border-left: 1px solid var(--border);
+}
+.insp-head { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); }
+.insp-cap { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; }
+.verdict-row { display: flex; align-items: center; gap: 10px; }
+.verdict {
+    display: inline-flex; align-items: center; gap: 7px;
+    height: 30px; padding: 0 13px;
+    border-radius: var(--radius-pill);
+    font-size: 13px; font-weight: var(--fw-bold); letter-spacing: 0.07em;
+    color: var(--ramp-success-600); background: var(--run-success-bg);
+    border: 1px solid var(--run-success-line);
+}
+.verdict-meta { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.verdict-meta .mono { font-size: 11px; }
+.ribbon {
+    display: flex; align-items: center; gap: 8px;
+    margin: 10px 16px 0; padding: 7px 10px;
+    background: var(--run-success-bg);
+    border: 1px solid var(--run-success-line);
+    border-radius: var(--radius-md);
+    font-size: 12px; color: var(--ramp-success-600); font-weight: var(--fw-medium);
+}
+.ribbon .grow { flex: 1; }
+.ribbon button { color: inherit; opacity: 0.7; display: inline-flex; }
+.ribbon button:hover { opacity: 1; }
+
+.selstep { padding: 12px 16px 14px; border-bottom: 1px solid var(--border); }
+.selstep .eyebrow { display: block; margin-bottom: 8px; }
+.ss-r1 { display: flex; align-items: center; gap: 8px; }
+.ss-r1 h3 { flex: 1; min-width: 0; font-size: 13.5px; font-weight: var(--fw-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-meta { font-family: var(--font-family-code); font-size: 11px; color: var(--text-muted); margin: 6px 0 9px; }
+.payload {
+    position: relative;
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    font-family: var(--font-family-code); font-size: 11.5px; line-height: 1.62;
+    overflow: hidden; white-space: pre;
+}
+.payload .copy {
+    position: absolute; top: 6px; right: 6px;
+    width: 24px; height: 24px; border-radius: var(--radius-xs);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--text-faint); background: var(--surface-sunken);
+}
+.payload .copy:hover { color: var(--text); background: var(--surface-raised); }
+
+.feed { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: 10px; }
+.feed-cap { display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; }
+.feed-cap .eyebrow { flex: 1; }
+.feed-cap .tfield { height: 26px; width: 118px; padding: 0 8px; background: var(--surface-sunken); border-color: transparent; }
+.feed-cap .tfield input { font-size: 11.5px; }
+.feed-cap select {
+    height: 26px; padding: 0 6px;
+    background: var(--surface-sunken); border: 1px solid transparent; border-radius: var(--radius-sm);
+    font-size: 11.5px; color: var(--text-muted); cursor: pointer;
+}
+.feed-list { flex: 1; overflow-y: auto; padding: 0 10px 12px; }
+.fentry {
+    width: 100%; text-align: left;
+    padding: 9px 10px; margin-bottom: 2px;
+    border-radius: var(--radius-md);
+    transition: background var(--dur-1) var(--ease-out);
+}
+.fentry:hover { background: var(--accent-softer); }
+.fentry.sel { background: var(--accent-soft); }
+.fe-r1 { display: flex; align-items: center; gap: 8px; }
+.fe-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--run-success); flex: none; }
+.fe-name { flex: 1; min-width: 0; font-size: 12.5px; font-weight: var(--fw-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fe-ms { font-family: var(--font-family-code); font-size: 10.5px; color: var(--text-faint); }
+.fe-prev {
+    display: block; margin-top: 4px; padding-left: 16px;
+    font-family: var(--font-family-code); font-size: 10.5px; color: var(--text-faint);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.feed-empty { display: none; padding: 18px 16px; font-size: 12px; color: var(--text-faint); text-align: center; }
+
+/* ====================== command palette ====================== */
+.palette-scrim { position: fixed; inset: 0; z-index: 90; background: var(--scrim); }
+.palette {
+    position: fixed; z-index: 91; left: 50%; top: 17%; transform: translateX(-50%);
+    width: 560px;
+    background: var(--surface-overlay);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
+    overflow: hidden;
+}
+.pal-input { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.pal-input svg { color: var(--text-faint); }
+.pal-input input { flex: 1; border: none; outline: none; background: none; font-size: var(--fs-base); }
+.pal-list { max-height: 320px; overflow-y: auto; padding: 6px; }
+.pal-group { padding: 8px 10px 3px; }
+.pal-item {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    height: 36px; padding: 0 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: var(--fw-medium); text-align: left;
+}
+.pal-item svg { color: var(--text-muted); }
+.pal-item:hover, .pal-item.active { background: var(--accent-soft); }
+.pal-item .grow { flex: 1; }
+.pal-foot {
+    display: flex; gap: 14px; padding: 8px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--text-faint);
+}
+
+/* ====================== info / variables popovers ====================== */
+.pop-info { width: 340px; padding: 12px; }
+.pop-info .field { margin-bottom: 10px; }
+.pop-info textarea {
+    width: 100%; min-height: 52px; padding: 8px 10px; resize: vertical;
+    background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 12.5px;
+}
+.gh-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px; font-family: var(--font-family-code); font-size: 11px; }
+.gh-row .k { color: var(--ramp-accent-700); }
+.gh-row .v { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop-vars { width: 336px; padding: 10px; }
+.var-row { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--radius-sm); }
+.var-row:hover { background: var(--accent-softer); }
+.var-name { font-family: var(--font-family-code); font-size: 11.5px; font-weight: var(--fw-semibold); color: var(--ramp-accent-700); }
+.var-val { flex: 1; min-width: 0; font-family: var(--font-family-code); font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.var-src {
+    font-size: 9.5px; font-weight: var(--fw-semibold); letter-spacing: 0.04em;
+    padding: 2px 6px; border-radius: var(--radius-pill); flex: none;
+    color: var(--text-muted); background: var(--surface-sunken); border: 1px solid var(--border);
+}
+
+/* ====================== Demo Mode: promote the run surface ====================== */
+body.demo .runpill { transform: translateX(-50%) scale(1.16); transform-origin: bottom center; box-shadow: var(--shadow-overlay); }
+body.demo .pip-pill { transform: scale(1.18); transform-origin: left center; }
+body.demo .cmdk, body.demo .tb-right .btn-quiet:not(.pressed) { opacity: 0.55; }
+
+@media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- inline SVG sprite: 24x24, stroke-width 2 (matches app iconography) -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
+    <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></symbol>
+    <symbol id="i-stepfwd" viewBox="0 0 24 24"><path d="M6 5l9 7-9 7z"/><path d="M18 5v14"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h8M18 7h2M4 17h3M13 17h7"/><circle cx="15" cy="7" r="2.5"/><circle cx="10" cy="17" r="2.5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-present" viewBox="0 0 24 24"><path d="M2 4h20"/><path d="M4 4v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4"/><path d="M12 16v4M9 20h6"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 4v6h6"/><path d="M4 14a8 8 0 1 0 2-8L3 10"/></symbol>
+    <symbol id="i-redo" viewBox="0 0 24 24"><path d="M21 4v6h-6"/><path d="M20 14a8 8 0 1 1-2-8l3 4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3l4 4L8 20l-5 1 1-5z"/></symbol>
+    <symbol id="i-branch" viewBox="0 0 24 24"><path d="M6 15V3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4a1 1 0 0 1 1-1h10l4 4v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 3v5h7"/><path d="M8 21v-6h8v6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3l9.5 17H2.5z"/><path d="M12 9v5"/><path d="M12 17h.01"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18"/><path d="M12 3a14 14 0 0 0 0 18"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+    <symbol id="i-cond" viewBox="0 0 24 24"><path d="M12 3l9 9-9 9-9-9z"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 4v6h6"/><path d="M4 14a8 8 0 1 0 2-8L3 10"/></symbol>
+</svg>
+
+<div class="app">
+
+    <!-- ============ TOP BAR: identity + palette + quiet chrome ============ -->
+    <header class="topbar">
+        <div class="tb-left">
+            <span class="wordmark">
+                <span class="logo-mark"><svg class="ic ic-sm ic-fill" aria-hidden="true"><use href="#i-zap"/></svg></span>
+                <strong>FlowRunner</strong>
+            </span>
+            <button class="pip-pill" id="pip" title="Engine status. Click to preview states." aria-live="polite">
+                <span class="pip-dot"></span>
+                <span class="st st-idle">IDLE</span>
+                <span class="st st-running">RUNNING</span>
+                <span class="st st-passed">PASSED</span>
+                <span class="st st-failed">FAILED</span>
+            </button>
+        </div>
+
+        <button class="cmdk" id="cmdk-btn" title="Open the command palette">
+            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="grow">Search or run a command</span>
+            <kbd>&#8984;K</kbd>
+        </button>
+
+        <div class="tb-right">
+            <button class="btn btn-quiet btn-icon" title="Undo (Cmd+Z)"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
+            <button class="btn btn-quiet btn-icon" title="Redo (Shift+Cmd+Z)" disabled><svg class="ic" aria-hidden="true"><use href="#i-redo"/></svg></button>
+            <span class="sep-v"></span>
+            <button class="btn btn-quiet btn-icon" title="Switch to dark theme"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg></button>
+            <button class="btn btn-quiet" id="demo-btn" aria-pressed="false" title="Demo Mode: presentation view">
+                <svg class="ic" aria-hidden="true"><use href="#i-present"/></svg><span>Present</span>
+            </button>
+            <div class="pop-wrap">
+                <button class="btn btn-quiet btn-icon" data-pop="#pop-overflow" title="Flow file actions" aria-haspopup="menu">
+                    <svg class="ic" aria-hidden="true"><use href="#i-more"/></svg>
+                </button>
+                <div class="popover pop-right" id="pop-overflow" hidden role="menu" style="min-width:264px">
+                    <div class="menu-group eyebrow">File</div>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus"/></svg><span class="grow">New Flow</span><kbd>&#8984;N</kbd></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-folder"/></svg><span class="grow">Open Flow</span><kbd>&#8984;O</kbd></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-save"/></svg><span class="grow">Save</span><span class="dot-dirty" title="Unsaved changes"></span><kbd>&#8984;S</kbd></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-save"/></svg><span class="grow">Save As</span><kbd>&#8679;&#8984;S</kbd></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-rotate"/></svg><span class="grow">Revert changes</span></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-x"/></svg><span class="grow">Close Flow</span><kbd>&#8984;W</kbd></button>
+                    <div class="menu-sep"></div>
+                    <div class="menu-group eyebrow">Import</div>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-terminal"/></svg><span class="grow">Import cURL</span></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download"/></svg><span class="grow">Import HAR</span></button>
+                    <div class="menu-sep"></div>
+                    <div class="menu-group eyebrow">Export</div>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-braces"/></svg><span class="grow">Export results as JSON</span></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-file"/></svg><span class="grow">Export results as CSV</span></button>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-download"/></svg><span class="grow">Export HAR</span></button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="shell">
+
+        <!-- ============ LEFT RAIL: the flow IS the navigation ============ -->
+        <aside class="rail">
+            <div class="pop-wrap">
+                <button class="switcher" data-pop="#pop-switcher" title="Switch flow" aria-haspopup="menu">
+                    <span class="sw-icn"><svg class="ic" aria-hidden="true"><use href="#i-file"/></svg></span>
+                    <span class="sw-txt">
+                        <span class="sw-name">BLA Demo &#8212; Login Abuse</span>
+                        <span class="sw-meta"><span class="chip-unsaved">UNSAVED</span><span class="sw-file">login-abuse.flow.json</span></span>
+                    </span>
+                    <svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                </button>
+                <div class="popover pop-switcher" id="pop-switcher" hidden role="menu">
+                    <label class="tfield">
+                        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-search"/></svg>
+                        <input type="search" id="recent-filter" placeholder="Filter recent flows">
+                    </label>
+                    <button class="recent current">
+                        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-check"/></svg>
+                        <span class="r-main"><span class="r-name">BLA Demo &#8212; Login Abuse</span><span class="r-path">~/Flows/login-abuse.flow.json</span></span>
+                        <span class="r-when">now</span>
+                    </button>
+                    <button class="recent">
+                        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-file"/></svg>
+                        <span class="r-main"><span class="r-name">Cart Abuse Detection</span><span class="r-path">~/Flows/cart-abuse-detection.flow.json</span></span>
+                        <span class="r-when">2d</span>
+                    </button>
+                    <button class="recent">
+                        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-file"/></svg>
+                        <span class="r-main"><span class="r-name">Account Takeover Replay</span><span class="r-path">~/Flows/account-takeover-replay.flow.json</span></span>
+                        <span class="r-when">5d</span>
+                    </button>
+                    <button class="recent">
+                        <svg class="ic ic-sm" aria-hidden="true"><use href="#i-file"/></svg>
+                        <span class="r-main"><span class="r-name">Credential Stuffing Baseline</span><span class="r-path">~/Flows/credential-stuffing.flow.json</span></span>
+                        <span class="r-when">2w</span>
+                    </button>
+                    <div class="pop-foot">
+                        <button class="btn btn-outline"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus"/></svg>New Flow</button>
+                        <button class="btn btn-outline"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-folder"/></svg>Open</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rail-search">
+                <label class="tfield">
+                    <svg class="ic ic-sm" aria-hidden="true"><use href="#i-search"/></svg>
+                    <input type="search" id="step-filter" placeholder="Filter steps">
+                    <kbd>&#8984;P</kbd>
+                </label>
+            </div>
+
+            <div class="rail-cap">
+                <span class="eyebrow">Flow outline</span>
+                <span class="count">2/2 passed</span>
+            </div>
+
+            <ol class="steps" id="steps">
+                <li>
+                    <button class="step-btn" data-step-select="s1">
+                        <span class="spine-dot" title="Success"></span>
+                        <span class="tglyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                        <span class="step-main">
+                            <span class="step-row1"><span class="step-name">List Users</span><span class="chip-method chip-get">GET</span></span>
+                            <span class="step-url">jsonplaceholder.typicode.com/users</span>
+                        </span>
+                    </button>
+                </li>
+                <li>
+                    <button class="step-btn" data-step-select="s2" data-selected="true">
+                        <span class="spine-dot" title="Success"></span>
+                        <span class="tglyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                        <span class="step-main">
+                            <span class="step-row1"><span class="step-name">Get First User</span><span class="chip-method chip-get">GET</span></span>
+                            <span class="step-url">jsonplaceholder.typicode.com/users/1</span>
+                        </span>
+                    </button>
+                </li>
+            </ol>
+
+            <div class="rail-foot pop-wrap">
+                <button class="add-step" data-pop="#pop-addstep" aria-haspopup="menu">
+                    <svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus"/></svg>
+                    <span class="grow">Add step</span>
+                    <kbd>&#8679;&#8984;A</kbd>
+                </button>
+                <div class="popover" id="pop-addstep" hidden role="menu" style="bottom: calc(100% + 6px); top: auto; left: 12px; right: 12px; min-width: 0;">
+                    <button class="menu-item"><span class="tglyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span><span class="grow">Request</span><kbd>&#9166;</kbd></button>
+                    <button class="menu-item"><span class="tglyph t-cond"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-cond"/></svg></span><span class="grow">Condition</span></button>
+                    <button class="menu-item"><span class="tglyph t-loop"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-repeat"/></svg></span><span class="grow">Loop</span></button>
+                    <button class="menu-item"><span class="tglyph t-xform"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-code"/></svg></span><span class="grow">Transform</span></button>
+                    <div class="menu-sep"></div>
+                    <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-terminal"/></svg><span class="grow">From cURL</span></button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ============ CENTER: the stage ============ -->
+        <main class="stage">
+
+            <div class="stage-head">
+                <div class="sh-left">
+                    <div class="pop-wrap" style="display:inline-block">
+                        <button class="btn btn-quiet" data-pop="#pop-info" aria-haspopup="dialog"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-info"/></svg><span>Flow info</span></button>
+                        <div class="popover pop-info" id="pop-info" hidden>
+                            <div class="field"><label>Flow name</label>
+                                <label class="tfield"><input type="text" value="BLA Demo &#8212; Login Abuse"></label>
+                            </div>
+                            <div class="field"><label>Description</label>
+                                <textarea>Two step login abuse reconnaissance against the demo user API. Enumerate accounts, then pull the first profile.</textarea>
+                            </div>
+                            <label style="display:block; font-size:12px; font-weight:500; color:var(--text-muted); margin-bottom:4px;">Global headers</label>
+                            <div class="gh-row"><span class="k">Accept:</span><span class="v">application/json</span></div>
+                            <div class="gh-row"><span class="k">X-Demo-Tenant:</span><span class="v">radware-ase</span></div>
+                        </div>
+                    </div>
+                    <div class="pop-wrap" style="display:inline-block">
+                        <button class="btn btn-quiet" data-pop="#pop-vars" aria-haspopup="dialog"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-braces"/></svg><span>Variables</span></button>
+                        <div class="popover pop-vars" id="pop-vars" hidden>
+                            <div class="var-row"><span class="var-name">{{userId}}</span><span class="var-val">1</span><span class="var-src">extract &#183; List Users</span></div>
+                            <div class="var-row"><span class="var-name">{{baseUrl}}</span><span class="var-val">https://jsonplaceholder.typicode.com</span><span class="var-src">flow</span></div>
+                            <div class="menu-sep"></div>
+                            <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus"/></svg><span class="grow">Add variable</span></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="seg-views" role="tablist" aria-label="Stage view">
+                    <button role="tab" aria-selected="true" data-view="editor"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-pencil"/></svg>Editor</button>
+                    <button role="tab" aria-selected="false" data-view="visual"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-branch"/></svg>Visual</button>
+                    <button role="tab" aria-selected="false" data-view="json"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-braces"/></svg>JSON</button>
+                </div>
+            </div>
+
+            <!-- floating graph toolbar (Visual mode) -->
+            <div class="graph-tools" role="toolbar" aria-label="Graph tools">
+                <button class="btn btn-quiet btn-icon" title="Zoom out" style="height:26px;width:26px">&#8722;</button>
+                <span class="zoom-pct">100%</span>
+                <button class="btn btn-quiet btn-icon" title="Zoom in" style="height:26px;width:26px">+</button>
+                <span class="sep-v"></span>
+                <button class="btn btn-quiet"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-sparkles"/></svg>Tidy Up</button>
+                <button class="btn btn-quiet"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-alert"/></svg>Next Error</button>
+                <button class="btn btn-quiet on"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-map"/></svg>Minimap</button>
+            </div>
+
+            <!-- ===== Editor view ===== -->
+            <section class="stage-view" id="view-editor">
+                <article class="edcard" id="edcard" data-emode="basic">
+                    <header class="ed-head">
+                        <span class="tglyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                        <div class="ed-title">
+                            <h2 id="ed-title">Get First User</h2>
+                            <span class="chip-method chip-get">GET</span>
+                        </div>
+                        <div class="seg-mode" role="tablist" aria-label="Editor mode">
+                            <button role="tab" aria-selected="true" data-emode="basic">Basic</button>
+                            <button role="tab" aria-selected="false" data-emode="power">Power</button>
+                        </div>
+                    </header>
+                    <div class="ed-body">
+                        <div class="field">
+                            <label for="ed-name">Step name</label>
+                            <label class="tfield"><input type="text" id="ed-name" value="Get First User"></label>
+                        </div>
+                        <div class="field">
+                            <label>Request</label>
+                            <div class="row-url">
+                                <div class="msel">
+                                    <select aria-label="HTTP method">
+                                        <option selected>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+                                    </select>
+                                    <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+                                </div>
+                                <label class="tfield url-field">
+                                    <input type="text" id="ed-url" value="https://jsonplaceholder.typicode.com/users/1" spellcheck="false">
+                                    <button class="varbtn" title="Insert {{variable}}"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-braces"/></svg></button>
+                                </label>
+                            </div>
+                            <p class="field-hint">Type <span class="mono">{{</span> to insert a variable. <span class="mono">{{userId}}</span> and <span class="mono">{{baseUrl}}</span> are available.</p>
+                        </div>
+                        <button class="disclosure"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-right"/></svg><span class="grow">Headers</span><span class="cnt" id="ed-headers">1</span></button>
+                        <button class="disclosure"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-right"/></svg><span class="grow">Extract variables</span><span class="cnt" id="ed-extract">0</span></button>
+                        <button class="disclosure power-only"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-right"/></svg><span class="grow">Request body</span><span class="cnt">none</span></button>
+                        <button class="disclosure power-only"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-right"/></svg><span class="grow">Assertions</span><span class="cnt">status is 200</span></button>
+                        <button class="disclosure power-only"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-chevron-right"/></svg><span class="grow">On failure</span><span class="cnt">stop flow</span></button>
+                    </div>
+                    <footer class="ed-foot">
+                        <button class="btn btn-quiet"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-terminal"/></svg>Copy cURL</button>
+                        <span class="grow"></span>
+                        <button class="btn btn-quiet">Cancel</button>
+                        <button class="btn btn-primary"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-check"/></svg>Save Step</button>
+                    </footer>
+                </article>
+            </section>
+
+            <!-- ===== Visual view ===== -->
+            <section class="stage-view" id="view-visual">
+                <div class="canvas">
+                    <svg class="edges" aria-hidden="true">
+                        <path d="M116 300 L 168 300" stroke="var(--run-success-line)" stroke-width="2" fill="none"/>
+                        <path d="M400 300 C 452 300, 452 412, 504 412" stroke="var(--run-success-line)" stroke-width="2" fill="none"/>
+                        <circle cx="168" cy="300" r="3" fill="var(--run-success)"/>
+                        <circle cx="504" cy="412" r="3" fill="var(--run-success)"/>
+                    </svg>
+                    <span class="node-start" style="left:48px; top:286px;">START</span>
+                    <button class="node" style="left:168px; top:262px;" data-step-select="s1">
+                        <span class="node-r1">
+                            <span class="tglyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                            <span class="nname">List Users</span>
+                            <span class="node-ok"><svg class="ic ic-xs" aria-hidden="true" style="width:9px;height:9px;stroke-width:3"><use href="#i-check"/></svg></span>
+                        </span>
+                        <span class="node-r2"><span class="chip-method chip-get">GET</span><span class="node-url">/users</span></span>
+                    </button>
+                    <button class="node sel" style="left:504px; top:374px;" data-step-select="s2">
+                        <span class="node-r1">
+                            <span class="tglyph"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg></span>
+                            <span class="nname">Get First User</span>
+                            <span class="node-ok"><svg class="ic ic-xs" aria-hidden="true" style="width:9px;height:9px;stroke-width:3"><use href="#i-check"/></svg></span>
+                        </span>
+                        <span class="node-r2"><span class="chip-method chip-get">GET</span><span class="node-url">/users/1</span></span>
+                    </button>
+                    <div class="minimap" title="Minimap">
+                        <span class="mm-node" style="left:22px; top:38px;"></span>
+                        <span class="mm-node" style="left:62px; top:52px;"></span>
+                        <span class="mm-view"></span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ===== JSON view (read-only) ===== -->
+            <section class="stage-view" id="view-json">
+                <div class="jsonwrap">
+                    <div class="json-bar">
+                        <span class="chip-ro">READ-ONLY</span>
+                        <span style="font-size:12px;color:var(--text-faint)">login-abuse.flow.json</span>
+                        <span class="grow"></span>
+                        <button class="btn btn-quiet"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-copy"/></svg>Copy JSON</button>
+                    </div>
+                    <div class="jsonblock"><span class="j-p">{</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"BLA Demo &#8212; Login Abuse"</span><span class="j-p">,</span>
+  <span class="j-k">"description"</span><span class="j-p">:</span> <span class="j-s">"Two step login abuse reconnaissance against the demo user API."</span><span class="j-p">,</span>
+  <span class="j-k">"headers"</span><span class="j-p">:</span> <span class="j-p">{</span> <span class="j-k">"Accept"</span><span class="j-p">:</span> <span class="j-s">"application/json"</span><span class="j-p">,</span> <span class="j-k">"X-Demo-Tenant"</span><span class="j-p">:</span> <span class="j-s">"radware-ase"</span> <span class="j-p">},</span>
+  <span class="j-k">"staticVars"</span><span class="j-p">:</span> <span class="j-p">{</span> <span class="j-k">"baseUrl"</span><span class="j-p">:</span> <span class="j-s">"https://jsonplaceholder.typicode.com"</span> <span class="j-p">},</span>
+  <span class="j-k">"steps"</span><span class="j-p">:</span> <span class="j-p">[</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"step-1"</span><span class="j-p">,</span>
+      <span class="j-k">"type"</span><span class="j-p">:</span> <span class="j-s">"request"</span><span class="j-p">,</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"List Users"</span><span class="j-p">,</span>
+      <span class="j-k">"method"</span><span class="j-p">:</span> <span class="j-s">"GET"</span><span class="j-p">,</span>
+      <span class="j-k">"url"</span><span class="j-p">:</span> <span class="j-s">"{{baseUrl}}/users"</span><span class="j-p">,</span>
+      <span class="j-k">"extract"</span><span class="j-p">:</span> <span class="j-p">{</span> <span class="j-k">"userId"</span><span class="j-p">:</span> <span class="j-s">"$[0].id"</span> <span class="j-p">}</span>
+    <span class="j-p">},</span>
+    <span class="j-p">{</span>
+      <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-s">"step-2"</span><span class="j-p">,</span>
+      <span class="j-k">"type"</span><span class="j-p">:</span> <span class="j-s">"request"</span><span class="j-p">,</span>
+      <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Get First User"</span><span class="j-p">,</span>
+      <span class="j-k">"method"</span><span class="j-p">:</span> <span class="j-s">"GET"</span><span class="j-p">,</span>
+      <span class="j-k">"url"</span><span class="j-p">:</span> <span class="j-s">"{{baseUrl}}/users/{{userId}}"</span><span class="j-p">,</span>
+      <span class="j-k">"onFailure"</span><span class="j-p">:</span> <span class="j-s">"stop"</span>
+    <span class="j-p">}</span>
+  <span class="j-p">]</span>
+<span class="j-p">}</span></div>
+                </div>
+            </section>
+
+            <!-- ===== Run pill bar: the command deck ===== -->
+            <div class="runpill pop-wrap" role="toolbar" aria-label="Run controls">
+                <button class="rp-run" title="Run flow (Cmd+R)"><svg class="ic ic-sm ic-fill" aria-hidden="true"><use href="#i-play"/></svg>Run</button>
+                <button class="rp-btn" title="Execute one step"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-stepfwd"/></svg>Step</button>
+                <button class="rp-btn" title="Stop run" disabled style="padding: 0 10px;"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-stop"/></svg></button>
+                <span class="sep-v"></span>
+                <span class="rp-status" aria-live="polite">
+                    <span class="pip-dot"></span>
+                    <span class="st st-idle">Ready</span>
+                    <span class="st st-running"><b>RUNNING</b> <span>step 2 of 2</span></span>
+                    <span class="st st-passed"><b>PASSED</b> <span>2/2 in 1.60 s</span></span>
+                    <span class="st st-failed"><b>FAILED</b> <span>1 of 2 errored</span></span>
+                </span>
+                <span class="sep-v"></span>
+                <button class="rp-opts" data-pop="#pop-opts" title="Run options" aria-haspopup="dialog">
+                    <svg class="ic ic-sm" aria-hidden="true"><use href="#i-sliders"/></svg>
+                    <span>1.0 s delay</span>
+                    <svg class="ic ic-xs" aria-hidden="true"><use href="#i-chevron-up"/></svg>
+                </button>
+                <div class="popover pop-up pop-opts" id="pop-opts" hidden>
+                    <label class="opt-row"><input type="checkbox"><span class="grow">Continuous Run</span></label>
+                    <label class="opt-row"><input type="checkbox" checked><span class="grow">Encode URL Vars</span></label>
+                    <div class="menu-sep"></div>
+                    <div class="opt-delay"><span class="grow">Delay between steps</span><input type="number" value="1000" min="0" step="100" aria-label="Delay in milliseconds"><span class="unit">ms</span></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ============ RIGHT RAIL: results inspector ============ -->
+        <aside class="inspector">
+            <div class="insp-head">
+                <div class="insp-cap">
+                    <span class="eyebrow">Last run</span>
+                    <div class="pop-wrap">
+                        <button class="btn btn-quiet btn-icon" data-pop="#pop-export" title="Export results" aria-haspopup="menu" style="height:26px;width:26px">
+                            <svg class="ic ic-sm" aria-hidden="true"><use href="#i-download"/></svg>
+                        </button>
+                        <div class="popover pop-right" id="pop-export" hidden role="menu" style="min-width:196px">
+                            <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-braces"/></svg><span class="grow">Results as JSON</span></button>
+                            <button class="menu-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-file"/></svg><span class="grow">Results as CSV</span></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="verdict-row">
+                    <span class="verdict"><svg class="ic ic-sm" aria-hidden="true" style="stroke-width:2.5"><use href="#i-check"/></svg>PASSED</span>
+                </div>
+                <p class="verdict-meta">2 of 2 steps passed &#183; <span class="mono">1.60 s</span> &#183; finished <span class="mono">14:32:08</span></p>
+            </div>
+
+            <div class="ribbon" id="ribbon" role="status">
+                <svg class="ic ic-sm" aria-hidden="true"><use href="#i-check"/></svg>
+                <span class="grow">Run finished. 2 passed, 0 failed.</span>
+                <button title="Dismiss" id="ribbon-x"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-x"/></svg></button>
+            </div>
+
+            <div class="selstep">
+                <span class="eyebrow">Selected step</span>
+                <div class="ss-r1">
+                    <h3 id="ss-name">Get First User</h3>
+                    <span class="chip-status chip-success">SUCCESS</span>
+                </div>
+                <p class="ss-meta" id="ss-meta">GET &#183; 200 OK &#183; 187 ms &#183; 1.1 KB</p>
+                <div class="payload" id="ss-payload"><button class="copy" title="Copy payload"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-copy"/></svg></button><span class="j-p">{</span>
+  <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">,</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Leanne Graham"</span><span class="j-p">,</span>
+  <span class="j-k">"username"</span><span class="j-p">:</span> <span class="j-s">"Bret"</span><span class="j-p">,</span>
+  <span class="j-k">"email"</span><span class="j-p">:</span> <span class="j-s">"Sincere@april.biz"</span><span class="j-p">,</span>
+  <span class="j-k">"address"</span><span class="j-p">:</span> <span class="j-p">{</span> <span class="j-k">"city"</span><span class="j-p">:</span> <span class="j-s">"Gwenborough"</span><span class="j-p">, &#8230; }</span><span class="j-p">,</span>
+  <span class="j-k">"phone"</span><span class="j-p">:</span> <span class="j-s">"1-770-736-8031 x56442"</span>
+<span class="j-p">}</span></div>
+            </div>
+
+            <div class="feed">
+                <div class="feed-cap">
+                    <span class="eyebrow">Run feed</span>
+                    <label class="tfield">
+                        <svg class="ic ic-xs" aria-hidden="true"><use href="#i-search"/></svg>
+                        <input type="search" id="feed-search" placeholder="Search">
+                    </label>
+                    <select id="feed-filter" aria-label="Filter by status">
+                        <option value="all" selected>All</option>
+                        <option value="success">Success</option>
+                        <option value="error">Error</option>
+                    </select>
+                </div>
+                <div class="feed-list" id="feed-list">
+                    <button class="fentry" data-step-select="s1" data-status="success">
+                        <span class="fe-r1">
+                            <span class="fe-dot"></span>
+                            <span class="fe-name">List Users</span>
+                            <span class="chip-status chip-success">SUCCESS</span>
+                            <span class="fe-ms">412 ms</span>
+                        </span>
+                        <span class="fe-prev">[{"id":1,"name":"Leanne Graham","username":"Bret"}, {"id":2,"name":"Ervin Howell"&#8230;</span>
+                    </button>
+                    <button class="fentry sel" data-step-select="s2" data-status="success">
+                        <span class="fe-r1">
+                            <span class="fe-dot"></span>
+                            <span class="fe-name">Get First User</span>
+                            <span class="chip-status chip-success">SUCCESS</span>
+                            <span class="fe-ms">187 ms</span>
+                        </span>
+                        <span class="fe-prev">{"id":1,"name":"Leanne Graham","email":"Sincere@april.biz","address":{"city"&#8230;</span>
+                    </button>
+                    <p class="feed-empty" id="feed-empty">No results match.</p>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- ============ Command palette (Cmd+K) ============ -->
+<div id="palette-root" hidden>
+    <div class="palette-scrim" id="palette-scrim"></div>
+    <div class="palette" role="dialog" aria-label="Command palette">
+        <div class="pal-input">
+            <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <input type="text" id="pal-q" placeholder="Type a command or search steps&#8230;">
+            <kbd>esc</kbd>
+        </div>
+        <div class="pal-list">
+            <div class="pal-group eyebrow">Run</div>
+            <button class="pal-item active"><svg class="ic ic-sm ic-fill" aria-hidden="true"><use href="#i-play"/></svg><span class="grow">Run flow</span><kbd>&#8984;R</kbd></button>
+            <button class="pal-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-stepfwd"/></svg><span class="grow">Step through</span><kbd>&#8984;.</kbd></button>
+            <div class="pal-group eyebrow">Steps</div>
+            <button class="pal-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg><span class="grow">Go to step: List Users</span></button>
+            <button class="pal-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-globe"/></svg><span class="grow">Go to step: Get First User</span></button>
+            <button class="pal-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-plus"/></svg><span class="grow">Add step</span><kbd>&#8679;&#8984;A</kbd></button>
+            <div class="pal-group eyebrow">Flow</div>
+            <button class="pal-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-save"/></svg><span class="grow">Save flow</span><kbd>&#8984;S</kbd></button>
+            <button class="pal-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-present"/></svg><span class="grow">Toggle Demo Mode</span><kbd>&#8679;&#8984;P</kbd></button>
+            <button class="pal-item"><svg class="ic ic-sm" aria-hidden="true"><use href="#i-sun"/></svg><span class="grow">Switch to dark theme</span></button>
+        </div>
+        <div class="pal-foot"><span>&#8593;&#8595; navigate</span><span>&#9166; select</span><span>esc close</span></div>
+    </div>
+</div>
+
+<!-- payload templates for step selection binding -->
+<template id="pay-s1"><button class="copy" title="Copy payload"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-copy"/></svg></button><span class="j-p">[</span>
+  <span class="j-p">{</span> <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">,</span> <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Leanne Graham"</span><span class="j-p">,</span> <span class="j-k">"username"</span><span class="j-p">:</span> <span class="j-s">"Bret"</span> <span class="j-p">},</span>
+  <span class="j-p">{</span> <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-n">2</span><span class="j-p">,</span> <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Ervin Howell"</span><span class="j-p">,</span> <span class="j-k">"username"</span><span class="j-p">:</span> <span class="j-s">"Antonette"</span> <span class="j-p">},</span>
+  <span class="j-p">{</span> <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-n">3</span><span class="j-p">,</span> <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Clementine Bauch"</span><span class="j-p">,</span> <span class="j-k">"username"</span><span class="j-p">:</span> <span class="j-s">"Samantha"</span> <span class="j-p">},</span>
+  <span class="j-p">&#8230; 7 more items</span>
+<span class="j-p">]</span></template>
+<template id="pay-s2"><button class="copy" title="Copy payload"><svg class="ic ic-xs" aria-hidden="true"><use href="#i-copy"/></svg></button><span class="j-p">{</span>
+  <span class="j-k">"id"</span><span class="j-p">:</span> <span class="j-n">1</span><span class="j-p">,</span>
+  <span class="j-k">"name"</span><span class="j-p">:</span> <span class="j-s">"Leanne Graham"</span><span class="j-p">,</span>
+  <span class="j-k">"username"</span><span class="j-p">:</span> <span class="j-s">"Bret"</span><span class="j-p">,</span>
+  <span class="j-k">"email"</span><span class="j-p">:</span> <span class="j-s">"Sincere@april.biz"</span><span class="j-p">,</span>
+  <span class="j-k">"address"</span><span class="j-p">:</span> <span class="j-p">{</span> <span class="j-k">"city"</span><span class="j-p">:</span> <span class="j-s">"Gwenborough"</span><span class="j-p">, &#8230; }</span><span class="j-p">,</span>
+  <span class="j-k">"phone"</span><span class="j-p">:</span> <span class="j-s">"1-770-736-8031 x56442"</span>
+<span class="j-p">}</span></template>
+
+<script>
+/* Minimal state toggles: everything here demonstrates design states only. */
+const $  = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+
+/* --- popovers --- */
+document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('[data-pop]');
+    $$('.popover').forEach(p => {
+        if (trigger && p === $(trigger.dataset.pop)) return;
+        if (!p.hidden && !p.contains(e.target)) p.hidden = true;
+    });
+    if (trigger) {
+        const pop = $(trigger.dataset.pop);
+        pop.hidden = !pop.hidden;
+    }
+});
+
+/* --- stage view switch --- */
+$$('.seg-views [data-view]').forEach(btn => btn.addEventListener('click', () => {
+    document.documentElement.dataset.stage = btn.dataset.view;
+    $$('.seg-views [data-view]').forEach(b => b.setAttribute('aria-selected', b === btn));
+}));
+
+/* --- step selection: outline / graph / feed stay in sync, inspector binds --- */
+const STEP = {
+    s1: { name: 'List Users',     url: 'https://jsonplaceholder.typicode.com/users',   meta: 'GET · 200 OK · 412 ms · 5.8 KB', headers: '1', extract: '1' },
+    s2: { name: 'Get First User', url: 'https://jsonplaceholder.typicode.com/users/1', meta: 'GET · 200 OK · 187 ms · 1.1 KB', headers: '1', extract: '0' }
+};
+function selectStep(id) {
+    const d = STEP[id];
+    $$('.step-btn').forEach(b => b.dataset.selected = String(b.dataset.stepSelect === id));
+    $$('.node[data-step-select]').forEach(n => n.classList.toggle('sel', n.dataset.stepSelect === id));
+    $$('.fentry').forEach(f => f.classList.toggle('sel', f.dataset.stepSelect === id));
+    $('#ed-title').textContent = d.name;
+    $('#ed-name').value = d.name;
+    $('#ed-url').value = d.url;
+    $('#ed-headers').textContent = d.headers;
+    $('#ed-extract').textContent = d.extract;
+    $('#ss-name').textContent = d.name;
+    $('#ss-meta').textContent = d.meta;
+    $('#ss-payload').replaceChildren($('#pay-' + id).content.cloneNode(true));
+}
+document.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-step-select]');
+    if (t) selectStep(t.dataset.stepSelect);
+});
+
+/* --- engine state preview: click the pip to cycle --- */
+const STATES = ['passed', 'running', 'failed', 'idle'];
+$('#pip').addEventListener('click', () => {
+    const cur = document.documentElement.dataset.engine;
+    document.documentElement.dataset.engine = STATES[(STATES.indexOf(cur) + 1) % STATES.length];
+});
+
+/* --- Demo Mode --- */
+$('#demo-btn').addEventListener('click', function () {
+    const on = document.body.classList.toggle('demo');
+    this.setAttribute('aria-pressed', on);
+    this.classList.toggle('pressed', on);
+});
+
+/* --- Basic / Power editor modes --- */
+$$('.seg-mode [data-emode]').forEach(btn => btn.addEventListener('click', () => {
+    $('#edcard').dataset.emode = btn.dataset.emode;
+    $$('.seg-mode [data-emode]').forEach(b => b.setAttribute('aria-selected', b === btn));
+}));
+
+/* --- fuzzy filter: outline steps (subsequence match) --- */
+const fuzzy = (q, s) => { q = q.toLowerCase(); s = s.toLowerCase(); let i = 0; for (const c of s) if (c === q[i]) i++; return i >= q.length; };
+$('#step-filter').addEventListener('input', function () {
+    $$('#steps > li').forEach(li => {
+        const txt = $('.step-name', li).textContent + ' ' + $('.step-url', li).textContent;
+        li.style.display = fuzzy(this.value, txt) ? '' : 'none';
+    });
+});
+
+/* --- recent flows filter --- */
+$('#recent-filter').addEventListener('input', function () {
+    $$('#pop-switcher .recent').forEach(r => {
+        r.style.display = fuzzy(this.value, r.textContent) ? '' : 'none';
+    });
+});
+
+/* --- feed search + status filter --- */
+function filterFeed() {
+    const q = $('#feed-search').value, st = $('#feed-filter').value;
+    let visible = 0;
+    $$('.fentry').forEach(f => {
+        const ok = fuzzy(q, f.textContent) && (st === 'all' || f.dataset.status === st);
+        f.style.display = ok ? '' : 'none';
+        if (ok) visible++;
+    });
+    $('#feed-empty').style.display = visible ? 'none' : 'block';
+}
+$('#feed-search').addEventListener('input', filterFeed);
+$('#feed-filter').addEventListener('change', filterFeed);
+
+/* --- transient runner message --- */
+$('#ribbon-x').addEventListener('click', () => $('#ribbon').remove());
+
+/* --- command palette --- */
+const pal = $('#palette-root');
+function openPal(open) { pal.hidden = !open; if (open) $('#pal-q').focus(); }
+$('#cmdk-btn').addEventListener('click', () => openPal(true));
+$('#palette-scrim').addEventListener('click', () => openPal(false));
+document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPal(pal.hidden); }
+    if (e.key === 'Escape') { openPal(false); $$('.popover').forEach(p => p.hidden = true); }
+});
+$('#pal-q').addEventListener('input', function () {
+    $$('.pal-item').forEach(i => i.style.display = fuzzy(this.value, i.textContent) ? '' : 'none');
+});
+</script>
+</body>
+</html>

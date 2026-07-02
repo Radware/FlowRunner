@@ -1336,11 +1336,18 @@ export class FlowVisualizer {
 
             if (result.output && result.output.status !== undefined && result.output.status !== null) {
                 const statusClass = result.output.status >= 400 ? 'error' : (result.output.status >= 300 ? 'warn' : 'success');
-                requestInfoHtml += `<span class="info-item status-${statusClass}">Status: <strong>${escapeHTML(result.output.status)}</strong></span>`;
+                requestInfoHtml += `<span class="nrt-chip nrt-${statusClass}">${escapeHTML(result.output.status)}</span>`;
+                if (result.output.duration != null) {
+                    requestInfoHtml += `<span class="nrt-chip nrt-ms">${Math.round(result.output.duration)} ms</span>`;
+                }
                 hasRequestInfo = true;
             } else if (result.status === 'error') {
-                requestInfoHtml += '<span class="info-item error">Request Error</span>';
+                requestInfoHtml += '<span class="nrt-chip nrt-error">FAILED</span>';
                 hasRequestInfo = true;
+            }
+            const extractedCount = result.extractedValues ? Object.keys(result.extractedValues).length : 0;
+            if (extractedCount > 0) {
+                requestInfoHtml += `<span class="nrt-chip nrt-vars" title="Variables extracted from this response">&rarr; ${extractedCount} var${extractedCount === 1 ? '' : 's'}</span>`;
             }
 
             const hasConfiguredExtractions = nodeData.step.extract && Object.keys(nodeData.step.extract).length > 0;
@@ -1362,8 +1369,8 @@ export class FlowVisualizer {
                 }
             }
 
-            if (extractionStatus !== 'N/A') {
-                requestInfoHtml += `<span class="info-item extract-${extractionStatusClass}">Extract: <strong>${extractionStatus}</strong></span>`;
+            if (extractionStatus === 'Failed') {
+                requestInfoHtml += `<span class="nrt-chip nrt-error">Extract failed</span>`;
                 hasRequestInfo = true;
             }
 

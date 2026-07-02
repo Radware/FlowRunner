@@ -106,6 +106,13 @@ export function setDirty() {
         domRefs.closeFlowBtn.disabled = !canClose;
     }
 
+    // --- Background-run launcher ---
+    // setDirty fires after every model mutation, which is exactly when "does
+    // this flow have steps to run" can change (updateRunnerUI only fires on
+    // runner lifecycle events, so it alone leaves the button stale).
+    const bgRunBtn = document.getElementById('bg-run-btn');
+    if (bgRunBtn) bgRunBtn.disabled = !flowIsLoaded || !hasSteps || appIsLoading;
+
     // Notify main process if dirty state changes (optional, if needed elsewhere)
     // if (window.electronAPI && typeof window.electronAPI.notifyDirtyStateChanged === 'function') {
     //     window.electronAPI.notifyDirtyStateChanged(isAppDirty);
@@ -777,12 +784,15 @@ export function syncPanelVisibility() {
     const tabRack = document.getElementById('inspector-tabs');
     if (tabRack) {
         const active = appState.isInfoOverlayOpen ? 'info'
-            : appState.isVariablesPanelVisible ? 'variables' : 'results';
+            : appState.isVariablesPanelVisible ? 'variables'
+            : appState.inspectorRunsOpen ? 'runs' : 'results';
         tabRack.querySelectorAll('.inspector-tab').forEach((tab) => {
             tab.setAttribute('aria-selected', String(tab.dataset.tab === active));
         });
         const resultsPane = document.getElementById('inspector-pane-results');
         if (resultsPane) resultsPane.style.display = active === 'results' ? '' : 'none';
+        const runsPane = document.getElementById('inspector-pane-runs');
+        if (runsPane) runsPane.style.display = active === 'runs' ? '' : 'none';
     }
 
     // Sentinel v2: the info/variables buttons are palette/shortcut compat stubs;
@@ -1208,4 +1218,82 @@ export function hideUpdateInfoDialog() {
         // delete dialog._backdropListener;
         // if (closeBtn) delete closeBtn._closeListener;
     }
+}
+
+
+// --- Background runs UI (Runs pane + topbar chips) --------------------------
+// Renders from backgroundRuns.getBackgroundRuns(); re-invoked on the module's
+// 'flowrunner:bgruns-changed' event (wired in eventHandlers).
+
+function bgVerdictWord(status) {
+    return status === 'running' ? 'RUNNING'
+        : status === 'passed' ? 'PASSED'
+        : status === 'failed' ? 'FAILED' : 'STOPPED';
+}
+
+function fmtClock(ts) {
+    try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+    catch { return ''; }
+}
+
+export function renderBackgroundRunsUI(runsList) {
+    // Topbar chips: live runs only (finished runs live in the Runs pane).
+    const strip = document.getElementById('bg-runs-strip');
+    if (strip) {
+        const live = runsList.filter((r) => r.status === 'running');
+        strip.innerHTML = live.map((r) => `
+            <button class="bg-run-chip" data-run-id="${escapeHTML(r.id)}" title="Background run: ${escapeHTML(r.name)} — click for details">
+                <svg class="icon icon--fill status-dot" aria-hidden="true"><use href="#i-dot"/></svg>
+                <span class="bg-run-chip-name">${escapeHTML(r.name)}</span>
+                ${r.continuous ? `<span class="bg-run-chip-iter">#${Math.max(1, r.currentIteration)}</span>` : ''}
+            </button>`).join('');
+    }
+
+    // Tab badge: count of live runs.
+    const badge = document.getElementById('runs-tab-badge');
+    if (badge) {
+        const liveCount = runsList.filter((r) => r.status === 'running').length;
+        badge.hidden = liveCount === 0;
+        badge.textContent = String(liveCount);
+    }
+
+    // Runs pane cards.
+    const list = document.getElementById('bg-runs-list');
+    if (!list) return;
+    if (runsList.length === 0) {
+        list.innerHTML = '<li class="bg-runs-empty">No background runs yet. Open a flow, set Continuous/Delay if you want, and press Background in the Results tab.</li>';
+        return;
+    }
+    list.innerHTML = runsList.map((r) => {
+        const feed = [...r.results].slice(-8).reverse().map((e) => `
+            <li class="bg-feed-row ${e.status}">
+                <span class="bg-feed-dot"></span>
+                ${r.continuous ? `<span class="bg-feed-iter">#${e.iteration}</span>` : ''}
+                <span class="bg-feed-name">${escapeHTML(e.stepName)}</span>
+                ${e.method ? `<span class="request-method ${escapeHTML(e.method)}">${escapeHTML(e.method)}</span>` : ''}
+                ${e.httpStatus != null ? `<span class="bg-feed-code">${e.httpStatus}</span>` : ''}
+                ${e.duration != null ? `<span class="bg-feed-ms">${Math.round(e.duration)} ms</span>` : ''}
+                ${e.error ? `<span class="bg-feed-err" title="${escapeHTML(e.error)}">${escapeHTML(e.error)}</span>` : ''}
+            </li>`).join('');
+        return `
+        <li class="bg-run-card" data-run-id="${escapeHTML(r.id)}" data-status="${r.status}">
+            <div class="bg-run-head">
+                <span class="bg-run-verdict" data-state="${r.status}">${bgVerdictWord(r.status)}</span>
+                <span class="bg-run-name" title="${escapeHTML(r.name)}">${escapeHTML(r.name)}</span>
+                <span class="bg-run-actions">
+                    ${r.status === 'running'
+                        ? '<button class="btn btn-sm btn-secondary" data-bg-action="stop">Stop</button>'
+                        : '<button class="btn btn-sm btn-ghost btn-icon" data-bg-action="remove" title="Remove from list"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>'}
+                </span>
+            </div>
+            <div class="bg-run-meta">
+                <span>${r.stepCount} step${r.stepCount === 1 ? '' : 's'}</span>
+                <span>${r.continuous ? `continuous · every ${r.delayMs} ms` : 'single run'}</span>
+                <span>${r.iterations} iteration${r.iterations === 1 ? '' : 's'} · <b class="bg-ok">${r.passes} passed</b> · <b class="bg-bad">${r.fails} failed</b></span>
+                <span>started ${fmtClock(r.startedAt)}${r.endedAt ? ` · ended ${fmtClock(r.endedAt)}` : ''}</span>
+            </div>
+            ${r.lastError ? `<div class="bg-run-error">${escapeHTML(r.lastError)}</div>` : ''}
+            ${feed ? `<ul class="bg-run-feed">${feed}</ul>` : ''}
+        </li>`;
+    }).join('');
 }

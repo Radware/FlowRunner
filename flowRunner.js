@@ -133,12 +133,24 @@ export class FlowRunner {
 
             // Clean up continuous run state
             this.isContinuousModeActive = false;
+            const clearedPendingIteration = !!this.continuousRunTimeoutId;
             if (this.continuousRunTimeoutId) {
                 logger.info("[FlowRunner] Clearing continuous run timeout");
                 clearTimeout(this.continuousRunTimeoutId);
                 this.continuousRunTimeoutId = null;
             }
             this.currentFlowModelForContinuousRun = null;
+
+            // Stopped BETWEEN continuous iterations: the next run was cancelled
+            // above and no execution loop is alive to observe stopRequested, so
+            // nothing else will ever fire the stop callback. Complete the stop
+            // here or the caller waits forever ("running" that never ends).
+            if (clearedPendingIteration && !this.state.isRunning && !this.state.isStepping) {
+                this.state.stopRequested = false;
+                this.updateRunnerUICallback?.();
+                this.onFlowStopped(this.state.context, this.state.results);
+                return;
+            }
 
             // Abort any ongoing fetch request
             if (this.state.currentFetchController) {

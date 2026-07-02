@@ -788,7 +788,7 @@ describe('FlowRunner', () => {
             await processAsyncOps(3);
             expect(executedStepIds).toEqual(['r1']);
             expect(mockOnFlowStopped).toHaveBeenCalled();
-            expect(mockOnMessage).toHaveBeenCalledWith(expect.stringContaining('Execution stopped: Request step "Req1" failed'), "error");
+            expect(mockOnMessage).toHaveBeenCalledWith(expect.stringContaining('Stopped: "Req1" failed and its On Failure setting is Stop.'), "error");
         });
 
         it('should continue flow on request error if onFailure is continue', async () => {
@@ -1067,5 +1067,53 @@ describe('FlowRunner', () => {
             await runner._executeRequestStep(step, {}, {});
             expect(global.fetch).toHaveBeenCalledTimes(1);
         });
+    });
+});
+
+// --- Wave 3.11: stop() between continuous iterations must complete the stop ---
+// During the wait window the scheduled next iteration is cancelled, but no
+// execution loop is alive to observe stopRequested — the engine must fire
+// onFlowStopped itself or callers hang on "running" forever.
+describe('continuous stop during the between-iterations wait window', () => {
+    it('fires onFlowStopped when stop() lands between iterations', async () => {
+        global.fetch = jest.fn(() => Promise.resolve({
+            ok: true, status: 200,
+            json: async () => ({}),
+            text: async () => '',
+            headers: {
+                get: (h) => (h.toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null),
+                forEach: (cb) => cb('application/json; charset=utf-8', 'content-type'),
+                [Symbol.iterator]: function* () { yield ['content-type', 'application/json; charset=utf-8']; },
+            },
+        }));
+
+        const onFlowStopped = jest.fn();
+        const onIterationStart = jest.fn();
+        let scheduled;
+        const scheduledPromise = new Promise((res) => { scheduled = res; });
+
+        const runner = new FlowRunner({
+            delay: 150,
+            evaluatePathFn: () => undefined,
+            substituteVariablesFn: (step) => ({ processedStep: step, unquotedPlaceholders: {} }),
+            onFlowStopped,
+            onIterationStart,
+            onMessage: (msg) => { if (/Scheduling next/i.test(msg)) scheduled(); },
+        });
+
+        const model = {
+            name: 'loop', headers: {}, staticVars: {},
+            steps: [{ id: 's1', name: 'S', type: 'request', method: 'GET', url: 'http://x' }],
+        };
+
+        const runPromise = runner.run(model, true);
+        await scheduledPromise;              // now inside the wait window
+        runner.stop();
+
+        expect(onFlowStopped).toHaveBeenCalledTimes(1);
+        const iterationsAtStop = onIterationStart.mock.calls.length;
+        await new Promise((r) => setTimeout(r, 400));
+        expect(onIterationStart.mock.calls.length).toBe(iterationsAtStop); // no zombie iterations
+        await runPromise;
     });
 });

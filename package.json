@@ -68,7 +68,7 @@
   "build": {
     "appId": "com.radware.flowrunner",
     "productName": "FlowRunner",
-    "copyright": "Copyright © 2024 Radware ASE Team",
+    "copyright": "Copyright \u00a9 2024 Radware ASE Team",
     "files": [
       "main.js",
       "preload.js",
@@ -77,6 +77,7 @@
       "config.js",
       "app.js",
       "appFeatures.js",
+      "backgroundRuns.js",
       "autoLayout.js",
       "dialogs.js",
       "domUtils.js",
