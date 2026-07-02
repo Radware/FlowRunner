@@ -8,6 +8,15 @@
 
 ---
 
+## Unreleased — flow manager + inspector IA + detail polish (Wave 3.8, user-feedback round)
+- **Flow manager (the drawer grows up):** the Wave 1 sidecar workspace model (workspaceManager.js, folders/subfolders by parentId, flows referenced by path — built and tested but never surfaced) now has its UI. The Flows drawer renders a folder tree: create folders/subfolders (hover actions: new-sub / rename / delete), drag flows into folders (drop on the folder row; drop on the Recent header to unfile), per-folder counts, collapse state persisted. Folder deletion keeps flows (they return to Recent) and reparents subfolders — workspaceManager semantics. Persisted via the existing workspace IPC in Electron and localStorage in the browser, so it works in degraded mode too. All inside fileOperations.js (no new module → no build.files change); flow rows keep their classes/dataset so selection, open-on-click, remove and reorder-drag kept working untouched.
+- **Inspector IA fix (user: "headers and variables are not Info"):** Flow Variables editor moved into the **Variables** pane (one home for variables: static editor above, discovered-in-flow below a divider); the Info tab became **Config** holding Flow Name, Description (full-width, 120px min textarea — the fields finally use the room) and Global Headers. Inspector widened 350→400px. Ctrl+1/2 and palette entries unchanged (same underlying toggles).
+- **Node editor modal:** PREVIOUS/NEXT rows now truly align (grid align-items center + label line-height), Step Name input is full width like URL, and the inner component heading is demoted so it stops fighting the modal title.
+- **Buttons de-dated:** soft depth (shadow-xs, shadow-sm on hover), quiet default borders with border-strong on hover, real transitions; btn-sm repadded. Run-state family untouched (locked semantics).
+- **window.prompt eradicated + showInputDialog grew a single-line mode** (Enter confirms) used by the folder dialogs.
+- **"Demo Mode" renamed in copy to "Present"** (full-screen demo view); internals/classes unchanged.
+- **Scope:** fileOperations.js (manager), index.html (sprite: i-folder-plus/i-pencil; drawer section head; variables/config pane moves), dialogs.js (single-line input), eventHandlers.js (init), demoMode.js (copy), styles.css. Jest 476/29 + e2e 20/20 green. Validated live in Chrome: folder create/file/collapse/rename/delete, Config + Variables panes, node editor modal, both themes.
+
 ## Unreleased — branch consolidation: everything on `dev`
 - **Why:** 16 remote feature branches (waves 1-3 lanes, the sprint branch, a fix branch) had accumulated; the user wanted one branch of record. Verified every branch was an ancestor of `dev` (git merge-base), merged the single holdout `wave2-engine-spikes` (evidence-only React Flow POC under `spikes/react-flow/` + `docs/engine-decision.md`, which the sprint docs referenced but which had never actually landed), pushed `dev` to the remote, then pruned all 16 remotely + locally (plus 12 stale local workflow-worktree branches). Nothing was lost: every pruned ref's history is reachable from `dev`. Branches now: `main`, `dev`.
 

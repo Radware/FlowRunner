@@ -11,7 +11,12 @@ import {
     escapeHTML, findStepById
 } from './flowCore.js';
 import { assignNewIdsRecursive } from './modelUtils.js';
-import { showConfirmDialog } from './dialogs.js';
+import { showConfirmDialog, showInputDialog } from './dialogs.js';
+import {
+    createEmptyWorkspace, parseWorkspace, serializeWorkspace,
+    addFolder, renameFolder, removeFolder, listChildFolders,
+    moveFlowToFolder, listFlowsInFolder,
+} from './workspaceManager.js';
 import { showValidationErrors } from './uiUtils.js';
 import { initializeAppComponents } from './app.js'; // <-- ADDED IMPORT
 import { logger } from './logger.js'; // <-- ADDED IMPORT
@@ -57,6 +62,7 @@ function syncRecentFilesToStore(list) {
  * from localStorage instead. Always re-renders the list when done.
  */
 export async function hydrateRecentFiles() {
+    await hydrateWorkspace();
     if (!window.electronAPI || typeof window.electronAPI.getRecentFiles !== 'function') {
         // No durable store available (e.g. tests/browser) — render whatever localStorage has.
         renderFlowList(getRecentFiles());
@@ -205,27 +211,106 @@ export function loadFlowList() {
 }
 
 // --- MODIFIED FUNCTION ---
+// --- Flow manager: sidecar workspace (folders / organization) --------------
+// Data layer in workspaceManager.js; persisted via workspace IPC in Electron,
+// localStorage in the browser (degraded mode) so the manager works everywhere.
+
+const WORKSPACE_LS_KEY = 'flowrunnerWorkspace';
+const FOLDER_COLLAPSE_KEY = 'flowrunnerFolderCollapsed';
+let workspaceModel = createEmptyWorkspace();
+
+export async function hydrateWorkspace() {
+    try {
+        if (window.electronAPI && typeof window.electronAPI.loadWorkspace === 'function') {
+            const res = await window.electronAPI.loadWorkspace();
+            if (res && res.success && res.workspace) {
+                workspaceModel = parseWorkspace(res.workspace);
+                return;
+            }
+        } else if (typeof localStorage !== 'undefined') {
+            const raw = localStorage.getItem(WORKSPACE_LS_KEY);
+            if (raw) {
+                workspaceModel = parseWorkspace(JSON.parse(raw));
+                return;
+            }
+        }
+    } catch (error) {
+        logger.warn('Could not hydrate workspace (using empty):', error);
+    }
+    workspaceModel = createEmptyWorkspace();
+}
+
+function persistWorkspace() {
+    try {
+        const data = serializeWorkspace(workspaceModel);
+        if (window.electronAPI && typeof window.electronAPI.saveWorkspace === 'function') {
+            Promise.resolve(window.electronAPI.saveWorkspace(data)).catch((err) => {
+                logger.warn('Failed to persist workspace:', err);
+            });
+        } else if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(WORKSPACE_LS_KEY, JSON.stringify(data));
+        }
+    } catch (error) {
+        logger.warn('Error persisting workspace:', error);
+    }
+}
+
+function loadCollapsedFolders() {
+    try {
+        const raw = localStorage.getItem(FOLDER_COLLAPSE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch { return new Set(); }
+}
+
+function saveCollapsedFolders(set) {
+    try { localStorage.setItem(FOLDER_COLLAPSE_KEY, JSON.stringify([...set])); } catch { /* ignore */ }
+}
+
+function rerenderFlowManager() {
+    renderFlowList(getRecentFiles());
+}
+
+/** Create a folder (root or subfolder) via the in-app input dialog. */
+async function promptNewFolder(parentId = null) {
+    const name = await showInputDialog({
+        title: parentId ? 'New subfolder' : 'New folder',
+        message: 'Folders organize your flows; the flow files themselves stay where they are.',
+        placeholder: 'Folder name',
+        confirmText: 'Create',
+        mono: false,
+        multiline: false,
+    });
+    if (!name || !name.trim()) return;
+    addFolder(workspaceModel, { name: name.trim(), parentId });
+    persistWorkspace();
+    rerenderFlowManager();
+}
+
+/** One-time wiring for the drawer's flow-manager chrome (New Folder button). */
+export function initializeFlowManager() {
+    document.getElementById('new-folder-btn')?.addEventListener('click', () => promptNewFolder(null));
+}
+
 export function renderFlowList(recentFiles) {
     if (!domRefs.flowList) return;
-    domRefs.flowList.innerHTML = ''; // Clear previous list
+    const list = domRefs.flowList;
+    list.innerHTML = '';
 
-    if (!recentFiles || recentFiles.length === 0) {
-        domRefs.flowList.innerHTML = '<li class="no-flows">No recent files.</li>';
-        return;
-    }
-
-    // Helper to get just the filename from a path
+    const recent = Array.isArray(recentFiles) ? recentFiles : [];
     const getFileName = (filePath) => path.basename(filePath);
+    const collapsed = loadCollapsedFolders();
+    const filedPaths = new Set(workspaceModel.flows.filter(f => f.folderId).map(f => f.path));
 
-    recentFiles.forEach(filePath => {
+    // ---- flow rows (same structure/classes as before: selection, open-on-click,
+    // remove button and reorder-drag all keep working) ----
+    const makeFlowRow = (filePath, { inFolder = false } = {}) => {
         const li = document.createElement('li');
         li.className = 'flow-list-item recent-file-item';
-        li.dataset.filePath = filePath; // Store the full path
-        li.title = filePath; // Show full path on hover
-
-        if (filePath === appState.currentFilePath) {
-            li.classList.add('selected');
-        }
+        if (inFolder) li.classList.add('in-folder');
+        li.dataset.filePath = filePath;
+        li.title = filePath;
+        if (filePath === appState.currentFilePath) li.classList.add('selected');
 
         li.innerHTML = `
             <div class="flow-item-content">
@@ -240,39 +325,173 @@ export function renderFlowList(recentFiles) {
             </div>
         `;
 
-        // click the row to open the flow
         li.addEventListener('click', (e) => {
-            // Only trigger if the click wasn't on the remove button
             if (!e.target.closest('.btn-remove-recent-file')) {
                 handleFlowListActions({ target: li });
             }
         });
 
-        // --- Drag handlers ---
+        // Drag: reorder within Recent (existing behavior) + drop onto a folder.
         li.draggable = true;
-        li.addEventListener('dragstart', () => {
+        li.addEventListener('dragstart', (e) => {
             li.classList.add('dragging');
+            try { e.dataTransfer.setData('text/flow-path', filePath); } catch { /* jsdom */ }
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
         });
         li.addEventListener('dragend', () => {
             li.classList.remove('dragging');
-            const order = [...domRefs.flowList.querySelectorAll('.recent-file-item')].map(el => el.dataset.filePath);
-            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(order));
-            syncRecentFilesToStore(order);
-            renderFlowList(order);
+            // Persist the visual order of the TOP-LEVEL (unfiled) rows only;
+            // folder membership is workspace state, not recency order.
+            const order = [...list.querySelectorAll(':scope > .recent-file-item')].map(el => el.dataset.filePath);
+            const filed = getRecentFiles().filter(p => !order.includes(p));
+            const full = [...order, ...filed];
+            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(full));
+            syncRecentFilesToStore(full);
+            renderFlowList(full);
         });
 
-        domRefs.flowList.appendChild(li);
-    });
+        return li;
+    };
 
-    domRefs.flowList.ondragover = (e) => {
+    // ---- folder rows ----
+    const renderFolder = (folder, depth, parentUl) => {
+        const li = document.createElement('li');
+        li.className = 'folder-item';
+        li.style.setProperty('--depth', depth);
+        const isCollapsed = collapsed.has(folder.id);
+        const flowsIn = listFlowsInFolder(workspaceModel, folder.id);
+        const childFolders = listChildFolders(workspaceModel, folder.id);
+
+        const row = document.createElement('div');
+        row.className = 'folder-row';
+        row.dataset.folderId = folder.id;
+        row.style.setProperty('--depth', depth);
+        row.innerHTML = `
+            <svg class="icon icon-sm folder-chevron${isCollapsed ? ' collapsed' : ''}" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder"/></svg>
+            <span class="folder-name">${escapeHTML(folder.name)}</span>
+            <span class="folder-actions">
+                <button data-folder-action="new-sub" title="New subfolder"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder-plus"/></svg></button>
+                <button data-folder-action="rename" title="Rename folder"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-pencil"/></svg></button>
+                <button data-folder-action="delete" title="Delete folder (flows are kept)"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+            </span>
+            <span class="folder-count">${flowsIn.length}</span>
+        `;
+
+        row.addEventListener('click', async (e) => {
+            const actionBtn = e.target.closest('[data-folder-action]');
+            if (actionBtn) {
+                e.stopPropagation();
+                const action = actionBtn.dataset.folderAction;
+                if (action === 'new-sub') {
+                    await promptNewFolder(folder.id);
+                } else if (action === 'rename') {
+                    const name = await showInputDialog({
+                        title: 'Rename folder', placeholder: 'Folder name',
+                        initialValue: folder.name, confirmText: 'Rename',
+                        mono: false, multiline: false,
+                    });
+                    if (name && name.trim()) {
+                        renameFolder(workspaceModel, folder.id, name.trim());
+                        persistWorkspace();
+                        rerenderFlowManager();
+                    }
+                } else if (action === 'delete') {
+                    const ok = await showConfirmDialog(
+                        `Delete folder "${folder.name}"? Flows inside are kept and return to Recent; subfolders move up a level.`,
+                        { title: 'Delete folder', confirmText: 'Delete', danger: true },
+                    );
+                    if (ok) {
+                        removeFolder(workspaceModel, folder.id);
+                        persistWorkspace();
+                        rerenderFlowManager();
+                    }
+                }
+                return;
+            }
+            // Row click toggles collapse.
+            const set = loadCollapsedFolders();
+            if (set.has(folder.id)) set.delete(folder.id); else set.add(folder.id);
+            saveCollapsedFolders(set);
+            rerenderFlowManager();
+        });
+
+        // Drop a flow onto the folder to file it.
+        row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drop-target'); });
+        row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+        row.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            row.classList.remove('drop-target');
+            let flowPath = '';
+            try { flowPath = e.dataTransfer.getData('text/flow-path'); } catch { /* ignore */ }
+            if (!flowPath) flowPath = list.querySelector('.recent-file-item.dragging')?.dataset.filePath || '';
+            if (!flowPath) return;
+            moveFlowToFolder(workspaceModel, flowPath, folder.id);
+            persistWorkspace();
+            rerenderFlowManager();
+        });
+
+        li.appendChild(row);
+
+        const childUl = document.createElement('ul');
+        childUl.className = 'folder-children';
+        if (isCollapsed) childUl.style.display = 'none';
+        childFolders.forEach((cf) => renderFolder(cf, depth + 1, childUl));
+        flowsIn.forEach((entry) => childUl.appendChild(makeFlowRow(entry.path, { inFolder: true })));
+        if (!childUl.children.length) {
+            const empty = document.createElement('li');
+            empty.className = 'folder-empty';
+            empty.style.setProperty('--depth', depth);
+            empty.textContent = 'Empty — drag a flow here';
+            childUl.appendChild(empty);
+        }
+        li.appendChild(childUl);
+        parentUl.appendChild(li);
+    };
+
+    const rootFolders = listChildFolders(workspaceModel, null);
+    rootFolders.forEach((f) => renderFolder(f, 0, list));
+
+    const unfiled = recent.filter((p) => !filedPaths.has(p));
+
+    if (rootFolders.length === 0 && unfiled.length === 0) {
+        list.innerHTML = '<li class="no-flows">No recent files.</li>';
+        return;
+    }
+
+    if (rootFolders.length > 0) {
+        const head = document.createElement('li');
+        head.className = 'flow-list-section';
+        head.textContent = 'Recent';
+        // Dropping on the Recent header un-files a flow.
+        head.addEventListener('dragover', (e) => { e.preventDefault(); head.classList.add('drop-root-target'); });
+        head.addEventListener('dragleave', () => head.classList.remove('drop-root-target'));
+        head.addEventListener('drop', (e) => {
+            e.preventDefault();
+            head.classList.remove('drop-root-target');
+            let flowPath = '';
+            try { flowPath = e.dataTransfer.getData('text/flow-path'); } catch { /* ignore */ }
+            if (!flowPath) return;
+            moveFlowToFolder(workspaceModel, flowPath, null);
+            persistWorkspace();
+            rerenderFlowManager();
+        });
+        list.appendChild(head);
+    }
+
+    unfiled.forEach((filePath) => list.appendChild(makeFlowRow(filePath)));
+
+    // Reorder-drag positioning for the unfiled rows (existing behavior).
+    list.ondragover = (e) => {
         e.preventDefault();
-        const dragging = domRefs.flowList.querySelector('.recent-file-item.dragging');
+        const dragging = list.querySelector(':scope > .recent-file-item.dragging');
         if (!dragging) return;
-        const afterEl = getAfterElement(domRefs.flowList, e.clientY);
+        const afterEl = getAfterElement(list, e.clientY);
         if (afterEl == null) {
-            domRefs.flowList.appendChild(dragging);
-        } else {
-            domRefs.flowList.insertBefore(dragging, afterEl);
+            list.appendChild(dragging);
+        } else if (afterEl.parentElement === list) {
+            list.insertBefore(dragging, afterEl);
         }
     };
 }

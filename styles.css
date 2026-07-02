@@ -710,7 +710,8 @@ button:disabled {
 .flow-info-overlay input[type="text"] {
     width: 100%;
 }
-.flow-info-overlay .collapsible-header {
+.flow-info-overlay .collapsible-header,
+.variables-panel .collapsible-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -727,31 +728,37 @@ button:disabled {
   transition: background-color 0.2s, border-radius 0.3s ease-in-out;
   margin-bottom: 5px;
 }
-.flow-info-overlay .collapsible-header:hover {
+.flow-info-overlay .collapsible-header:hover,
+.variables-panel .collapsible-header:hover {
     background-color: var(--medium-bg-color);
 }
-.flow-info-overlay .collapsible-header .toggle-icon {
+.flow-info-overlay .collapsible-header .toggle-icon,
+.variables-panel .collapsible-header .toggle-icon {
   margin-left: 10px;
   transition: transform 0.3s ease-in-out;
   font-weight: bold;
   color: var(--primary-color);
 }
-.flow-info-overlay .collapsible-header.active {
+.flow-info-overlay .collapsible-header.active,
+.variables-panel .collapsible-header.active {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   background-color: var(--medium-bg-color);
 }
-.flow-info-overlay .collapsible-header.active .toggle-icon {
+.flow-info-overlay .collapsible-header.active .toggle-icon,
+.variables-panel .collapsible-header.active .toggle-icon {
     transform: rotate(180deg);
 }
-.flow-info-overlay .collapsible-content {
+.flow-info-overlay .collapsible-content,
+.variables-panel .collapsible-content {
      border: none;
      padding: 0 15px; /* Horizontal padding, vertical added on open */
      max-height: 0;
      overflow: hidden;
      transition: max-height 0.3s ease-out, padding-top 0.3s ease-out, padding-bottom 0.3s ease-out, border-color 0.3s ease-out;
 }
-.flow-info-overlay .collapsible-header.active + .collapsible-content {
+.flow-info-overlay .collapsible-header.active + .collapsible-content,
+.variables-panel .collapsible-header.active + .collapsible-content {
     border: 1px solid var(--border-color-light);
     border-top: none;
     background-color: var(--surface-raised);
@@ -1685,11 +1692,12 @@ body.flow-step-dragging { cursor: grabbing !important; }
     display: grid;
     grid-template-columns: 90px 1fr;
     gap: 12px;
-    align-items: start;
+    align-items: center;
 }
 .node-editor-meta-label {
     font-size: 0.78rem;
     font-weight: 600;
+    line-height: 1;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--medium-text-color);
@@ -3716,3 +3724,136 @@ html.demo-mode #app-rail #sidebar-toggle-btn,
 html.demo-mode #app-rail #rail-palette-btn { display: none; }
 html.demo-mode .app-topbar { padding-block: 6px; }
 html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
+
+
+/* ============ Round: detail polish (buttons, editor sizing, inspector IA) ============ */
+
+/* Buttons: soft depth, quiet borders, real hover/press feedback. */
+.btn {
+    transition: background-color var(--dur-1) var(--ease-out),
+                border-color var(--dur-1) var(--ease-out),
+                color var(--dur-1) var(--ease-out),
+                box-shadow var(--dur-1) var(--ease-out),
+                transform var(--dur-1) var(--ease-out);
+}
+.btn-secondary {
+    border-color: var(--border);
+    box-shadow: var(--shadow-xs);
+}
+.btn-secondary:hover:not(:disabled) {
+    background-color: var(--surface-raised);
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+}
+.btn-primary { box-shadow: var(--shadow-xs); }
+.btn-primary:hover:not(:disabled) { box-shadow: var(--shadow-sm); }
+.btn-sm { padding: 5px 12px; border-radius: var(--radius-sm); }
+.btn:disabled { box-shadow: none; }
+
+/* Step editor: fields own their row (Step Name was needlessly narrow). */
+.step-editor .form-group > input[type="text"],
+.step-editor .form-group > input[type="number"],
+.step-editor .form-group > textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Node editor modal: the inner component header repeats the modal title; demote it. */
+.node-editor-body .editor-header h3 {
+    font-size: var(--fs-label);
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* Inspector: more room, fields that use it. */
+#runner-panel { width: 400px; }
+.runner-content .flow-info-overlay input[type="text"],
+.runner-content .flow-info-overlay textarea,
+.runner-content .variables-panel input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+}
+.runner-content .flow-info-overlay textarea { min-height: 120px; resize: vertical; }
+
+/* Flow Variables editor lives in the Variables pane now. */
+.runner-content .variables-panel .flow-variables-section { margin-bottom: var(--space-lg); flex-shrink: 0; }
+
+/* ---- Flows drawer: section head + folder tree ---- */
+.drawer-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px 4px;
+}
+.drawer-section-label {
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+.flow-list-section {
+    padding: 10px 16px 4px;
+    font-size: var(--fs-caption);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    list-style: none;
+}
+.folder-item { list-style: none; }
+.folder-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 1px var(--space-sm);
+    padding: 7px 10px 7px calc(10px + var(--depth, 0) * 14px);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 500;
+    font-size: var(--fs-body);
+}
+.folder-row:hover { background: var(--surface-sunken); }
+.folder-row.drop-target {
+    background: color-mix(in oklab, var(--accent) 14%, transparent);
+    box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.folder-chevron { transition: transform var(--dur-1) var(--ease-out); flex-shrink: 0; color: var(--text-muted); }
+.folder-chevron.collapsed { transform: rotate(-90deg); }
+.folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.folder-count {
+    font-size: var(--fs-caption);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.folder-actions { display: none; align-items: center; gap: 2px; }
+.folder-row:hover .folder-actions { display: inline-flex; }
+.folder-actions button {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; padding: 0;
+    background: transparent; border: none; border-radius: var(--radius-xs);
+    color: var(--text-muted); cursor: pointer;
+}
+.folder-actions button:hover { color: var(--text); background: var(--surface-raised); }
+.folder-children { list-style: none; margin: 0; padding: 0; }
+.folder-empty {
+    list-style: none;
+    padding: 4px 16px 6px calc(34px + var(--depth, 0) * 14px);
+    color: var(--text-faint, var(--text-muted));
+    font-size: var(--fs-caption);
+    font-style: italic;
+}
+.recent-file-item.drop-root-target { box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* Single-line variant of the input dialog (folder names etc.) */
+.app-input-textarea.single { min-height: 40px; height: 40px; resize: none; }
+
+
+/* Variables pane: editor section above, discovered variables below a divider. */
+.runner-content .variables-panel .flow-variables-section {
+    padding-bottom: var(--space-lg);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: var(--space-lg);
+}
+.runner-content .variables-panel .variables-container { flex: 1; min-height: 0; overflow-y: auto; }

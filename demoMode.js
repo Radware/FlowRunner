@@ -92,8 +92,8 @@ function syncButton(button, on) {
     button.setAttribute('aria-pressed', on ? 'true' : 'false');
     button.classList.toggle('active', on);
     button.title = on
-        ? 'Exit Demo Mode (presentation view)'
-        : 'Enter Demo Mode (presentation view for projecting a live flow)';
+        ? 'Exit Present mode'
+        : 'Present: full-screen demo view for projecting a live flow';
 }
 
 /**

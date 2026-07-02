@@ -175,6 +175,9 @@ export function showInputDialog(opts = {}) {
     field.placeholder = opts.placeholder || '';
     field.value = opts.initialValue || '';
     field.classList.toggle('mono', opts.mono !== false);
+    const multiline = opts.multiline !== false;
+    field.classList.toggle('single', !multiline);
+    field.rows = multiline ? 6 : 1;
     okBtn.textContent = opts.confirmText || 'Import';
 
     const previouslyFocused = document.activeElement;
@@ -201,8 +204,11 @@ export function showInputDialog(opts = {}) {
         const onBackdrop = (e) => { if (e.target === overlay) close(null); };
         const onKey = (e) => {
             if (e.key === 'Escape') { e.stopPropagation(); close(null); }
-            // Cmd/Ctrl+Enter confirms (plain Enter inserts a newline in the textarea).
-            else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.stopPropagation(); close(field.value); }
+            // Multiline: Cmd/Ctrl+Enter confirms (plain Enter = newline).
+            // Single-line: plain Enter confirms.
+            else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !multiline)) {
+                e.preventDefault(); e.stopPropagation(); close(field.value);
+            }
         };
 
         okBtn.addEventListener('click', onOk);

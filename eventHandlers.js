@@ -5,7 +5,7 @@ import {
     handleCreateNewFlow, handleOpenFile, handleFlowListActions,
     saveCurrentFlow, handleSaveAs, confirmDiscardChanges,
     handleCancelFlow, handleCloseFlow,
-    getRecentFiles, handleSelectFlow
+    getRecentFiles, handleSelectFlow, initializeFlowManager
 } from './fileOperations.js';
 import {
     handleRunFlow,
@@ -86,6 +86,8 @@ export function initializeEventListeners() {
     domRefs.toggleVariablesBtn?.addEventListener('click', () => handleToggleVariablesPanel());
 
     // --- Sentinel v2 shell ---
+    // Flow manager: New Folder button in the drawer section head.
+    initializeFlowManager();
     // Flows drawer close chevron mirrors the rail toggle.
     document.getElementById('drawer-close-btn')?.addEventListener('click', handleToggleSidebarCollapse);
     // Rail palette button opens the command palette (same path as Cmd/Ctrl+K).
