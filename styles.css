@@ -681,7 +681,6 @@ button:disabled {
     overflow: hidden;
     max-height: 0;    /* Start closed */
     opacity: 0;
-    transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding-top 0.3s ease-out, padding-bottom 0.3s ease-out;
     display: flex;
     flex-direction: column;
     z-index: 100;  /* Both panels should have same z-index */
@@ -755,7 +754,7 @@ button:disabled {
      padding: 0 15px; /* Horizontal padding, vertical added on open */
      max-height: 0;
      overflow: hidden;
-     transition: max-height 0.3s ease-out, padding-top 0.3s ease-out, padding-bottom 0.3s ease-out, border-color 0.3s ease-out;
+     transition: opacity 0.2s ease-out;
 }
 .flow-info-overlay .collapsible-header.active + .collapsible-content,
 .variables-panel .collapsible-header.active + .collapsible-content {
@@ -924,7 +923,6 @@ button:disabled {
 
 /* --- Pane Minimization Styles */
 .collapsible-pane {
-    transition: width 0.3s ease-in-out, padding 0.3s ease-in-out;
     position: relative;
     overflow: hidden;
     display: flex;
@@ -4003,3 +4001,79 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
 }
 .request-extractions { display: inline-flex; align-items: center; gap: 5px; }
 .request-extractions > span:first-child { font-size: var(--fs-caption); color: var(--text-faint, var(--text-muted)); }
+
+
+/* ============ Critique round: verdict pill, inspector collapse, Power panes ============ */
+
+/* The run verdict at projector scale. Filled soft chip, saturated word. */
+.run-verdict[hidden] { display: none; }
+.run-verdict {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: var(--radius-pill);
+    font-size: var(--fs-label);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    margin-right: 4px;
+    border: 1px solid transparent;
+}
+.run-verdict .status-dot { width: 10px; height: 10px; }
+.run-verdict[data-state="running"] {
+    color: color-mix(in oklab, var(--run-running) 70%, var(--text));
+    background: color-mix(in oklab, var(--run-running) 14%, transparent);
+    border-color: color-mix(in oklab, var(--run-running) 30%, transparent);
+}
+.run-verdict[data-state="success"] {
+    color: color-mix(in oklab, var(--run-success) 60%, var(--text));
+    background: color-mix(in oklab, var(--run-success) 15%, transparent);
+    border-color: color-mix(in oklab, var(--run-success) 32%, transparent);
+}
+.run-verdict[data-state="error"] {
+    color: color-mix(in oklab, var(--run-error) 62%, var(--text));
+    background: color-mix(in oklab, var(--run-error) 14%, transparent);
+    border-color: color-mix(in oklab, var(--run-error) 32%, transparent);
+}
+
+/* Inspector collapse: slim strip, toggle stays reachable, chevron flips. */
+#runner-panel.collapsed { width: 46px; }
+#runner-panel.collapsed .inspector-tabs,
+#runner-panel.collapsed .runner-content { display: none; }
+#runner-panel.collapsed .runner-header {
+    justify-content: center;
+    padding: 10px 6px;
+    border-bottom: none;
+}
+#runner-panel.collapsed .runner-toggle svg { transform: rotate(180deg); }
+.runner-toggle svg { transition: transform var(--dur-2) var(--ease-out); }
+
+/* Power tab panes: same design language as the rest of the editor. */
+.tab-content.active { padding-top: 4px; }
+.header-row-no-items, .extract-row-no-items, .assertion-row-no-items,
+.global-header-row-no-items, .flow-var-row-no-items, .no-flow-vars {
+    padding: 14px 16px;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-faint, var(--text-muted));
+    font-size: var(--fs-body);
+    background: var(--surface-sunken);
+    margin-bottom: 10px;
+}
+.btn-add-header, .btn-add-extract, .btn-add-assertion,
+.btn-add-global-header, .btn-add-flow-var {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px dashed color-mix(in oklab, var(--accent) 40%, var(--border));
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.btn-add-header:hover, .btn-add-extract:hover, .btn-add-assertion:hover,
+.btn-add-global-header:hover, .btn-add-flow-var:hover {
+    background: color-mix(in oklab, var(--accent) 8%, transparent);
+    border-color: var(--accent);
+}
+.form-tabs .form-hint { margin-top: 10px; line-height: 1.55; }

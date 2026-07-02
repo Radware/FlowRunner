@@ -556,7 +556,10 @@ test.describe('E2E: Comprehensive Flow Execution', () => {
         page.locator('.result-item[data-step-id="step_e2e_3_post_data"] .result-status')
     ).toHaveText('SUCCESS', { timeout: 30_000 });
     await expect(connToStep3).toHaveClass(/status-success/);
-    await expect(connToStep2).not.toHaveClass(/status-success/);
+    // Wave 3.10 persistence contract: the executed route STAYS painted —
+    // earlier connectors keep their terminal status (the projected graph
+    // tells the whole run's story), rather than only the last edge coloring.
+    await expect(connToStep2).toHaveClass(/status-success/);
 
     await expect(page.locator('#run-flow-btn')).toBeEnabled({ timeout: 90_000 });
   });

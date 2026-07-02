@@ -514,7 +514,7 @@ export class FlowRunner {
                 if (step.type === 'request' && (!step.onFailure || step.onFailure === 'stop')) {
                     const errorReason = result.error || 'Request failed';
                     logger.warn(`[FlowRunner] Request Step \"${step.name}\" (ID: ${step.id}) failed and onFailure=stop. Requesting stop. Reason: ${errorReason}`);
-                    this.onMessage(`Execution stopped: Request step "${step.name}" failed (onFailure=stop).`, "error");
+                    this.onMessage(`Stopped: "${step.name}" failed and its On Failure setting is Stop.`, "error");
                     this.stop();
                 } else if (step.type !== 'request') {
                     const errorReason = result.error || 'Step failed';
@@ -951,13 +951,13 @@ export class FlowRunner {
                         this.onMessage(`Request step "${step.name}" timed out after 30 seconds.`, 'error');
                     }
                 } else if (errorMsg.match(/ENOTFOUND|DNS|getaddrinfo|Failed to fetch|Name or service not known|Could not resolve host/i)) {
-                    errorMsg = 'Network error: Could not resolve host or DNS lookup failed.';
+                    errorMsg = 'Could not resolve the host. Check the URL or your connection.';
                     this.onMessage(`Request step "${step.name}": Could not resolve host or DNS lookup failed.\n\nCheck the URL and your network connection.`, 'error');
                 } else if (errorMsg.match(/ECONNREFUSED|connection refused|ECONNRESET|Connection refused/i)) {
-                    errorMsg = 'Network error: Connection refused by server.';
+                    errorMsg = 'The server refused the connection. Check the port and that the service is up.';
                     this.onMessage(`Request step "${step.name}": Connection refused by server.\n\nCheck if the server is running and reachable.`, 'error');
                 } else if (errorMsg.match(/timeout|timed out|ETIMEDOUT/i)) {
-                    errorMsg = 'Network error: Connection timed out.';
+                    errorMsg = 'The request timed out. The server may be slow or unreachable.';
                     this.onMessage(`Request step "${step.name}": Connection timed out.\n\nCheck your network connection and server status.`, 'error');
                 } else if (errorMsg.match(/NetworkError|network error|TypeError: Failed to fetch/i)) {
                     errorMsg = 'Network error: Failed to connect.';

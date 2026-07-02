@@ -305,7 +305,7 @@ export async function handleStepFlow() {
      } else {
          // If not the first step, just clear previous "running" highlights before the next step
          if (appState.visualizerComponent) appState.visualizerComponent.clearHighlights('active-step'); // Clear only active step highlight
-         clearListViewHighlights(); // Clear all previous list highlights? Or maybe just running? Let's clear all for simplicity for now.
+         clearListViewHighlights(['step-running']); // running is exclusive; terminal tints persist
      }
 
      updateRunnerUI(); // Disable buttons during step
@@ -433,9 +433,13 @@ export function handleRunnerFlowComplete(finalContext, results) {
              highlightStepInList(stoppedStepId, 'step-stopped');
         }
     } else {
-         // Clear only active highlights if stop was between steps
-         if (appState.visualizerComponent) appState.visualizerComponent.clearHighlights(); // Clear all for safety
-         clearListViewHighlights();
+         // Stop landed between steps (or after a terminal failure): clear ONLY the
+         // running indicator. Wiping everything here was the bug that erased the
+         // red FAIL tint the instant onFailure=stop fired.
+         if (appState.visualizerComponent?.clearRunningHighlight) {
+             appState.visualizerComponent.clearRunningHighlight();
+         }
+         clearListViewHighlights(['step-running']);
     }
 
     updateRunnerUI(); // Ensure UI reflects the stopped state

@@ -155,6 +155,16 @@ export function setSystemStatus(state) {
         const word = pip.querySelector('.status-word');
         if (word) word.textContent = WORDS[state] || 'IDLE';
     });
+    // The verdict pill: projector-scale PASSED/FAILED/RUNNING beside the run
+    // cluster. The 11px brand pip stays as ambient state; THIS is the verdict.
+    const verdict = document.getElementById('run-verdict');
+    if (verdict) {
+        const show = state === 'running' || state === 'success' || state === 'error';
+        verdict.hidden = !show;
+        verdict.dataset.state = state;
+        const word = verdict.querySelector('.run-verdict-word');
+        if (word) word.textContent = WORDS[state] || '';
+    }
 }
 
 /** Sync the List|Visual segmented control to appState.currentView (selection + sliding thumb). */
@@ -918,26 +928,23 @@ export function syncStepsSearchVisibility() {
 }
 
 /** Clears all runtime-related status classes from steps in the list view */
-export function clearListViewHighlights() {
+export function clearListViewHighlights(only = null) {
     if (!domRefs.flowBuilderMount) return;
     try {
-        // Define all possible status classes used for highlighting
-        const statusClasses = ['step-running', 'step-success', 'step-error', 'step-stopped', 'step-skipped'];
-        domRefs.flowBuilderMount.querySelectorAll('.flow-step')
-            .forEach(el => {
-                el.classList.remove(...statusClasses);
-            });
+        // Default: clear every run-state class. Pass an array (e.g. ['step-running'])
+        // to clear selectively — terminal PASS/FAIL tints must survive a stop
+        // (the projector reads the flow's story from those rows).
+        const statusClasses = Array.isArray(only) && only.length
+            ? only
+            : ['step-running', 'step-success', 'step-error', 'step-stopped', 'step-skipped'];
+        domRefs.flowBuilderMount.querySelectorAll('.flow-step').forEach((el) => {
+            el.classList.remove(...statusClasses);
+        });
     } catch (error) {
-        logger.error("Error clearing list view highlights:", error);
+        logger.error('Error clearing list view highlights:', error);
     }
 }
 
-/**
- * Highlights a specific step in the list view with a given status class.
- * Removes previous status classes before adding the new one.
- * @param {string} stepId The ID of the step to highlight.
- * @param {string} statusClass The CSS class representing the status (e.g., 'step-running', 'step-success').
- */
 export function highlightStepInList(stepId, statusClass) {
     // Ignore system steps that don't have a corresponding list item
     if (!stepId || /-(result|start|end|iter-\d+|error)$/i.test(stepId)) {
@@ -947,8 +954,10 @@ export function highlightStepInList(stepId, statusClass) {
     try {
         const stepElement = domRefs.flowBuilderMount.querySelector(`.flow-step[data-step-id="${stepId}"]`);
         if (stepElement) {
-            // Remove all potential previous status classes first
-            clearListViewHighlights(); // Clear all highlights first to ensure clean state
+            // Running is exclusive (one step runs at a time); terminal tints on
+            // OTHER rows must persist so the whole run stays readable.
+            clearListViewHighlights(['step-running']);
+            stepElement.classList.remove('step-running', 'step-success', 'step-error', 'step-stopped', 'step-skipped');
             stepElement.classList.add(statusClass); // Add the new status class
 
             // Scroll into view logic

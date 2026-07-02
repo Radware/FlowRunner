@@ -1229,9 +1229,14 @@ export class FlowVisualizer {
     }
 
     highlightNode(stepId, highlightType = 'active') {
-        this.clearHighlights();
+        // Running/active is exclusive; terminal states on OTHER nodes persist so
+        // the graph keeps telling the whole run's story on the projector.
+        this.clearRunningHighlight();
 
         const nodeData = this.nodes.get(stepId);
+        if (nodeData?.element) {
+            nodeData.element.classList.remove('active-step', 'success', 'error', 'stopped', 'skipped', 'running');
+        }
         if (!nodeData || !nodeData.element) {
             logger.warn(`Highlight Error: Node data or element not found for step ${stepId}.`);
             return;
@@ -1255,8 +1260,26 @@ export class FlowVisualizer {
         );
 
         connectorPaths.forEach((path) => {
-            const statusClass = `status-${highlightType}`;
-            path.classList.add(CONNECTOR_ACTIVE_CLASS, statusClass);
+            // Per-connector exclusivity: one status at a time. OTHER connectors
+            // keep their terminal states so the executed route stays painted.
+            [...path.classList].filter((c) => c.startsWith('status-'))
+                .forEach((c) => path.classList.remove(c));
+            path.classList.add(CONNECTOR_ACTIVE_CLASS, `status-${highlightType}`);
+        });
+    }
+
+    /** Clear only the running/active markers, preserving terminal PASS/FAIL states. */
+    clearRunningHighlight() {
+        this.nodes.forEach((nodeData) => {
+            nodeData?.element?.classList.remove('active-step', 'running');
+        });
+        const connectorPaths = this.editor?.precanvas?.querySelectorAll('.connector-path') || [];
+        connectorPaths.forEach((path) => {
+            path.classList.remove('status-active', 'status-active-step');
+            // Keep the executed-route marker only where a terminal status remains.
+            if (![...path.classList].some((c) => c.startsWith('status-'))) {
+                path.classList.remove(CONNECTOR_ACTIVE_CLASS);
+            }
         });
     }
 
