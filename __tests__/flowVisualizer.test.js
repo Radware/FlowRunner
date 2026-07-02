@@ -166,7 +166,7 @@ describe('FlowVisualizer (Drawflow)', () => {
         const node = container.querySelector('.drawflow-node.flow-node[data-step-id="step1"]');
         const runtimeInfo = node.querySelector('.node-runtime-details');
         expect(runtimeInfo.textContent).toContain('200'); // Wave 3.11: instrument chips (code + ms), not 'Status:' prose
-        expect(runtimeInfo.querySelector('.status-success')).toBeTruthy();
+        expect(runtimeInfo.querySelector('.nrt-chip.nrt-success')).toBeTruthy();
     });
 
     test('node moved event triggers layout update callback', async () => {

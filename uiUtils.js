@@ -145,6 +145,10 @@ export function updateWorkspaceTitle() {
         dirtyFlag.hidden = !isDirty;
     }
     document.title = title;
+
+    // The open flow can change while the Runs page is displayed (Cmd+O, topbar
+    // Close/Save stay live there); let its launcher re-sync its flow picker.
+    document.dispatchEvent(new CustomEvent('flowrunner:flow-context-changed'));
 }
 
 /**
@@ -784,15 +788,12 @@ export function syncPanelVisibility() {
     const tabRack = document.getElementById('inspector-tabs');
     if (tabRack) {
         const active = appState.isInfoOverlayOpen ? 'info'
-            : appState.isVariablesPanelVisible ? 'variables'
-            : appState.inspectorRunsOpen ? 'runs' : 'results';
+            : appState.isVariablesPanelVisible ? 'variables' : 'results';
         tabRack.querySelectorAll('.inspector-tab').forEach((tab) => {
             tab.setAttribute('aria-selected', String(tab.dataset.tab === active));
         });
         const resultsPane = document.getElementById('inspector-pane-results');
         if (resultsPane) resultsPane.style.display = active === 'results' ? '' : 'none';
-        const runsPane = document.getElementById('inspector-pane-runs');
-        if (runsPane) runsPane.style.display = active === 'runs' ? '' : 'none';
     }
 
     // Sentinel v2: the info/variables buttons are palette/shortcut compat stubs;
@@ -1249,23 +1250,41 @@ export function renderBackgroundRunsUI(runsList) {
             </button>`).join('');
     }
 
-    // Tab badge: count of live runs.
-    const badge = document.getElementById('runs-tab-badge');
+    // Rail badge: count of live runs on the Runs page button. The badge is
+    // aria-hidden (raw "2" would become the button's accessible name), so the
+    // count is conveyed through the button's label instead.
+    const badge = document.getElementById('rail-runs-badge');
     if (badge) {
         const liveCount = runsList.filter((r) => r.status === 'running').length;
         badge.hidden = liveCount === 0;
         badge.textContent = String(liveCount);
+        document.getElementById('rail-runs-btn')?.setAttribute('aria-label',
+            liveCount > 0 ? `Background Runs — ${liveCount} running` : 'Background Runs');
     }
 
-    // Runs pane cards.
+    // Page summary line: quiet aggregate of everything on the board.
+    const summary = document.getElementById('runs-page-summary');
+    if (summary) {
+        if (runsList.length === 0) {
+            summary.textContent = 'Each run executes a snapshot of a flow, so you can keep editing while it works.';
+        } else {
+            const live = runsList.filter((r) => r.status === 'running').length;
+            const iters = runsList.reduce((n, r) => n + r.iterations, 0);
+            const passes = runsList.reduce((n, r) => n + r.passes, 0);
+            const fails = runsList.reduce((n, r) => n + r.fails, 0);
+            summary.textContent = `${live} live · ${iters} iteration${iters === 1 ? '' : 's'} · ${passes} passed · ${fails} failed`;
+        }
+    }
+
+    // Run cards.
     const list = document.getElementById('bg-runs-list');
     if (!list) return;
     if (runsList.length === 0) {
-        list.innerHTML = '<li class="bg-runs-empty">No background runs yet. Open a flow, set Continuous/Delay if you want, and press Background in the Results tab.</li>';
+        list.innerHTML = '<li class="bg-runs-empty">No background runs yet. Pick a flow above and press Start run — it executes a snapshot, so you can keep editing while it works.</li>';
         return;
     }
     list.innerHTML = runsList.map((r) => {
-        const feed = [...r.results].slice(-8).reverse().map((e) => `
+        const feed = [...r.results].slice(-10).reverse().map((e) => `
             <li class="bg-feed-row ${e.status}">
                 <span class="bg-feed-dot"></span>
                 ${r.continuous ? `<span class="bg-feed-iter">#${e.iteration}</span>` : ''}

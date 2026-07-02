@@ -5,7 +5,8 @@ import {
     handleCreateNewFlow, handleOpenFile, handleFlowListActions,
     saveCurrentFlow, handleSaveAs, confirmDiscardChanges,
     handleCancelFlow, handleCloseFlow,
-    getRecentFiles, handleSelectFlow, initializeFlowManager
+    getRecentFiles, handleSelectFlow, initializeFlowManager,
+    readFlowModelFromPath
 } from './fileOperations.js';
 import {
     handleRunFlow,
@@ -56,6 +57,65 @@ import { startBackgroundRun, stopBackgroundRun, removeBackgroundRun, getBackgrou
 // the keyboard shortcut and the toolbar button drive the SAME state machine.
 let demoModeController = null;
 
+// --- Runs page (background-runs mission control) ---
+const RUNS_LAUNCH_CURRENT = '__current__';
+
+/** Delay-input parse that honors an explicit 0 (max rate) — `|| fallback` would eat it. */
+function parseDelayMs(raw, fallback = 1000) {
+    if (raw === '' || raw == null) return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : fallback;
+}
+
+/**
+ * Switch between the flow editor and the Runs page. The topbar and rail stay;
+ * drawer/workspace/inspector are swapped for the runs board via CSS.
+ * @param {'flow'|'runs'} page
+ */
+export function setActivePage(page) {
+    const app = document.querySelector('.app-container');
+    const pageEl = document.getElementById('runs-page');
+    if (!app || !pageEl) return;
+    const runs = page === 'runs';
+    appState.activePage = runs ? 'runs' : 'flow';
+    app.classList.toggle('page-runs', runs);
+    pageEl.hidden = !runs;
+    document.getElementById('rail-runs-btn')?.setAttribute('aria-pressed', String(runs));
+    if (runs) {
+        populateRunsLauncher();
+        renderBackgroundRunsUI(getBackgroundRuns());
+    }
+}
+
+/** Fill the Runs-page flow picker: current flow first, then recent files. */
+function populateRunsLauncher() {
+    const select = document.getElementById('runs-launch-select');
+    if (!select) return;
+    const previous = select.value;
+    const canReadFiles = !!(window.electronAPI && typeof window.electronAPI.readFile === 'function');
+    const options = [];
+    if (appState.currentFlowModel) {
+        const name = appState.currentFlowModel.name || 'Untitled flow';
+        options.push(`<option value="${RUNS_LAUNCH_CURRENT}">${escapeHTML(name)} — open now${appState.isDirty ? ', unsaved edits included' : ''}</option>`);
+    }
+    const currentPath = appState.currentFilePath;
+    getRecentFiles().filter((p) => p !== currentPath).forEach((p) => {
+        const name = p.split(/[\\/]/).pop();
+        options.push(`<option value="${escapeHTML(p)}"${canReadFiles ? '' : ' disabled'}>${escapeHTML(name)}</option>`);
+    });
+    select.innerHTML = options.length
+        ? options.join('')
+        : '<option value="" disabled selected>No flows yet — open or create one first</option>';
+    if (previous && [...select.options].some((o) => o.value === previous && !o.disabled)) {
+        select.value = previous;
+    }
+    if (!canReadFiles && options.length) {
+        select.title = 'In the browser only the currently open flow can be launched; file access requires the desktop app.';
+    }
+    const startBtn = document.getElementById('runs-launch-btn');
+    if (startBtn) startBtn.disabled = !select.value;
+}
+
 // --- Initialization of Listeners ---
 
 export function initializeEventListeners() {
@@ -99,8 +159,7 @@ export function initializeEventListeners() {
     document.getElementById('inspector-tabs')?.addEventListener('click', (e) => {
         const tab = e.target.closest('.inspector-tab');
         if (!tab) return;
-        appState.inspectorRunsOpen = tab.dataset.tab === 'runs';
-        if (tab.dataset.tab === 'results' || tab.dataset.tab === 'runs') {
+        if (tab.dataset.tab === 'results') {
             handleToggleInfoOverlay(false);
             handleToggleVariablesPanel(false);
         } else if (tab.dataset.tab === 'variables') {
@@ -111,13 +170,14 @@ export function initializeEventListeners() {
         syncPanelVisibility();
     });
 
-    // --- Background runs ---
-    // Launcher: snapshot the CURRENT flow with the current Continuous/Delay
-    // settings; the foreground runner stays free for authoring test-runs.
+    // --- Background runs / Runs page ---
+    // Quick launcher in the Results pane: snapshot the CURRENT flow with the
+    // current Continuous/Delay settings and stay put — the author keeps their
+    // editing context; the rail badge and topbar chip show it's alive.
     document.getElementById('bg-run-btn')?.addEventListener('click', () => {
         if (!appState.currentFlowModel) return;
         const continuous = !!domRefs.continuousRunCheckbox?.checked;
-        const delayMs = Math.max(0, Number(domRefs.requestDelayInput?.value) || 1000);
+        const delayMs = parseDelayMs(domRefs.requestDelayInput?.value);
         startBackgroundRun({
             model: appState.currentFlowModel,
             name: appState.currentFlowModel.name,
@@ -125,14 +185,15 @@ export function initializeEventListeners() {
             delayMs,
             encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked,
         });
-        appState.inspectorRunsOpen = true;
-        handleToggleInfoOverlay(false);
-        handleToggleVariablesPanel(false);
-        syncPanelVisibility();
-        showMessage(`Background run started${continuous ? ' (continuous)' : ''}. You can keep working.`, 'success');
+        showMessage(`Background run started${continuous ? ' (continuous)' : ''} — watch it in Runs, on the left rail.`, 'success');
     });
     // Live re-render + delegated card actions.
     document.addEventListener('flowrunner:bgruns-changed', () => renderBackgroundRunsUI(getBackgroundRuns()));
+    // Open flow changed (open/close/save) while the Runs page is up → the
+    // "open now" option in the launcher would lie; re-sync it.
+    document.addEventListener('flowrunner:flow-context-changed', () => {
+        if (appState.activePage === 'runs') populateRunsLauncher();
+    });
     document.getElementById('bg-runs-list')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-bg-action]');
         if (!btn) return;
@@ -141,13 +202,50 @@ export function initializeEventListeners() {
         if (btn.dataset.bgAction === 'stop') stopBackgroundRun(id);
         else if (btn.dataset.bgAction === 'remove') removeBackgroundRun(id);
     });
-    // Topbar chip click focuses the Runs tab.
+    // Rail button toggles the Runs page; a topbar chip always opens it.
+    document.getElementById('rail-runs-btn')?.addEventListener('click', () => {
+        setActivePage(appState.activePage === 'runs' ? 'flow' : 'runs');
+    });
     document.getElementById('bg-runs-strip')?.addEventListener('click', (e) => {
         if (!e.target.closest('.bg-run-chip')) return;
-        appState.inspectorRunsOpen = true;
-        handleToggleInfoOverlay(false);
-        handleToggleVariablesPanel(false);
-        syncPanelVisibility();
+        setActivePage('runs');
+    });
+    // The Flows rail button leaves the Runs page first (the drawer lives on the
+    // flow page); a second click then toggles the drawer as usual.
+    document.getElementById('sidebar-toggle-btn')?.addEventListener('click', (e) => {
+        if (appState.activePage !== 'runs') return;
+        e.stopImmediatePropagation();
+        setActivePage('flow');
+    }, { capture: true });
+    // Runs-page launcher: current flow or any recent flow file (read fresh from
+    // disk — the open editor is never touched).
+    document.getElementById('runs-launch-select')?.addEventListener('change', () => {
+        const select = document.getElementById('runs-launch-select');
+        const startBtn = document.getElementById('runs-launch-btn');
+        if (startBtn) startBtn.disabled = !select?.value;
+    });
+    document.getElementById('runs-launcher')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const value = document.getElementById('runs-launch-select')?.value;
+        if (!value) return;
+        const continuous = !!document.getElementById('runs-launch-continuous')?.checked;
+        const delayMs = parseDelayMs(document.getElementById('runs-launch-delay')?.value);
+        try {
+            const model = value === RUNS_LAUNCH_CURRENT
+                ? appState.currentFlowModel
+                : await readFlowModelFromPath(value);
+            if (!model) throw new Error('No flow is open.');
+            if (!(model.steps || []).length) throw new Error('That flow has no steps.');
+            startBackgroundRun({
+                model,
+                name: model.name || value.split(/[\\/]/).pop(),
+                continuous,
+                delayMs,
+                encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked,
+            });
+        } catch (err) {
+            showMessage(`Could not start the background run: ${err.message}`, 'error');
+        }
     });
 
     // Zoom Controls
@@ -202,6 +300,12 @@ export function initializeEventListeners() {
     demoModeController = initDemoMode({
         toggleButton: domRefs.demoModeBtn,
         onChange: () => {
+            // Present projects the FLOW: entering it from the Runs page would
+            // otherwise leave the runs board on screen (and persist demo-mode
+            // to localStorage with barely any visible change).
+            if (document.documentElement.classList.contains('demo-mode')) {
+                setActivePage('flow');
+            }
             // Re-fit the graph so nodes fill the resized viewport. resetZoom() is
             // a documented public method in docs/visualizer-contract.md; called
             // defensively (graph view may be inactive).
@@ -266,6 +370,11 @@ export function initializeEventListeners() {
 
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+        // Runs page: the editor is display:none there, but programmatic clicks
+        // and model edits still work — so editor-scoped shortcuts would silently
+        // mutate an interface the user cannot see. Skip them; navigation (Cmd+K)
+        // and the always-visible run cluster (F5/F10/Esc, Cmd+S) stay live.
+        const onRunsPage = appState.activePage === 'runs';
 
         // File Operations
         if (ctrlOrCmd && e.key.toLowerCase() === 's') {
@@ -279,6 +388,7 @@ export function initializeEventListeners() {
             e.preventDefault();
              // Trigger open only if enabled
             if (!domRefs.openFlowBtn?.disabled) {
+                setActivePage('flow'); // opening a flow must be visible, not behind the runs board
                 handleOpenFile();
             }
         }
@@ -287,12 +397,12 @@ export function initializeEventListeners() {
         // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) = redo. Only fires when
         // focus is OUTSIDE inputs (guarded above), so native text-field undo is
         // untouched inside step editors and the search boxes.
-        if (ctrlOrCmd && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+        if (ctrlOrCmd && e.key.toLowerCase() === 'z' && !e.shiftKey && !onRunsPage) {
             e.preventDefault();
             handleFlowRedoUndo('undo');
         }
-        if ((ctrlOrCmd && e.key.toLowerCase() === 'z' && e.shiftKey)
-            || (ctrlOrCmd && e.key.toLowerCase() === 'y')) {
+        if (((ctrlOrCmd && e.key.toLowerCase() === 'z' && e.shiftKey)
+            || (ctrlOrCmd && e.key.toLowerCase() === 'y')) && !onRunsPage) {
             e.preventDefault();
             handleFlowRedoUndo('redo');
         }
@@ -333,16 +443,16 @@ export function initializeEventListeners() {
             domRefs.zoomResetBtn?.click();
         }
 
-        // View/Panel Toggles
-        if (ctrlOrCmd && e.key === '1') {
+        // View/Panel Toggles (editor-scoped: inert on the Runs page)
+        if (ctrlOrCmd && e.key === '1' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleInfoBtn?.click(); // Simulate click on the button
         }
-        if (ctrlOrCmd && e.key === '2') {
+        if (ctrlOrCmd && e.key === '2' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleVariablesBtn?.click(); // Simulate click on the button
         }
-        if (ctrlOrCmd && e.key === '3') {
+        if (ctrlOrCmd && e.key === '3' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleViewBtn?.click(); // Simulate click on the button
         }
@@ -356,13 +466,13 @@ export function initializeEventListeners() {
             demoModeController?.toggle();
         }
 
-        if (e.key.toLowerCase() === 'm' && appState.currentView === 'node-graph') {
+        if (e.key.toLowerCase() === 'm' && appState.currentView === 'node-graph' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleMinimapBtn?.click();
         }
 
         // WAVE2 LANE canvas: single-key Cmd/Ctrl+Z undo for the last "Tidy Up".
-        if (ctrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'z'
+        if (ctrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'z' && !onRunsPage
             && appState.currentView === 'node-graph'
             && appState.visualizerComponent?.canUndoLayout?.()) {
             e.preventDefault();
@@ -1062,9 +1172,9 @@ function buildCommandItems() {
 
     const push = (label, action, hint) => items.push({ id: label, label, action, hint });
 
-    // --- File actions ---
-    push('New Flow', () => handleCreateNewFlow(), 'Create a new flow');
-    push('Open Flow…', () => handleOpenFile(), 'Open a .flow.json file');
+    // --- File actions --- (leave the Runs page first: the editor is hidden there)
+    push('New Flow', () => { setActivePage('flow'); handleCreateNewFlow(); }, 'Create a new flow');
+    push('Open Flow…', () => { setActivePage('flow'); handleOpenFile(); }, 'Open a .flow.json file');
     if (hasFlow && domRefs.saveFlowBtn && !domRefs.saveFlowBtn.disabled) {
         push('Save Flow', () => saveCurrentFlow(false), 'Ctrl/Cmd+S');
     }
@@ -1095,6 +1205,9 @@ function buildCommandItems() {
         push('Tidy Up', () => domRefs.tidyUpBtn?.click(), 'Auto-layout the graph');
         push('Toggle Minimap', () => domRefs.toggleMinimapBtn?.click(), 'Show/hide minimap');
     }
+    push(appState.activePage === 'runs' ? 'Back to Editor' : 'Background Runs',
+        () => setActivePage(appState.activePage === 'runs' ? 'flow' : 'runs'),
+        appState.activePage === 'runs' ? 'Return to the flow editor' : 'Launch + monitor flows in the background');
 
     // --- Runner ---
     if (hasFlow && domRefs.runFlowBtn && !domRefs.runFlowBtn.disabled) {
@@ -1210,6 +1323,7 @@ export function initializePaletteShortcuts() {
             const inField = tag === 'input' || tag === 'textarea'
                 || tag === 'select' || target?.isContentEditable;
             if (!inField && appState.currentFlowModel
+                && appState.activePage !== 'runs' // Runs page: Tab must walk the launcher form, not edit the hidden flow
                 && !(paletteInstance && paletteInstance.isOpen())) {
                 e.preventDefault();
                 openAddNodePalette(appState.selectedStepId || null);

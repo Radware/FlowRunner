@@ -34,10 +34,13 @@ describe('FlowRunner', () => {
     let originalGlobalClearTimeout;
 
     beforeEach(() => {
-        jest.useFakeTimers({ now: Date.now() });
+        // Capture the REAL globals BEFORE useFakeTimers swaps them out —
+        // otherwise afterEach "restores" the fake timer functions and every
+        // later test in the file inherits a clock nobody advances.
         originalGlobalFetch = global.fetch;
         originalGlobalSetTimeout = global.setTimeout;
         originalGlobalClearTimeout = global.clearTimeout;
+        jest.useFakeTimers({ now: Date.now() });
 
         global.fetch = jest.fn(() => Promise.resolve({
             ok: true,

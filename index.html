@@ -78,6 +78,11 @@
             <button id="rail-palette-btn" class="rail-btn" title="Command palette (Ctrl/Cmd+K)">
                 <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
             </button>
+            <button id="rail-runs-btn" class="rail-btn" aria-pressed="false" aria-label="Background Runs"
+                title="Background Runs — launch flows and monitor them while you keep working">
+                <svg class="icon" aria-hidden="true"><use href="#i-repeat"/></svg>
+                <span class="rail-badge" id="rail-runs-badge" aria-hidden="true" hidden></span>
+            </button>
             <span class="rail-spacer" aria-hidden="true"></span>
             <button id="theme-toggle-btn" class="rail-btn theme-toggle" aria-pressed="false" title="Toggle light/dark theme">
                 <svg class="icon theme-toggle-icon" aria-hidden="true"><use href="#i-moon"/></svg>
@@ -238,12 +243,43 @@
             </div>
         </main>
 
+        <!-- Background Runs page: a full-workspace mission control, toggled from the
+             rail. While active (.app-container.page-runs) it replaces the drawer,
+             workspace and inspector; the topbar and rail stay. -->
+        <section class="runs-page" id="runs-page" hidden aria-label="Background Runs">
+            <header class="runs-page-head">
+                <div class="runs-page-title">
+                    <h2>Background Runs</h2>
+                    <p class="runs-page-sub" id="runs-page-summary">Each run executes a snapshot of a flow, so you can keep editing while it works.</p>
+                </div>
+                <form class="runs-launcher" id="runs-launcher">
+                    <label class="runs-launcher-field runs-launcher-flow" for="runs-launch-select">
+                        <span class="runs-launcher-label">Flow</span>
+                        <select id="runs-launch-select" aria-label="Flow to run in the background"></select>
+                    </label>
+                    <label class="runs-launcher-check" title="Repeat the flow until you stop it">
+                        <input type="checkbox" id="runs-launch-continuous" checked>
+                        <span>Continuous</span>
+                    </label>
+                    <label class="runs-launcher-field runs-launcher-delay" for="runs-launch-delay"
+                        title="Delay between steps, and between iterations in Continuous mode">
+                        <span class="runs-launcher-label">Delay</span>
+                        <input type="number" id="runs-launch-delay" value="1000" min="0" step="100">
+                        <span class="runs-launcher-unit">ms</span>
+                    </label>
+                    <button type="submit" id="runs-launch-btn" class="btn btn-primary">
+                        <svg class="icon icon--fill icon-sm" aria-hidden="true"><use href="#i-play"/></svg><span>Start run</span>
+                    </button>
+                </form>
+            </header>
+            <ul class="bg-runs-list" id="bg-runs-list"></ul>
+        </section>
+
         <!-- Inspector (formerly the Runner panel): Results | Variables | Info tabs -->
         <aside class="runner-panel collapsible-pane" id="runner-panel">
             <div class="runner-header">
                 <div class="inspector-tabs" id="inspector-tabs" role="tablist" aria-label="Inspector panes">
                     <button class="inspector-tab" data-tab="results" role="tab" aria-selected="true">Results</button>
-                    <button class="inspector-tab" data-tab="runs" role="tab" aria-selected="false">Runs<span class="runs-tab-badge" id="runs-tab-badge" hidden></span></button>
                     <button class="inspector-tab" data-tab="variables" role="tab" aria-selected="false">Variables</button>
                     <button class="inspector-tab" data-tab="info" role="tab" aria-selected="false">Config</button>
                 </div>
@@ -298,11 +334,6 @@
                             <li class="no-results">Run a flow to see results here.</li>
                         </ul>
                     </div>
-                </section>
-
-                <section class="inspector-pane inspector-pane-runs" id="inspector-pane-runs" style="display: none;">
-                    <div class="runs-pane-hint">Background runs execute a snapshot of a flow so you can keep editing. Launch one from the Results tab.</div>
-                    <ul class="bg-runs-list" id="bg-runs-list"></ul>
                 </section>
 
                 <div class="flow-info-overlay" data-ref="infoOverlay">

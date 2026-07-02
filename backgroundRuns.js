@@ -149,6 +149,9 @@ export function startBackgroundRun({ model, name, continuous = false, delayMs = 
             if (run._iterationHadError && !run._stopRequested) { run.fails += 1; }
             run._iterationHadError = false;
             run.currentIteration = 0;
+            // A user-requested stop is not an error: the aborted request would
+            // otherwise leave a scary "…failed…" line on a healthy run's card.
+            if (run._stopRequested) run.lastError = null;
             run.status = run._stopRequested ? 'stopped' : (run.fails > 0 ? 'failed' : 'stopped');
             run.endedAt = Date.now();
             pruneFinished();

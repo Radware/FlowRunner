@@ -57,6 +57,11 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Symptom:** stopping a continuous run between iterations (with short flows, ~95% of wall-time) cancelled the next iteration but never fired `onFlowStopped` — any UI tracking the run showed "running" forever.
 - **Fix/lesson:** stop() now completes the stop itself when it clears a pending iteration while nothing is executing. If you add engine callers (like backgroundRuns.js), remember: continuous iterations are delimited by `onIterationStart`; `onFlowComplete` only fires for single runs / the very end.
 
+### 2m. Jest fake-timer restore leak poisons every later test in the file
+- **Symptom:** tests OUTSIDE a describe hang on plain `setTimeout` sleeps (5s timeout) yet pass with `-t` isolation.
+- **Root cause:** `beforeEach` captured `originalGlobalSetTimeout = global.setTimeout` AFTER `jest.useFakeTimers()` had already swapped it, so `afterEach` ran `useRealTimers()` then re-installed the captured FAKE function on the global.
+- **Fix/lesson:** capture originals BEFORE `useFakeTimers()`. If a test only fails in the full run, suspect leaked globals from an earlier describe, not the test itself.
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*

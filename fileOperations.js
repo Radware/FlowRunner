@@ -130,6 +130,23 @@ export function addRecentFile(filePath, moveToTop = true) {
     }
 }
 
+/**
+ * Read a flow file into a model WITHOUT touching the open editor — used by the
+ * Runs page to launch background runs of flows that are not currently open.
+ * @param {string} filePath
+ * @returns {Promise<object>} flow model
+ */
+export async function readFlowModelFromPath(filePath) {
+    if (!window.electronAPI || typeof window.electronAPI.readFile !== 'function') {
+        throw new Error('Reading flow files from disk requires the desktop app.');
+    }
+    const result = await window.electronAPI.readFile(filePath);
+    if (!result || !result.success) {
+        throw new Error(result?.error || 'Could not read the file.');
+    }
+    return jsonToFlowModel(JSON.parse(result.data));
+}
+
 // --- NEW HELPER FUNCTION ---
 // --- SUGGESTED MODIFICATION for NEW VERSION's getRecentFiles ---
 export function getRecentFiles() {
