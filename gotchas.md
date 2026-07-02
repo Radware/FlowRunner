@@ -17,6 +17,51 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - ShowRunner portal drops camelCase `visualLayout` on flow create/import (needs a `visualLayout`/`visual_layout` fallback like it already has for `staticVars`).
 - flowrunner-cli silently downgrades an unknown transform `op` to `base64_decode` (should skip/fail loudly).
 
+## Testing / workflows
+
+### 2d. Workflow worktrees pollute `npm test` (duplicate/failing suites)
+- **Symptom:** after a multi-agent `Workflow` with `isolation: 'worktree'`, `npm test` reports a huge count (e.g. 2039 tests / 100 suites) or fails on a path like `.claude/worktrees/wf_.../__tests__/...`.
+- **Cause:** each worktree is a full repo checkout under `.claude/worktrees/`; jest's `testMatch` `**/__tests__/**/*.test.js` scans them as extra (often stale) suites; `testPathIgnorePatterns` only excluded `/node_modules/`.
+- **Fix:** `jest.config.mjs` now also ignores `/\.claude/` and `/visualizer-island/`. Also **remove worktrees after integrating a wave** — `git worktree remove --force <path>` for each under `.claude/worktrees/`, then `git worktree prune`.
+
+### 2e. Golden/fixture tests must use GIT-TRACKED fixtures
+- A conformance test that reads a **gitignored** flow (e.g. `jwt-manipulation-attacks.flow.json`) passes on your working tree but **fails in worktrees/CI** (the file isn't checked out). Use tracked fixtures (`httpbin-flow.flow.json`, `random-ip-example.flow.json`, `__tests__/fixtures/**`).
+
+### 2f. Vite **lib** mode doesn't replace `process.env.NODE_ENV` — React island throws at runtime
+- **Symptom:** the React Flow island (`visualizer-island/`) builds, packages, and passes unit tests, but at runtime the facade logs `React Flow island loaded but did not expose createReactFlowVisualizer` and falls back to Drawflow — the island never mounts.
+- **Cause:** Vite **library** builds (unlike app builds) do NOT auto-define `process.env.NODE_ENV`. React's bundle then ships bare `process.env.NODE_ENV` reads; in the browser (no `process`) the first read throws `process is not defined`, the IIFE aborts before assigning the `FlowRunnerReactIsland` global, and the facade rejects.
+- **Fix:** `visualizer-island/vite.config.js` → `define: { 'process.env.NODE_ENV': JSON.stringify('production') }`. Side benefit: React tree-shakes dev code, halving the bundle (778 kB → 380 kB / 122 kB gzip).
+- **Lesson:** jsdom unit tests never load the real bundle and the packaged build only checks it *compiles* — this class of bug is **only** caught by running the app (browser preview or packaged). Dogfound flag-gated features before flipping the default. (Note: a browser preview served by `http.server` may cache `island.js`, so a rebuild needs a cache-bust to be observed.)
+
+### 2g. Native `confirm()`/`alert()` freeze the renderer — and wedge remote-driven Chrome
+- **Symptom:** during browser validation the tab became permanently "still loading"; screenshots/JS injection failed until the tab was killed. Root cause: a native dialog (`confirm()` on dirty-step select) blocks the JS event loop; the page never reaches idle, and on a projector it freezes the live demo.
+- **Fix/lesson:** never call native dialogs in the renderer. Use `showConfirmDialog()` (dialogs.js, promise-based) or `showMessage` toasts; low-level modules dispatch the `flowrunner:toast` CustomEvent instead of importing uiUtils.
+
+### 2h. E2E recent-files seeding MUST write through to electron-store
+- **Symptom:** a spec seeds `localStorage.flowrunnerRecentFiles`, reloads, and the item is gone → click times out. `hydrateRecentFiles()` treats the durable electron-store list as the source of truth on startup and overwrites localStorage-only seeds. Passes/failures depended on what earlier runs left in the shared store profile (also why `workers: 1`).
+- **Fix/lesson:** seed BOTH (`localStorage` + `await window.electronAPI.setRecentFiles(arr)`) — helper in `e2e/testUtils.js`. Watch for spec-local copies of `pushRecent` shadowing the shared helper (flow-execution had one).
+
+### 2i. Playwright never clicks covered targets — overlays must not blanket the app
+- **Symptom:** first-run onboarding overlay intercepts pointer events; Playwright waits for the target to be unobstructed (it will NOT click the scrim to dismiss), so every spec times out on a fresh profile.
+- **Fix/lesson:** `maybeShowOnboarding` skips under `navigator.webdriver`. Generally: overlays in this app must be dismissible AND absent under automation.
+
+### 2j. Canvas-painted UI (minimap) doesn't follow CSS variables
+- **Symptom:** minimap glared near-white in dark mode. Canvas pixels are painted once; they don't re-resolve `var(--…)` on theme change, and the node fill was hardcoded `#ffffff`.
+- **Fix/lesson:** resolve theme tokens at paint time (`getComputedStyle`) and repaint on theme toggle (`visualizer.refreshMinimap()` from `toggleTheme()` in app.js).
+
+### 2k. Bare `import('pkg')` specifiers in renderer modules — work in `npm start`, fail packaged
+- **Symptom:** Tidy Up threw "Could not compute an auto-layout" ONLY in the installed app. `autoLayout.js` dynamic-imported `elkjs`/`@dagrejs/dagre` by bare specifier — Node resolution makes that work in dev and Jest, but the packaged renderer (and a served browser) cannot resolve bare specifiers.
+- **Fix/lesson:** vendor renderer-facing deps under `assets/vendor/` (the fuse/immer/drawflow pattern) and import them by relative path first, falling back to the bare specifier for Node/Jest. Cousin of gotcha #1: anything that resolves via node_modules at runtime must be treated as suspect in the renderer.
+
+### 2l. FlowRunner.stop() during the continuous wait window used to hang callers
+- **Symptom:** stopping a continuous run between iterations (with short flows, ~95% of wall-time) cancelled the next iteration but never fired `onFlowStopped` — any UI tracking the run showed "running" forever.
+- **Fix/lesson:** stop() now completes the stop itself when it clears a pending iteration while nothing is executing. If you add engine callers (like backgroundRuns.js), remember: continuous iterations are delimited by `onIterationStart`; `onFlowComplete` only fires for single runs / the very end.
+
+### 2m. Jest fake-timer restore leak poisons every later test in the file
+- **Symptom:** tests OUTSIDE a describe hang on plain `setTimeout` sleeps (5s timeout) yet pass with `-t` isolation.
+- **Root cause:** `beforeEach` captured `originalGlobalSetTimeout = global.setTimeout` AFTER `jest.useFakeTimers()` had already swapped it, so `afterEach` ran `useRealTimers()` then re-installed the captured FAKE function on the global.
+- **Fix/lesson:** capture originals BEFORE `useFakeTimers()`. If a test only fails in the full run, suspect leaked globals from an earlier describe, not the test itself.
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*
@@ -43,6 +88,13 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Cause:** `__tests__/setup.js` `require()`s the vendored **UMD** `assets/vendor/drawflow/drawflow.min.js`; the root `package.json` `"type": "module"` makes Node treat that `.js` as ESM, so `require()` throws.
 - **Fix:** `assets/vendor/drawflow/package.json` = `{"type": "commonjs"}` scopes only that vendored dir to CJS (the browser loads Drawflow via a `<script>` tag, so runtime is unaffected; the file isn't imported by the app).
 - **Note:** fixing this unmasked **4 pre-existing failures in `flowVisualizer.test.js`** (Drawflow drag/double-click/add-step under jsdom). They pre-date the fix — treat as a known follow-up, not a regression.
+
+### 2d. New npm renderer deps must be vendored as ESM + imported by relative path (CSP)
+- **Symptom (would-be):** a renderer module `import Fuse from 'fuse.js'` (or `immer`) works in `npm start`/Jest but the **packaged** app can't resolve the bare specifier under `script-src 'self'` (no Node integration in the renderer) — silent module-graph death, dead UI (same failure mode as gotcha #1).
+- **Fix (Wave 2 file-features):** vendor the library's **single-file `.mjs`** build under `assets/vendor/<lib>/` and import by **relative path** (`import Fuse from './assets/vendor/fuse/fuse.min.mjs'`). Unlike Drawflow (UMD → needs a `{"type":"commonjs"}` scoping `package.json`), these are already ESM, so no scoping file is needed. Keep the npm package in `dependencies` **only** so Jest's node_modules resolver runs the same source; the packaged app imports the vendored copy, not node_modules. Covered by the existing `assets/**/*` in `build.files` — but the JS modules that import them still need their own `build.files` entries.
+
+### 2e. Undo/redo history: detect a "new flow" by model object identity, not a flag
+- **Trap:** wiring `resetFlowHistory()` into every load/create/clone/save-as handler is high-blast-radius across lanes. Instead `flowHistory.js` watches `appState.currentFlowModel` **object identity** in `renderCurrentFlow`: loads reassign the reference (⇒ reset the stack), in-place edits keep it (⇒ snapshot). **Gotcha:** undo/redo also reassigns the reference (it writes a fresh clone), so a `suppressAutoReset` latch tells the *next* render "this is time-travel, not a new flow." That latch **must be cleared on every hard `resetFlowHistory`** or a stale suppress from an interrupted undo makes a subsequent real load fail to reset (surfaced as cross-test history leakage under the shared `appState` singleton in jsdom).
 
 ## Execution engine
 
@@ -140,6 +192,20 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 
 ### 30. `clearHighlights('active-step')` ignores its argument
 - `FlowVisualizer.clearHighlights()` takes no parameter and always clears **all** highlight classes; callers passing `'active-step'` wipe every status highlight, not just the active one.
+
+### 31. ⚠️ One missing `}` in `styles.css` silently kills the whole tail via CSS nesting *(cost hours of "why does it still look old")*
+- **Symptom:** large, recently-added CSS sections (command palette, Demo Mode, guided onboarding, teaching empty-states, Basic/Power inspector, test-summary, tidy-relayout, on-node error badges) render **completely unstyled** — the app "looks like the old UI" even though the rules exist in the file and the file loads without error.
+- **Root cause:** a rule with **no closing brace** (found: `.inspector-disclosure-btn:focus-visible {` and `.palette-search:focus {`, each with a comment where the body should be and no `}`). Modern browsers parse **native CSS nesting**, so every subsequent top-level rule becomes a *nested* rule inside the unclosed one (you'll see `& .foo {…}` in the CSSOM). Those nested selectors only match as descendants of a non-matching parent, so they never apply. One missing brace can bury 100+ rules. No parse error is thrown.
+- **Diagnose fast:** in the page, walk `document.styleSheets[…].cssRules` and find the top-level rule whose `.cssRules` contains your "dead" selector — that rule is the one missing its `}`. Or strip comments and count braces: `node -e "const c=require('fs').readFileSync('styles.css','utf8').replace(/\/\*[\s\S]*?\*\//g,''); let d=0; for(const ch of c){if(ch==='{')d++;else if(ch==='}')d--;} console.log(d)"` — must be `0`. (A naive count that includes comments gives false positives.)
+- **Lesson:** run the comment-stripped brace check after any hand-edit to `styles.css`; treat "a block of new styles isn't applying at all" as a missing-brace suspicion, not a specificity problem.
+
+### 32. Run-status pill classes live on `.result-item`, not `.result-status`
+- `.result-status.success` etc. **never matched**: `runnerInterface.js` puts the status class on the parent `<li class="result-item success">`, while the inner `<span class="result-status">` carries no modifier. Style status badges as `.result-item.<status> .result-status` (and `::before` pip). Same shape applies to node status (`.result-item`-style parents) — check the parent, not the span, before writing status selectors.
+
+### 33. Chrome disk-caches ES modules in the browser-preview workflow — JS edits need a hard reload
+- **Symptom:** you edit a renderer module (`app.js`, `eventHandlers.js`, `firstRun.js`, …), reload the localhost preview, and your change **isn't running** (old behavior persists), even though `curl` shows the served file is updated.
+- **Cause:** `python -m http.server` sends no cache headers, so Chrome heuristically caches the ES modules and, on a normal reload, serves them from disk without revalidating. `styles.css` (a `<link>`) refetches fine, which is why CSS edits *look* live but JS edits don't.
+- **Fix:** hard-reload (**Cmd/Ctrl+Shift+R**) after JS edits, or serve with `Cache-Control: no-store`. Tell whether the new JS loaded by probing for a change you made in the DOM (e.g. a new attribute) before assuming your logic is wrong.
 
 ## Install-time (for users / support)
 

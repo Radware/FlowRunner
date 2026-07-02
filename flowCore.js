@@ -24,6 +24,7 @@ export function generateUniqueId() {
  */
 export function flowModelToJson(flowModel) {
   const json = {
+    schemaVersion: flowModel.schemaVersion || '1.0', // additive: absence is read as "1.0"; never gates the wire format. See docs/schema-versioning.md.
     id: flowModel.id, // Include ID if present (for updates)
     name: flowModel.name || '',
     description: flowModel.description || '',
@@ -102,6 +103,26 @@ export function flowModelToJson(flowModel) {
         if (step.extract && Object.keys(step.extract).length > 0) {
           jsonStep.extract = makeExtractPathsExplicit(step.extract);
         }
+
+        // === WAVE3 assertions ===
+        // Additive optional per-step assertions. Emitted verbatim (frozen
+        // conditionData operator vocabulary + { target, operator, value, critical? }).
+        // Only written when non-empty so a step without assertions never gains an
+        // empty key — keeps golden pre-sprint flows byte-stable and CLI-safe.
+        if (Array.isArray(step.assertions) && step.assertions.length > 0) {
+          jsonStep.assertions = step.assertions.map(a => ({ ...a }));
+        }
+        // === END WAVE3 assertions ===
+
+        // Additive per-request retries ({ count, delayMs }; engine: flowRunner).
+        // Only written when count > 0 so retry-free flows stay byte-identical.
+        if (step.retries && typeof step.retries === 'object'
+            && Number.isFinite(step.retries.count) && step.retries.count > 0) {
+          jsonStep.retries = {
+            count: Math.floor(step.retries.count),
+            delayMs: Math.max(0, Number.isFinite(step.retries.delayMs) ? step.retries.delayMs : 0),
+          };
+        }
       } else if (step.type === 'condition') {
         jsonStep.condition = step.condition || '';
         // Store structured condition data if available (preferred)
@@ -168,6 +189,47 @@ export function decodeMarkersRecursive(data) {
 
 
 /**
+ * Render a stored body (with ##VAR:type:name## markers) as editor text.
+ * CRITICAL round-trip contract: an UNQUOTED marker must come back as a bare
+ * {{var}} (no surrounding quotes) in the JSON text, otherwise the next save
+ * re-classifies it as a *string* marker and silently changes the JSON type
+ * the request sends ({"id":{{n}}} becoming {"id":"{{n}}"}). We decode unquoted
+ * markers through a sentinel, stringify, then strip the sentinel's quotes.
+ * @param {*} rawBodyWithMarkers
+ * @return {string} body text for the editor
+ */
+export function stringifyBodyForDisplay(rawBodyWithMarkers) {
+  const UNQ_RE = /^##VAR:unquoted:([^#]+)##$/;
+  const decode = (data) => {
+    if (typeof data === 'string') {
+      const unq = data.match(UNQ_RE);
+      if (unq) return `##UNQ##{{${unq[1]}}}##/UNQ##`;
+      return decodeMarkersRecursive(data);
+    } else if (Array.isArray(data)) {
+      return data.map(decode);
+    } else if (typeof data === 'object' && data !== null) {
+      const out = {};
+      for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) out[key] = decode(data[key]);
+      }
+      return out;
+    }
+    return data;
+  };
+
+  const decoded = decode(rawBodyWithMarkers);
+  if (typeof decoded === 'object' && decoded !== null) {
+    try {
+      return JSON.stringify(decoded, null, 2)
+        .replace(/"##UNQ##(\{\{[^}]+\}\})##\/UNQ##"/g, '$1');
+    } catch (e) {
+      return String(decoded);
+    }
+  }
+  return String(decoded).replace(/##UNQ##(\{\{[^}]+\}\})##\/UNQ##/g, '$1');
+}
+
+/**
  * Convert JSON representation (from backend) to internal flow model.
  * Restores {{variable}} syntax for UI display.
  * @param {Object} json - JSON flow definition from backend.
@@ -180,6 +242,7 @@ export function jsonToFlowModel(json) {
   }
 
   const flowModel = {
+    schemaVersion: json.schemaVersion, // preserve for lossless round-trip; absence (undefined) is stamped "1.0" on save
     id: json.id, // Keep the ID
     name: json.name || 'New Flow',
     description: json.description || '',
@@ -230,20 +293,32 @@ export function jsonToFlowModel(json) {
                 logger.warn(`Could not deep copy body for step ${step.id}, storing reference.`, e);
                 step.rawBodyWithMarkers = jsonStep.body;
             }
-            const decodedBodyForUI = decodeMarkersRecursive(step.rawBodyWithMarkers);
-            if (typeof decodedBodyForUI === 'object' && decodedBodyForUI !== null) {
-                 try {
-                    step.body = JSON.stringify(decodedBodyForUI, null, 2);
-                 }
-                 catch (e) {
-                     step.body = String(decodedBodyForUI);
-                 }
-            } else {
-                step.body = String(decodedBodyForUI);
-            }
+            step.body = stringifyBodyForDisplay(step.rawBodyWithMarkers);
         }
         // Upgrade extract paths for backward compatibility
         step.extract = upgradeExtractPaths(jsonStep.extract || {});
+
+        // === WAVE3 assertions ===
+        // Load additive per-step assertions into the model verbatim (deep-copied)
+        // when present. Absent/malformed ⇒ no `assertions` key on the model, so a
+        // pre-sprint flow round-trips byte-identically.
+        if (Array.isArray(jsonStep.assertions) && jsonStep.assertions.length > 0) {
+          step.assertions = jsonStep.assertions
+            .filter(a => a && typeof a === 'object')
+            .map(a => ({ ...a }));
+        }
+        // === END WAVE3 assertions ===
+
+        // Additive per-request retries: carried into the model when valid so the
+        // editor can show it and the engine (flowRunner) can honor it. Absent ⇒
+        // no key on the model (pre-existing flows round-trip byte-identically).
+        if (jsonStep.retries && typeof jsonStep.retries === 'object'
+            && Number.isFinite(jsonStep.retries.count) && jsonStep.retries.count > 0) {
+          step.retries = {
+            count: Math.floor(jsonStep.retries.count),
+            delayMs: Math.max(0, Number.isFinite(jsonStep.retries.delayMs) ? jsonStep.retries.delayMs : 0),
+          };
+        }
       } else if (jsonStep.type === 'condition') {
         step.condition = jsonStep.condition || '';
         if (jsonStep.conditionData) {
@@ -674,8 +749,10 @@ export function formatJson(bodyText) {
        return finalFormattedJson;
   } catch (error) {
     logger.warn("JSON formatting failed:", error.message);
-    // Optionally provide user feedback here, e.g., using an alert or status message
-    alert(`Formatting Error: ${error.message}. Please check syntax.`);
+    // Toast via the uiUtils bridge (no import: flowCore must not depend on UI modules).
+    document.dispatchEvent(new CustomEvent('flowrunner:toast', {
+        detail: { message: `Formatting error: ${error.message}. Check the JSON syntax.`, type: 'error' }
+    }));
     return bodyText; // Return original on error to avoid data loss
   }
 }
@@ -865,7 +942,10 @@ export function validateFlow(flowModel) {
             if (!sourceVar) {
               result.valid = false;
               result.errors.push(`${currentPath}: Loop source variable is required. Enter a variable or path to an array.`);
-            } else if (!currentAvailableVars.has(sourceVar)) {
+            } else if (!currentAvailableVars.has(sourceVar.split(/[.[]/)[0])) {
+              // Dotted/indexed paths (items.data, resp.items[0]) are valid loop
+              // sources — the runtime evaluates the path; only the base variable
+              // must be defined.
               result.valid = false;
               result.errors.push(`${currentPath}: Loop source references undefined variable \"{{${sourceVar}}}\".\n\nHint: Make sure this variable is defined earlier in the flow or as a static variable.`);
             }

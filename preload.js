@@ -46,6 +46,40 @@ const electronAPI = {
         return ipcRenderer.invoke('fs:writeFile', filePath, content);
     },
 
+    // --- Recent Files (persisted via electron-store in main) ---
+    // Each returns a Promise resolving to { success, recentFiles }.
+    getRecentFiles: () => {
+        logger.debug("[Preload] Invoking 'store:getRecentFiles'");
+        return ipcRenderer.invoke('store:getRecentFiles');
+    },
+    addRecentFile: (filePath) => {
+        logger.debug("[Preload] Invoking 'store:addRecentFile' for:", filePath);
+        return ipcRenderer.invoke('store:addRecentFile', filePath);
+    },
+    removeRecentFile: (filePath) => {
+        logger.debug("[Preload] Invoking 'store:removeRecentFile' for:", filePath);
+        return ipcRenderer.invoke('store:removeRecentFile', filePath);
+    },
+    setRecentFiles: (list) => {
+        logger.debug("[Preload] Invoking 'store:setRecentFiles'");
+        return ipcRenderer.invoke('store:setRecentFiles', list);
+    },
+    clearRecentFiles: () => {
+        logger.debug("[Preload] Invoking 'store:clearRecentFiles'");
+        return ipcRenderer.invoke('store:clearRecentFiles');
+    },
+
+    // --- Sidecar Workspace (folders/tags/category by flow path) ---
+    // load -> { success, workspace }; save(workspace) -> { success, workspace }.
+    loadWorkspace: () => {
+        logger.debug("[Preload] Invoking 'workspace:load'");
+        return ipcRenderer.invoke('workspace:load');
+    },
+    saveWorkspace: (workspace) => {
+        logger.debug("[Preload] Invoking 'workspace:save'");
+        return ipcRenderer.invoke('workspace:save', workspace);
+    },
+
     // --- Dirty State Communication ---
     // Sets up a listener for messages from the main process asking for the dirty state
     onCheckDirtyState: (callback) => {

@@ -33,7 +33,6 @@ export class FlowBuilderComponent {
         this.flowModel = null;
         this.selectedStepId = null;
         this.variables = {};
-        this.stepSearchQuery = '';
         // Panel visibility is managed by the wrapper (app.js) based on user clicks on toggle buttons
 
         this.uiRefs = {}; // For elements *within* the builder section
@@ -53,11 +52,8 @@ export class FlowBuilderComponent {
             <div class="flow-builder-section" data-ref="builderSection">
                 <div class="flow-steps-panel" data-ref="stepsPanel">
                     <h3>Flow Steps</h3>
-                    <div class="flow-steps-search" data-ref="stepsSearch">
-                        <input type="text" data-ref="stepsSearchInput" placeholder="Search steps...">
-                        <button class="btn btn-sm btn-secondary" data-ref="stepsSearchClearBtn" title="Clear search">✕</button>
-                    </div>
-                    <div class="flow-steps-search-results" data-ref="stepsSearchResults" style="display:none;"></div>
+                    <!-- Step search: the global Fuse.js box (#steps-search-wrap) is
+                         adopted into this panel by uiUtils.syncStepsSearchVisibility. -->
                     <div class="flow-steps-container" data-ref="stepsContainer">
                         <!-- Steps rendered here -->
                     </div>
@@ -99,25 +95,6 @@ export class FlowBuilderComponent {
     _bindBaseEventListeners() {
         // Add Top-Level Step Button
         this.uiRefs.addTopLevelStepBtn.addEventListener('click', () => this.options.onRequestAddStep());
-
-        const searchInput = this.uiRefs.stepsSearchInput;
-        const clearBtn = this.uiRefs.stepsSearchClearBtn;
-        if (searchInput) {
-            searchInput.addEventListener('input', () => {
-                this.stepSearchQuery = searchInput.value;
-                this._applyStepSearchFilter();
-            });
-        }
-        if (clearBtn) {
-            clearBtn.addEventListener('click', () => {
-                if (searchInput) {
-                    searchInput.value = '';
-                }
-                this.stepSearchQuery = '';
-                this._applyStepSearchFilter();
-                searchInput?.focus();
-            });
-        }
     }
 
     // This _setupCollapsible was for the Info Overlay when it was part of the builder.
@@ -143,10 +120,6 @@ export class FlowBuilderComponent {
             this.uiRefs.editorContainer.style.display = 'none';
             this.uiRefs.editorContainer.innerHTML = '';
 
-            if (this.uiRefs.stepsSearchInput) this.uiRefs.stepsSearchInput.value = '';
-            this.stepSearchQuery = '';
-            this._renderStepSearchResults([], '', this.uiRefs.stepsSearchResults);
-            
             // Clear global info overlay as well if no flow model
             if (domRefs.infoOverlayNameInput) domRefs.infoOverlayNameInput.value = '';
             if (domRefs.infoOverlayDescTextarea) domRefs.infoOverlayDescTextarea.value = '';
@@ -403,114 +376,6 @@ export class FlowBuilderComponent {
          }
     }
 
-    _applyStepSearchFilter() {
-        const container = this.uiRefs.stepsContainer;
-        const resultsContainer = this.uiRefs.stepsSearchResults;
-        if (!container || !this.flowModel) return;
-
-        const query = (this.stepSearchQuery || '').trim().toLowerCase();
-        const visibleIds = new Set();
-        const matches = [];
-
-        const collectSteps = (steps, trail = []) => {
-            let hasAnyVisible = false;
-            if (!steps || !Array.isArray(steps)) return false;
-            steps.forEach(step => {
-                const displayName = step.name || this._getStepTypeLabel(step.type);
-                const haystack = `${displayName} ${step.type || ''}`.toLowerCase();
-                const selfMatches = query ? haystack.includes(query) : true;
-
-                const currentTrail = trail.length > 0 ? `${trail.join(' > ')} > ${displayName}` : displayName;
-                let childMatches = false;
-
-                if (step.type === 'condition') {
-                    const thenTrail = `${currentTrail} > Then`;
-                    const elseTrail = `${currentTrail} > Else`;
-                    childMatches = collectSteps(step.thenSteps, [thenTrail]) || childMatches;
-                    childMatches = collectSteps(step.elseSteps, [elseTrail]) || childMatches;
-                } else if (step.type === 'loop') {
-                    const loopTrail = `${currentTrail} > Loop`;
-                    childMatches = collectSteps(step.loopSteps, [loopTrail]) || childMatches;
-                }
-
-                const visible = !query || selfMatches || childMatches;
-                if (visible) visibleIds.add(step.id);
-                if (query && selfMatches) {
-                    matches.push({
-                        id: step.id,
-                        name: displayName,
-                        type: step.type || 'unknown',
-                        trail: trail.join(' > ')
-                    });
-                }
-                hasAnyVisible = hasAnyVisible || visible;
-            });
-            return hasAnyVisible;
-        };
-
-        collectSteps(this.flowModel.steps || [], []);
-
-        container.querySelectorAll('.flow-step').forEach(stepEl => {
-            const stepId = stepEl.dataset.stepId;
-            stepEl.style.display = visibleIds.has(stepId) ? '' : 'none';
-        });
-
-        this._renderStepSearchResults(matches, query, resultsContainer);
-    }
-
-    _renderStepSearchResults(matches, query, resultsContainer) {
-        if (!resultsContainer) return;
-        if (!query) {
-            resultsContainer.innerHTML = '';
-            resultsContainer.style.display = 'none';
-            return;
-        }
-
-        resultsContainer.style.display = 'block';
-        if (!matches || matches.length === 0) {
-            resultsContainer.innerHTML = '<div class="step-search-empty">No matching steps.</div>';
-            return;
-        }
-
-        const maxResults = 30;
-        const clipped = matches.slice(0, maxResults);
-        const itemsHtml = clipped.map(match => `
-            <div class="step-search-item" data-step-id="${escapeHTML(match.id)}">
-                <div class="step-search-info">
-                    <div class="step-search-name">${escapeHTML(match.name)}</div>
-                    <div class="step-search-meta">${escapeHTML(match.type)}${match.trail ? ` - ${escapeHTML(match.trail)}` : ''}</div>
-                </div>
-                <div class="step-search-actions">
-                    <button class="btn btn-sm btn-secondary" data-action="jump-list" title="Jump to step in list">List</button>
-                    <button class="btn btn-sm btn-secondary" data-action="jump-graph" title="Jump to step in graph">Graph</button>
-                </div>
-            </div>
-        `).join('');
-        const overflowNote = matches.length > maxResults
-            ? `<div class="step-search-overflow">Showing ${maxResults} of ${matches.length} matches.</div>`
-            : '';
-        resultsContainer.innerHTML = itemsHtml + overflowNote;
-
-        resultsContainer.querySelectorAll('.step-search-item').forEach(item => {
-            const stepId = item.dataset.stepId;
-            item.querySelectorAll('button').forEach(button => {
-                button.addEventListener('click', (event) => {
-                    event.preventDefault();
-                    const previousSelection = appState.selectedStepId;
-                    this.options.onStepSelect?.(stepId);
-                    if (appState.selectedStepId !== stepId && previousSelection !== stepId) {
-                        return;
-                    }
-                    if (button.dataset.action === 'jump-graph') {
-                        this._jumpToGraph(stepId);
-                    } else {
-                        this._scrollStepIntoView(stepId);
-                    }
-                });
-            });
-        });
-    }
-
     _scrollStepIntoView(stepId) {
         const container = this.uiRefs.stepsContainer;
         if (!container || !stepId) return;
@@ -548,7 +413,6 @@ export class FlowBuilderComponent {
         const steps = this.flowModel.steps || [];
         if (steps.length === 0) {
             container.innerHTML = `<div class="empty-flow-message"><p>No steps defined.</p><p>Click "+ Add Step" below.</p></div>`;
-            this._renderStepSearchResults([], this.stepSearchQuery, this.uiRefs.stepsSearchResults);
             return;
         }
 
@@ -564,7 +428,6 @@ export class FlowBuilderComponent {
         steps.forEach(step => {
             container.appendChild(renderStep(step, renderOptions));
         });
-        this._applyStepSearchFilter();
     }
 
     _updateStepEditorUI() {

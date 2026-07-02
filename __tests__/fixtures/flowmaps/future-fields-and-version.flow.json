@@ -1,0 +1,41 @@
+{
+    "id": "fixture-future-fields-and-version",
+    "name": "From-the-future: extra unknown fields + schemaVersion 2.0",
+    "description": "A newer writer stamped schemaVersion 2.0 and sprinkled unknown top-level and per-step fields. The older engine must ignore the unknown fields and still execute the known steps normally.",
+    "schemaVersion": "2.0",
+    "workspaceId": "ws_from_the_future",
+    "assertions": [
+        {"path": "body.ok", "operator": "is_true"}
+    ],
+    "staticVars": {
+        "baseUrl": "https://example.test"
+    },
+    "steps": [
+        {
+            "id": "f1",
+            "name": "Known request carrying unknown additive fields",
+            "type": "request",
+            "method": "GET",
+            "url": "{{baseUrl}}/resource",
+            "onFailure": "continue",
+            "retries": 3,
+            "timeoutMs": 5000,
+            "circuitBreaker": {"threshold": 0.5, "window": "30s"},
+            "extract": {
+                "status": ".status"
+            }
+        },
+        {
+            "id": "f2",
+            "name": "Known condition with a valid, known operator",
+            "type": "condition",
+            "conditionData": {
+                "variable": "status",
+                "operator": "equals",
+                "value": "200"
+            },
+            "then": [],
+            "else": []
+        }
+    ]
+}

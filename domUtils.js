@@ -12,6 +12,11 @@ export function initializeDOMReferences() {
         addFlowBtn: document.getElementById('add-flow-btn'), // Now just "New"
         openFlowBtn: document.getElementById('open-flow-btn'),
         flowList: document.getElementById('flow-list'), // Now shows recent files
+        // WAVE2 file-features: fuzzy-search inputs (files + steps)
+        fileSearchInput: document.getElementById('file-search-input'),
+        stepsSearchWrap: document.getElementById('steps-search-wrap'),
+        stepsSearchInput: document.getElementById('steps-search-input'),
+        stepsSearchCount: document.getElementById('steps-search-count'),
 
         // Workspace
         workspace: document.getElementById('workspace'),
@@ -34,8 +39,13 @@ export function initializeDOMReferences() {
         zoomOutBtn: document.getElementById('zoom-out-btn'),
         zoomInBtn: document.getElementById('zoom-in-btn'),
         zoomResetBtn: document.getElementById('zoom-reset-btn'),
-        autoLayoutBtn: document.getElementById('auto-layout-btn'),
+        // WAVE2 LANE canvas: Tidy Up + jump-to-next-failed toolbar buttons
+        tidyUpBtn: document.getElementById('tidy-up-btn'),
+        nextErrorBtn: document.getElementById('next-error-btn'),
         toggleMinimapBtn: document.getElementById('toggle-minimap-btn'),
+        // === WAVE3 demo-mode === presentation toggle + first-run onboarding host
+        demoModeBtn: document.getElementById('demo-mode-btn'),
+        onboardingHost: document.getElementById('onboarding-host'),
 
         // Panels relative to Workspace
         variablesPanel: document.querySelector('.variables-panel'),
@@ -113,6 +123,5 @@ export function initializeDOMReferences() {
     if (!domRefs.resultsStatusFilter) logger.warn("Required select #results-status-filter not found in HTML.");
     if (!domRefs.exportResultsJsonBtn) logger.warn("Required button #export-results-json-btn not found in HTML.");
     if (!domRefs.exportResultsCsvBtn) logger.warn("Required button #export-results-csv-btn not found in HTML.");
-    if (!domRefs.autoLayoutBtn) logger.warn("Required button #auto-layout-btn not found in HTML.");
 
 }

@@ -10,7 +10,10 @@ export default {
     },
     moduleFileExtensions: ['js', 'mjs'],
     testMatch: ['**/__tests__/**/*.test.js'],
-    testPathIgnorePatterns: ['/node_modules/'],
+    // Ignore node_modules AND .claude/ (workflow worktrees / vendored spikes are full
+    // repo checkouts whose __tests__/ would otherwise be scanned as duplicate suites).
+    // visualizer-island/ is a self-contained Vite app with its own tests, not part of this suite.
+    testPathIgnorePatterns: ['/node_modules/', '/\\.claude/', '/visualizer-island/'],
     verbose: true,
     injectGlobals: true
 };

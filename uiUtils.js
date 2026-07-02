@@ -8,6 +8,10 @@ import { handleBuilderFlowUpdate, handleBuilderHeadersUpdate, handleBuilderFlowV
 // Import adjustCollapsibleHeight from app.js (assuming it's exported there)
 import { adjustCollapsibleHeight as appAdjustCollapsibleHeight } from './app.js';
 import { logger } from './logger.js';
+// WAVE2 file-features: Fuse.js-backed fuzzy search (files + steps).
+import { searchFiles, searchSteps } from './fuzzySearch.js';
+// WAVE2 file-features: undo/redo history reconciliation on (re)render.
+import { syncFlowHistoryOnRender } from './flowHistory.js';
 
 // Simple path shim for display purposes
 const path = {
@@ -102,6 +106,13 @@ export function setDirty() {
         domRefs.closeFlowBtn.disabled = !canClose;
     }
 
+    // --- Background-run launcher ---
+    // setDirty fires after every model mutation, which is exactly when "does
+    // this flow have steps to run" can change (updateRunnerUI only fires on
+    // runner lifecycle events, so it alone leaves the button stale).
+    const bgRunBtn = document.getElementById('bg-run-btn');
+    if (bgRunBtn) bgRunBtn.disabled = !flowIsLoaded || !hasSteps || appIsLoading;
+
     // Notify main process if dirty state changes (optional, if needed elsewhere)
     // if (window.electronAPI && typeof window.electronAPI.notifyDirtyStateChanged === 'function') {
     //     window.electronAPI.notifyDirtyStateChanged(isAppDirty);
@@ -118,17 +129,86 @@ export function updateWorkspaceTitle() {
         const displayFileName = appState.currentFilePath ? path.basename(appState.currentFilePath) : baseName;
         const needsSave = appState.isDirty || appState.stepEditorIsDirty;
 
-        // Title bar shows filename (or flow name) + dirty indicator
+        // OS window title keeps the conventional asterisk; the on-screen header
+        // shows dirtiness as the #dirty-flag pip (an instrument readout), not " *".
         title = `${displayFileName}${needsSave ? ' *' : ''} - FlowRunner`;
-        // Workspace header shows flow name + dirty indicator
-        workspaceHeader = `${baseName}${needsSave ? ' *' : ''}`;
+        workspaceHeader = baseName;
     }
 
     // Update DOM elements if they exist
     if (domRefs.workspaceTitle) {
         domRefs.workspaceTitle.textContent = workspaceHeader;
     }
+    const dirtyFlag = document.getElementById('dirty-flag');
+    if (dirtyFlag) {
+        const isDirty = !!(appState.currentFlowModel && (appState.isDirty || appState.stepEditorIsDirty));
+        dirtyFlag.hidden = !isDirty;
+    }
     document.title = title;
+
+    // The open flow can change while the Runs page is displayed (Cmd+O, topbar
+    // Close/Save stay live there); let its launcher re-sync its flow picker.
+    document.dispatchEvent(new CustomEvent('flowrunner:flow-context-changed'));
+}
+
+/**
+ * Drive the System Status Pip (the Sentinel signature) in the brand lockup and
+ * its mirror in the runner header. state: idle | running | success | error | stopped.
+ * Bound strictly to real engine state — never faked, never animated when idle.
+ */
+export function setSystemStatus(state) {
+    const WORDS = { idle: 'IDLE', running: 'RUNNING', success: 'PASSED', error: 'FAILED', stopped: 'STOPPED' };
+    const dataState = state === 'stopped' ? 'idle' : state;
+    ['system-status-pip', 'runner-status-pip'].forEach((id) => {
+        const pip = document.getElementById(id);
+        if (!pip) return;
+        pip.dataset.state = dataState;
+        const word = pip.querySelector('.status-word');
+        if (word) word.textContent = WORDS[state] || 'IDLE';
+    });
+    // The verdict pill: projector-scale PASSED/FAILED/RUNNING beside the run
+    // cluster. The 11px brand pip stays as ambient state; THIS is the verdict.
+    const verdict = document.getElementById('run-verdict');
+    if (verdict) {
+        const show = state === 'running' || state === 'success' || state === 'error';
+        verdict.hidden = !show;
+        verdict.dataset.state = state;
+        const word = verdict.querySelector('.run-verdict-word');
+        if (word) word.textContent = WORDS[state] || '';
+    }
+}
+
+/** Sync the List|Visual segmented control to appState.currentView (selection + sliding thumb). */
+export function syncViewSegmented(hasFlow) {
+    // Reflect the active view on the workspace so the floating canvas toolbar can gate itself.
+    const ws = document.getElementById('workspace');
+    if (ws) ws.dataset.view = hasFlow ? appState.currentView : 'list-editor';
+    const seg = document.getElementById('view-segmented');
+    if (!seg) return;
+    seg.style.display = hasFlow ? '' : 'none';
+    if (!hasFlow) return;
+    const cells = seg.querySelectorAll('.segmented__cell');
+    const thumb = seg.querySelector('.segmented__thumb');
+    let active = null;
+    cells.forEach((cell) => {
+        const on = cell.dataset.view === appState.currentView;
+        cell.setAttribute('aria-selected', String(on));
+        if (on) active = cell;
+    });
+    if (active && thumb) {
+        thumb.style.width = `${active.offsetWidth}px`;
+        thumb.style.transform = `translateX(${active.offsetLeft - active.parentElement.clientLeft - 3}px)`;
+    }
+}
+
+// Toast bridge: lets low-level modules (flowCore, flowStepComponents) surface
+// toasts without importing uiUtils (avoids circular imports). Dispatch with:
+// document.dispatchEvent(new CustomEvent('flowrunner:toast', {detail:{message, type}}))
+if (typeof document !== 'undefined') {
+    document.addEventListener('flowrunner:toast', (e) => {
+        const { message, type = 'error', title = null } = e.detail || {};
+        if (message) showMessage(message, type, undefined, title);
+    });
 }
 
 export function showMessage(message, type = 'info', container = domRefs.builderMessages, title = null, allowHTML = false) {
@@ -142,8 +222,9 @@ export function showMessage(message, type = 'info', container = domRefs.builderM
 
     const messageEl = document.createElement('div');
     messageEl.className = `flow-message ${type}`;
-    const icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
-    const iconHtml = `<div class="message-icon">${icons[type] || icons.info}</div>`;
+    // Sentinel icon system: sprite SVGs, never emoji (index.html <symbol> defs).
+    const icons = { info: 'i-info', success: 'i-check', error: 'i-alert-circle', warning: 'i-alert-triangle' };
+    const iconHtml = `<div class="message-icon"><svg class="icon" aria-hidden="true"><use href="#${icons[type] || icons.info}"/></svg></div>`;
     const contentContainer = document.createElement('div'); // Container for content
     contentContainer.className = 'message-content';
 
@@ -167,12 +248,10 @@ export function showMessage(message, type = 'info', container = domRefs.builderM
     messageEl.innerHTML = `
         ${iconHtml}
         <div class="message-body">
-            <div class="message-header">
-                ${title ? `<strong>${escapeHTML(title)}</strong>` : ''}
-                <button class="btn-close-message" title="Dismiss message">✕</button>
-            </div>
+            ${title ? `<div class="message-header"><strong>${escapeHTML(title)}</strong></div>` : ''}
             <!-- Content will be appended below -->
         </div>
+        <button class="btn-close-message" title="Dismiss message" aria-label="Dismiss message"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>
     `;
     // Append the content element we created and potentially attached listeners to
     messageEl.querySelector('.message-body').appendChild(contentContainer);
@@ -212,8 +291,13 @@ export function clearMessages(container = domRefs.builderMessages) {
 }
 
 export function renderCurrentFlow() {
+    // WAVE2 file-features: reconcile undo/redo history with the model about to be
+    // rendered (auto-resets the stack when a NEW flow is loaded).
+    syncFlowHistoryOnRender();
+
     if (!appState.currentFlowModel) {
         clearWorkspace(true); // Full clear if no model
+        syncViewSegmented(false);
         return;
     }
 
@@ -226,6 +310,7 @@ export function renderCurrentFlow() {
     // Set active view
     if (domRefs.flowBuilderMount) domRefs.flowBuilderMount.classList.toggle('active', appState.currentView === 'list-editor');
     if (domRefs.flowVisualizerMount) domRefs.flowVisualizerMount.classList.toggle('active', appState.currentView === 'node-graph');
+    syncViewSegmented(true); // Sentinel: keep the List|Visual segmented control in sync
 
     // Populate global info overlay (values only)
     _populateGlobalInfoOverlay();
@@ -258,6 +343,10 @@ export function renderCurrentFlow() {
 
     // Sync visibility of toggle buttons and panels
     syncPanelVisibility();
+
+    // WAVE2 file-features: show/hide the steps-search box for the active view
+    // and re-apply any active step filter against the freshly rendered rows.
+    syncStepsSearchVisibility();
 
     // Update button states based on dirty status, etc.
     setDirty();
@@ -633,15 +722,18 @@ export function updateViewToggle() {
         if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = 'none';
         if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = 'none';
         if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = 'none';
-        if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = 'none';
+        if(domRefs.tidyUpBtn) domRefs.tidyUpBtn.style.display = 'none'; // WAVE2 LANE canvas
+        if(domRefs.nextErrorBtn) domRefs.nextErrorBtn.style.display = 'none'; // WAVE2 LANE canvas
         if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = 'none';
+        syncViewSegmented(false);
         return;
     }
     domRefs.toggleViewBtn.style.display = ''; // Ensure button is visible if flow loaded
     if(domRefs.zoomInBtn) domRefs.zoomInBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomOutBtn) domRefs.zoomOutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if(domRefs.zoomResetBtn) domRefs.zoomResetBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
-    if(domRefs.autoLayoutBtn) domRefs.autoLayoutBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
+    if(domRefs.tidyUpBtn) domRefs.tidyUpBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none'; // WAVE2 LANE canvas
+    if(domRefs.nextErrorBtn) domRefs.nextErrorBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none'; // WAVE2 LANE canvas
     if(domRefs.toggleMinimapBtn) domRefs.toggleMinimapBtn.style.display = appState.currentView === 'node-graph' ? '' : 'none';
     if (appState.currentView === 'list-editor') {
         domRefs.toggleViewBtn.textContent = 'Visual View';
@@ -658,6 +750,7 @@ export function updateViewToggle() {
         if(domRefs.toggleVariablesBtn) domRefs.toggleVariablesBtn.style.display = '';
         if(appState.visualizerComponent) appState.visualizerComponent.showMinimap();
     }
+    syncViewSegmented(true);
 }
 
 /** Syncs the visibility and state of Info/Variables panels and their toggle buttons */
@@ -687,40 +780,182 @@ export function syncPanelVisibility() {
     if (toggleMinimapBtn) {
         const isVisible = appState.visualizerComponent?.isMinimapVisible() ?? false;
         toggleMinimapBtn.classList.toggle('active', isVisible);
-        toggleMinimapBtn.textContent = isVisible ? 'Hide Minimap' : 'Show Minimap';
+        // Icon-only button in the floating toolbar: update the tooltip, keep the glyph.
+        toggleMinimapBtn.title = isVisible ? 'Hide Minimap' : 'Show Minimap';
     }
 
-    // Show/hide the toggle buttons themselves based on whether a flow is loaded
+    // Sentinel v2: reflect the overlay state onto the inspector tab rack.
+    const tabRack = document.getElementById('inspector-tabs');
+    if (tabRack) {
+        const active = appState.isInfoOverlayOpen ? 'info'
+            : appState.isVariablesPanelVisible ? 'variables' : 'results';
+        tabRack.querySelectorAll('.inspector-tab').forEach((tab) => {
+            tab.setAttribute('aria-selected', String(tab.dataset.tab === active));
+        });
+        const resultsPane = document.getElementById('inspector-pane-results');
+        if (resultsPane) resultsPane.style.display = active === 'results' ? '' : 'none';
+    }
+
+    // Sentinel v2: the info/variables buttons are palette/shortcut compat stubs;
+    // the inspector tab rack is the visible affordance. Keep them hidden.
     const shouldShowButtons = !!appState.currentFlowModel;
-    if (toggleInfoBtn) toggleInfoBtn.style.display = shouldShowButtons ? '' : 'none';
-    if (toggleVariablesBtn) toggleVariablesBtn.style.display = shouldShowButtons ? '' : 'none';
+    if (toggleInfoBtn) toggleInfoBtn.style.display = 'none';
+    if (toggleVariablesBtn) toggleVariablesBtn.style.display = 'none';
     if (toggleMinimapBtn) {
         const shouldShow = shouldShowButtons && appState.currentView === 'node-graph';
         toggleMinimapBtn.style.display = shouldShow ? '' : 'none';
     }
 }
 
-/** Clears all runtime-related status classes from steps in the list view */
-export function clearListViewHighlights() {
-    if (!domRefs.flowBuilderMount) return;
-    try {
-        // Define all possible status classes used for highlighting
-        const statusClasses = ['step-running', 'step-success', 'step-error', 'step-stopped', 'step-skipped'];
-        domRefs.flowBuilderMount.querySelectorAll('.flow-step')
-            .forEach(el => {
-                el.classList.remove(...statusClasses);
-            });
-    } catch (error) {
-        logger.error("Error clearing list view highlights:", error);
+// ============================================================================
+// WAVE2 file-features: fuzzy search over recent files + steps
+// ----------------------------------------------------------------------------
+// These filter EXISTING rendered rows by toggling a `.search-hidden` class,
+// rather than re-rendering. That preserves drag-order, selection state and any
+// in-flight step editors, and keeps this lane out of fileOperations' render path
+// (avoiding a uiUtils <-> fileOperations import cycle). Ranking from Fuse is
+// applied by reordering the surviving rows to match match-relevance.
+// ============================================================================
+
+/**
+ * Filter the recent-files sidebar list against the file-search box. Rows that do
+ * not match get `.search-hidden`; matching rows are reordered by relevance.
+ * A blank query restores every row in its original (drag) order.
+ */
+export function applyFileSearch() {
+    const listEl = domRefs.flowList;
+    const input = domRefs.fileSearchInput;
+    if (!listEl) return;
+
+    const query = (input?.value || '').trim();
+    const rows = Array.from(listEl.querySelectorAll('.recent-file-item'));
+    if (rows.length === 0) return;
+
+    // Clear any prior "no matches" placeholder we injected.
+    listEl.querySelector('.search-no-matches')?.remove();
+
+    if (!query) {
+        rows.forEach(row => row.classList.remove('search-hidden'));
+        return;
+    }
+
+    const paths = rows.map(row => row.dataset.filePath);
+    const ranked = searchFiles(query, paths); // ordered subset
+    const rankIndex = new Map(ranked.map((p, i) => [p, i]));
+
+    rows.forEach(row => {
+        const matched = rankIndex.has(row.dataset.filePath);
+        row.classList.toggle('search-hidden', !matched);
+    });
+
+    // Reorder surviving rows to reflect relevance ranking.
+    ranked.forEach(path => {
+        const row = rows.find(r => r.dataset.filePath === path);
+        if (row) listEl.appendChild(row);
+    });
+
+    if (ranked.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'search-no-matches';
+        li.textContent = 'No matching recent files.';
+        listEl.appendChild(li);
     }
 }
 
 /**
- * Highlights a specific step in the list view with a given status class.
- * Removes previous status classes before adding the new one.
- * @param {string} stepId The ID of the step to highlight.
- * @param {string} statusClass The CSS class representing the status (e.g., 'step-running', 'step-success').
+ * Filter the current flow's steps against the steps-search box. Matching steps
+ * (including nested ones) stay visible; the rest get `.search-hidden`. Ancestor
+ * containers of a match are kept visible so nested hits remain reachable.
+ * Updates the small "N / M" match counter. Blank query clears all filtering.
  */
+export function applyStepsSearch() {
+    const mount = domRefs.flowBuilderMount;
+    const input = domRefs.stepsSearchInput;
+    const countEl = domRefs.stepsSearchCount;
+    if (!mount) return;
+
+    const query = (input?.value || '').trim();
+    const stepEls = Array.from(mount.querySelectorAll('.flow-step'));
+    const total = stepEls.length;
+
+    if (!query) {
+        stepEls.forEach(el => el.classList.remove('search-hidden', 'search-match'));
+        if (countEl) countEl.textContent = '';
+        return;
+    }
+
+    const steps = appState.currentFlowModel?.steps || [];
+    const matches = searchSteps(query, steps);
+    const matchIds = new Set(matches.map(s => s.id));
+
+    // A step is visible if it matches OR it is an ancestor of a match (so the
+    // path to a nested hit is preserved).
+    stepEls.forEach(el => {
+        const id = el.dataset.stepId;
+        const isMatch = matchIds.has(id);
+        const containsMatch = !isMatch
+            && Array.from(el.querySelectorAll('.flow-step'))
+                .some(child => matchIds.has(child.dataset.stepId));
+        const visible = isMatch || containsMatch;
+        el.classList.toggle('search-hidden', !visible);
+        el.classList.toggle('search-match', isMatch);
+    });
+
+    if (countEl) {
+        countEl.textContent = `${matchIds.size} / ${total}`;
+    }
+}
+
+/**
+ * Show or hide the steps-search box depending on whether a flow with steps is
+ * loaded in the list-editor view, and clear a stale query when hidden. Called
+ * from renderCurrentFlow so the box tracks the active view.
+ */
+export function syncStepsSearchVisibility() {
+    const wrap = domRefs.stepsSearchWrap;
+    if (!wrap) return;
+    const hasSteps = !!appState.currentFlowModel?.steps?.length;
+    const inListView = appState.currentView === 'list-editor';
+    const shouldShow = hasSteps && inListView;
+    // The search lives inside the Flow Steps panel header (single search box,
+    // scoped to the list it filters). The builder owns that DOM and may wipe it,
+    // so re-adopt the wrap after every render; moving a node keeps its listeners.
+    if (shouldShow && domRefs.flowBuilderMount) {
+        const panel = domRefs.flowBuilderMount.querySelector('.flow-steps-panel');
+        const heading = panel?.querySelector('h3');
+        if (panel && wrap.parentElement !== panel) {
+            heading ? heading.insertAdjacentElement('afterend', wrap)
+                    : panel.prepend(wrap);
+        }
+    }
+    wrap.style.display = shouldShow ? '' : 'none';
+    if (shouldShow) {
+        // Re-apply an active query against freshly rendered rows.
+        if (domRefs.stepsSearchInput?.value) applyStepsSearch();
+    } else if (domRefs.stepsSearchInput) {
+        domRefs.stepsSearchInput.value = '';
+        if (domRefs.stepsSearchCount) domRefs.stepsSearchCount.textContent = '';
+    }
+}
+
+/** Clears all runtime-related status classes from steps in the list view */
+export function clearListViewHighlights(only = null) {
+    if (!domRefs.flowBuilderMount) return;
+    try {
+        // Default: clear every run-state class. Pass an array (e.g. ['step-running'])
+        // to clear selectively — terminal PASS/FAIL tints must survive a stop
+        // (the projector reads the flow's story from those rows).
+        const statusClasses = Array.isArray(only) && only.length
+            ? only
+            : ['step-running', 'step-success', 'step-error', 'step-stopped', 'step-skipped'];
+        domRefs.flowBuilderMount.querySelectorAll('.flow-step').forEach((el) => {
+            el.classList.remove(...statusClasses);
+        });
+    } catch (error) {
+        logger.error('Error clearing list view highlights:', error);
+    }
+}
+
 export function highlightStepInList(stepId, statusClass) {
     // Ignore system steps that don't have a corresponding list item
     if (!stepId || /-(result|start|end|iter-\d+|error)$/i.test(stepId)) {
@@ -730,8 +965,10 @@ export function highlightStepInList(stepId, statusClass) {
     try {
         const stepElement = domRefs.flowBuilderMount.querySelector(`.flow-step[data-step-id="${stepId}"]`);
         if (stepElement) {
-            // Remove all potential previous status classes first
-            clearListViewHighlights(); // Clear all highlights first to ensure clean state
+            // Running is exclusive (one step runs at a time); terminal tints on
+            // OTHER rows must persist so the whole run stays readable.
+            clearListViewHighlights(['step-running']);
+            stepElement.classList.remove('step-running', 'step-success', 'step-error', 'step-stopped', 'step-skipped');
             stepElement.classList.add(statusClass); // Add the new status class
 
             // Scroll into view logic
@@ -775,14 +1012,14 @@ export function highlightStepInList(stepId, statusClass) {
 
      // Create a list of errors
      const errorListHtml = errors.map(error => `<li>${escapeHTML(error)}</li>`).join('');
-     const iconHtml = '<div class="message-icon">❌</div>'; // Error icon
+     const iconHtml = '<div class="message-icon"><svg class="icon" aria-hidden="true"><use href="#i-alert-circle"/></svg></div>';
 
      messageEl.innerHTML = `
           ${iconHtml}
           <div class="message-body">
              <div class="message-header">
                  <strong>Validation Failed</strong>
-                 <button class="btn-close-message" title="Dismiss message">✕</button>
+                 <button class="btn-close-message" title="Dismiss message" aria-label="Dismiss message"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>
              </div>
              <ul class="validation-errors">${errorListHtml}</ul>
          </div>
@@ -982,4 +1219,100 @@ export function hideUpdateInfoDialog() {
         // delete dialog._backdropListener;
         // if (closeBtn) delete closeBtn._closeListener;
     }
+}
+
+
+// --- Background runs UI (Runs pane + topbar chips) --------------------------
+// Renders from backgroundRuns.getBackgroundRuns(); re-invoked on the module's
+// 'flowrunner:bgruns-changed' event (wired in eventHandlers).
+
+function bgVerdictWord(status) {
+    return status === 'running' ? 'RUNNING'
+        : status === 'passed' ? 'PASSED'
+        : status === 'failed' ? 'FAILED' : 'STOPPED';
+}
+
+function fmtClock(ts) {
+    try { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+    catch { return ''; }
+}
+
+export function renderBackgroundRunsUI(runsList) {
+    // Topbar chips: live runs only (finished runs live in the Runs pane).
+    const strip = document.getElementById('bg-runs-strip');
+    if (strip) {
+        const live = runsList.filter((r) => r.status === 'running');
+        strip.innerHTML = live.map((r) => `
+            <button class="bg-run-chip" data-run-id="${escapeHTML(r.id)}" title="Background run: ${escapeHTML(r.name)} — click for details">
+                <svg class="icon icon--fill status-dot" aria-hidden="true"><use href="#i-dot"/></svg>
+                <span class="bg-run-chip-name">${escapeHTML(r.name)}</span>
+                ${r.continuous ? `<span class="bg-run-chip-iter">#${Math.max(1, r.currentIteration)}</span>` : ''}
+            </button>`).join('');
+    }
+
+    // Rail badge: count of live runs on the Runs page button. The badge is
+    // aria-hidden (raw "2" would become the button's accessible name), so the
+    // count is conveyed through the button's label instead.
+    const badge = document.getElementById('rail-runs-badge');
+    if (badge) {
+        const liveCount = runsList.filter((r) => r.status === 'running').length;
+        badge.hidden = liveCount === 0;
+        badge.textContent = String(liveCount);
+        document.getElementById('rail-runs-btn')?.setAttribute('aria-label',
+            liveCount > 0 ? `Background Runs — ${liveCount} running` : 'Background Runs');
+    }
+
+    // Page summary line: quiet aggregate of everything on the board.
+    const summary = document.getElementById('runs-page-summary');
+    if (summary) {
+        if (runsList.length === 0) {
+            summary.textContent = 'Each run executes a snapshot of a flow, so you can keep editing while it works.';
+        } else {
+            const live = runsList.filter((r) => r.status === 'running').length;
+            const iters = runsList.reduce((n, r) => n + r.iterations, 0);
+            const passes = runsList.reduce((n, r) => n + r.passes, 0);
+            const fails = runsList.reduce((n, r) => n + r.fails, 0);
+            summary.textContent = `${live} live · ${iters} iteration${iters === 1 ? '' : 's'} · ${passes} passed · ${fails} failed`;
+        }
+    }
+
+    // Run cards.
+    const list = document.getElementById('bg-runs-list');
+    if (!list) return;
+    if (runsList.length === 0) {
+        list.innerHTML = '<li class="bg-runs-empty">No background runs yet. Pick a flow above and press Start run — it executes a snapshot, so you can keep editing while it works.</li>';
+        return;
+    }
+    list.innerHTML = runsList.map((r) => {
+        const feed = [...r.results].slice(-10).reverse().map((e) => `
+            <li class="bg-feed-row ${e.status}">
+                <span class="bg-feed-dot"></span>
+                ${r.continuous ? `<span class="bg-feed-iter">#${e.iteration}</span>` : ''}
+                <span class="bg-feed-name">${escapeHTML(e.stepName)}</span>
+                ${e.method ? `<span class="request-method ${escapeHTML(e.method)}">${escapeHTML(e.method)}</span>` : ''}
+                ${e.httpStatus != null ? `<span class="bg-feed-code">${e.httpStatus}</span>` : ''}
+                ${e.duration != null ? `<span class="bg-feed-ms">${Math.round(e.duration)} ms</span>` : ''}
+                ${e.error ? `<span class="bg-feed-err" title="${escapeHTML(e.error)}">${escapeHTML(e.error)}</span>` : ''}
+            </li>`).join('');
+        return `
+        <li class="bg-run-card" data-run-id="${escapeHTML(r.id)}" data-status="${r.status}">
+            <div class="bg-run-head">
+                <span class="bg-run-verdict" data-state="${r.status}">${bgVerdictWord(r.status)}</span>
+                <span class="bg-run-name" title="${escapeHTML(r.name)}">${escapeHTML(r.name)}</span>
+                <span class="bg-run-actions">
+                    ${r.status === 'running'
+                        ? '<button class="btn btn-sm btn-secondary" data-bg-action="stop">Stop</button>'
+                        : '<button class="btn btn-sm btn-ghost btn-icon" data-bg-action="remove" title="Remove from list"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>'}
+                </span>
+            </div>
+            <div class="bg-run-meta">
+                <span>${r.stepCount} step${r.stepCount === 1 ? '' : 's'}</span>
+                <span>${r.continuous ? `continuous · every ${r.delayMs} ms` : 'single run'}</span>
+                <span>${r.iterations} iteration${r.iterations === 1 ? '' : 's'} · <b class="bg-ok">${r.passes} passed</b> · <b class="bg-bad">${r.fails} failed</b></span>
+                <span>started ${fmtClock(r.startedAt)}${r.endedAt ? ` · ended ${fmtClock(r.endedAt)}` : ''}</span>
+            </div>
+            ${r.lastError ? `<div class="bg-run-error">${escapeHTML(r.lastError)}</div>` : ''}
+            ${feed ? `<ul class="bg-run-feed">${feed}</ul>` : ''}
+        </li>`;
+    }).join('');
 }

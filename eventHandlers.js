@@ -4,7 +4,9 @@ import { appState, domRefs } from './state.js';
 import {
     handleCreateNewFlow, handleOpenFile, handleFlowListActions,
     saveCurrentFlow, handleSaveAs, confirmDiscardChanges,
-    handleCancelFlow, handleCloseFlow
+    handleCancelFlow, handleCloseFlow,
+    getRecentFiles, handleSelectFlow, initializeFlowManager,
+    readFlowModelFromPath
 } from './fileOperations.js';
 import {
     handleRunFlow,
@@ -19,20 +21,100 @@ import {
 import {
     showAppStepTypeDialog, initializeStepTypeDialogListeners,
     initializeVarDropdownListeners, initializeVariableInsertionListener,
+    showConfirmDialog,
 } from './dialogs.js';
 import {
     handleToggleSidebarCollapse, handleToggleRunnerCollapse
 } from './appFeatures.js';
 import {
     renderCurrentFlow, setDirty, syncPanelVisibility, showMessage,
-    updateWorkspaceTitle, updateViewToggle, updateDefinedVariables
+    updateWorkspaceTitle, updateViewToggle, updateDefinedVariables,
+    renderBackgroundRunsUI
 } from './uiUtils.js';
 import {
     addNestedStepToModel, deleteStepFromModel, moveStepInModel,
     cloneStepInModel, findStepInfoRecursive, insertStepAfterInModel, moveStepToBranchStart
 } from './modelUtils.js';
-import { createNewStep, escapeHTML, findStepById } from './flowCore.js';
+import { createNewStep, escapeHTML, findStepById, jsonToFlowModel } from './flowCore.js';
 import { logger } from './logger.js';
+// WAVE2 LANE canvas: ELK/dagre auto-layout adapter powering the "Tidy Up" button.
+import { computeLayout } from './autoLayout.js';
+
+// --- WAVE2 node-features: reusable palette overlays + View-as-JSON panel ---
+import { createPalette, getStepTypeItems } from './palette.js';
+import { createJsonView, flowToPrettyJson } from './jsonView.js';
+
+// WAVE2 file-features: undo/redo (immer-patch history) + live fuzzy search.
+import { undoFlow, redoFlow, canUndoFlow, canRedoFlow } from './flowHistory.js';
+import { applyFileSearch, applyStepsSearch } from './uiUtils.js';
+
+/* === WAVE3 demo-mode === presentation toggle + guided first-run onboarding. */
+import { initDemoMode } from './demoMode.js';
+import { maybeShowOnboarding, renderEmptyState } from './firstRun.js';
+import { startBackgroundRun, stopBackgroundRun, removeBackgroundRun, getBackgroundRuns } from './backgroundRuns.js';
+
+// Controller for the Demo-Mode toggle, created in initializeEventListeners so
+// the keyboard shortcut and the toolbar button drive the SAME state machine.
+let demoModeController = null;
+
+// --- Runs page (background-runs mission control) ---
+const RUNS_LAUNCH_CURRENT = '__current__';
+
+/** Delay-input parse that honors an explicit 0 (max rate) — `|| fallback` would eat it. */
+function parseDelayMs(raw, fallback = 1000) {
+    if (raw === '' || raw == null) return fallback;
+    const n = Number(raw);
+    return Number.isFinite(n) ? Math.max(0, n) : fallback;
+}
+
+/**
+ * Switch between the flow editor and the Runs page. The topbar and rail stay;
+ * drawer/workspace/inspector are swapped for the runs board via CSS.
+ * @param {'flow'|'runs'} page
+ */
+export function setActivePage(page) {
+    const app = document.querySelector('.app-container');
+    const pageEl = document.getElementById('runs-page');
+    if (!app || !pageEl) return;
+    const runs = page === 'runs';
+    appState.activePage = runs ? 'runs' : 'flow';
+    app.classList.toggle('page-runs', runs);
+    pageEl.hidden = !runs;
+    document.getElementById('rail-runs-btn')?.setAttribute('aria-pressed', String(runs));
+    if (runs) {
+        populateRunsLauncher();
+        renderBackgroundRunsUI(getBackgroundRuns());
+    }
+}
+
+/** Fill the Runs-page flow picker: current flow first, then recent files. */
+function populateRunsLauncher() {
+    const select = document.getElementById('runs-launch-select');
+    if (!select) return;
+    const previous = select.value;
+    const canReadFiles = !!(window.electronAPI && typeof window.electronAPI.readFile === 'function');
+    const options = [];
+    if (appState.currentFlowModel) {
+        const name = appState.currentFlowModel.name || 'Untitled flow';
+        options.push(`<option value="${RUNS_LAUNCH_CURRENT}">${escapeHTML(name)} — open now${appState.isDirty ? ', unsaved edits included' : ''}</option>`);
+    }
+    const currentPath = appState.currentFilePath;
+    getRecentFiles().filter((p) => p !== currentPath).forEach((p) => {
+        const name = p.split(/[\\/]/).pop();
+        options.push(`<option value="${escapeHTML(p)}"${canReadFiles ? '' : ' disabled'}>${escapeHTML(name)}</option>`);
+    });
+    select.innerHTML = options.length
+        ? options.join('')
+        : '<option value="" disabled selected>No flows yet — open or create one first</option>';
+    if (previous && [...select.options].some((o) => o.value === previous && !o.disabled)) {
+        select.value = previous;
+    }
+    if (!canReadFiles && options.length) {
+        select.title = 'In the browser only the currently open flow can be launched; file access requires the desktop app.';
+    }
+    const startBtn = document.getElementById('runs-launch-btn');
+    if (startBtn) startBtn.disabled = !select.value;
+}
 
 // --- Initialization of Listeners ---
 
@@ -52,6 +134,12 @@ export function initializeEventListeners() {
 
     // --- Workspace Header View/Panel Controls ---
     domRefs.toggleViewBtn?.addEventListener('click', handleToggleView); // Toggles List/Graph view
+    // Sentinel: List|Visual segmented control drives the same toggle (only when switching away from the active view)
+    document.querySelectorAll('#view-segmented .segmented__cell').forEach((cell) => {
+        cell.addEventListener('click', () => {
+            if (cell.dataset.view !== appState.currentView) handleToggleView();
+        });
+    });
 
     // Info Panel Toggle Button (Main Header) - Toggles based on current state
     domRefs.toggleInfoBtn?.addEventListener('click', () => handleToggleInfoOverlay());
@@ -59,11 +147,142 @@ export function initializeEventListeners() {
     // Variables Panel Toggle Button (Main Header) - Toggles based on current state
     domRefs.toggleVariablesBtn?.addEventListener('click', () => handleToggleVariablesPanel());
 
+    // --- Sentinel v2 shell ---
+    // Flow manager: New Folder button in the drawer section head.
+    initializeFlowManager();
+    // Flows drawer close chevron mirrors the rail toggle.
+    document.getElementById('drawer-close-btn')?.addEventListener('click', handleToggleSidebarCollapse);
+    // Rail palette button opens the command palette (same path as Cmd/Ctrl+K).
+    document.getElementById('rail-palette-btn')?.addEventListener('click', () => openCommandPalette());
+    // Inspector tab rack: Results = both context panes closed; Variables / Info
+    // reuse the existing overlay toggles (state, shortcuts, palette all shared).
+    document.getElementById('inspector-tabs')?.addEventListener('click', (e) => {
+        const tab = e.target.closest('.inspector-tab');
+        if (!tab) return;
+        if (tab.dataset.tab === 'results') {
+            handleToggleInfoOverlay(false);
+            handleToggleVariablesPanel(false);
+        } else if (tab.dataset.tab === 'variables') {
+            handleToggleVariablesPanel(true);
+        } else if (tab.dataset.tab === 'info') {
+            handleToggleInfoOverlay(true);
+        }
+        syncPanelVisibility();
+    });
+
+    // --- Background runs / Runs page ---
+    // Quick launcher in the Results pane: snapshot the CURRENT flow with the
+    // current Continuous/Delay settings and stay put — the author keeps their
+    // editing context; the rail badge and topbar chip show it's alive.
+    document.getElementById('bg-run-btn')?.addEventListener('click', () => {
+        if (!appState.currentFlowModel) return;
+        const continuous = !!domRefs.continuousRunCheckbox?.checked;
+        const delayMs = parseDelayMs(domRefs.requestDelayInput?.value);
+        startBackgroundRun({
+            model: appState.currentFlowModel,
+            name: appState.currentFlowModel.name,
+            continuous,
+            delayMs,
+            encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked,
+        });
+        showMessage(`Background run started${continuous ? ' (continuous)' : ''} — watch it in Runs, on the left rail.`, 'success');
+    });
+    // Live re-render, COALESCED: notify() fires per step completion, which at a
+    // 0ms continuous rate means hundreds of events/sec — rebuilding the board
+    // (innerHTML) on each one janks the window and destroys the Stop/Remove
+    // buttons between mousedown and mouseup, eating the click. Render at most
+    // ~4x/sec, and never while a pointer is held down inside the list.
+    let bgRenderTimer = null;
+    let bgLastRender = 0;
+    let bgPointerHeld = false;
+    let bgRenderDeferred = false;
+    const BG_RENDER_MIN_MS = 250;
+    const flushBgRender = () => {
+        bgRenderTimer = null;
+        if (bgPointerHeld) { bgRenderDeferred = true; return; }
+        bgRenderDeferred = false;
+        bgLastRender = Date.now();
+        renderBackgroundRunsUI(getBackgroundRuns());
+    };
+    const requestBgRender = () => {
+        if (bgRenderTimer !== null) return;
+        const wait = Math.max(0, BG_RENDER_MIN_MS - (Date.now() - bgLastRender));
+        bgRenderTimer = setTimeout(flushBgRender, wait);
+    };
+    document.addEventListener('flowrunner:bgruns-changed', requestBgRender);
+    document.getElementById('bg-runs-list')?.addEventListener('pointerdown', () => { bgPointerHeld = true; });
+    document.addEventListener('pointerup', () => {
+        if (!bgPointerHeld) return;
+        bgPointerHeld = false;
+        if (bgRenderDeferred) requestBgRender();
+    });
+    document.addEventListener('pointercancel', () => { bgPointerHeld = false; });
+    // Open flow changed (open/close/save) while the Runs page is up → the
+    // "open now" option in the launcher would lie; re-sync it.
+    document.addEventListener('flowrunner:flow-context-changed', () => {
+        if (appState.activePage === 'runs') populateRunsLauncher();
+    });
+    document.getElementById('bg-runs-list')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-bg-action]');
+        if (!btn) return;
+        const id = btn.closest('.bg-run-card')?.dataset.runId;
+        if (!id) return;
+        if (btn.dataset.bgAction === 'stop') stopBackgroundRun(id);
+        else if (btn.dataset.bgAction === 'remove') removeBackgroundRun(id);
+    });
+    // Rail button toggles the Runs page; a topbar chip always opens it.
+    document.getElementById('rail-runs-btn')?.addEventListener('click', () => {
+        setActivePage(appState.activePage === 'runs' ? 'flow' : 'runs');
+    });
+    document.getElementById('bg-runs-strip')?.addEventListener('click', (e) => {
+        if (!e.target.closest('.bg-run-chip')) return;
+        setActivePage('runs');
+    });
+    // The Flows rail button leaves the Runs page first (the drawer lives on the
+    // flow page); a second click then toggles the drawer as usual.
+    document.getElementById('sidebar-toggle-btn')?.addEventListener('click', (e) => {
+        if (appState.activePage !== 'runs') return;
+        e.stopImmediatePropagation();
+        setActivePage('flow');
+    }, { capture: true });
+    // Runs-page launcher: current flow or any recent flow file (read fresh from
+    // disk — the open editor is never touched).
+    document.getElementById('runs-launch-select')?.addEventListener('change', () => {
+        const select = document.getElementById('runs-launch-select');
+        const startBtn = document.getElementById('runs-launch-btn');
+        if (startBtn) startBtn.disabled = !select?.value;
+    });
+    document.getElementById('runs-launcher')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const value = document.getElementById('runs-launch-select')?.value;
+        if (!value) return;
+        const continuous = !!document.getElementById('runs-launch-continuous')?.checked;
+        const delayMs = parseDelayMs(document.getElementById('runs-launch-delay')?.value);
+        try {
+            const model = value === RUNS_LAUNCH_CURRENT
+                ? appState.currentFlowModel
+                : await readFlowModelFromPath(value);
+            if (!model) throw new Error('No flow is open.');
+            if (!(model.steps || []).length) throw new Error('That flow has no steps.');
+            startBackgroundRun({
+                model,
+                name: model.name || value.split(/[\\/]/).pop(),
+                continuous,
+                delayMs,
+                encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked,
+            });
+        } catch (err) {
+            showMessage(`Could not start the background run: ${err.message}`, 'error');
+        }
+    });
+
     // Zoom Controls
     domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
     domRefs.zoomOutBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomOut());
     domRefs.zoomResetBtn?.addEventListener('click', () => appState.visualizerComponent?.resetZoom());
-    domRefs.autoLayoutBtn?.addEventListener('click', handleAutoArrangeLayout);
+    // WAVE2 LANE canvas: Tidy Up (Alt-click = tidy only the selected step) + jump-to-next-failed.
+    domRefs.tidyUpBtn?.addEventListener('click', (event) => handleTidyUp({ selectionOnly: !!event.altKey }));
+    domRefs.nextErrorBtn?.addEventListener('click', handleJumpToNextError);
     domRefs.toggleMinimapBtn?.addEventListener('click', () => handleToggleMinimap());
 
     // Info Panel Close Button (Inside Panel) - Explicitly closes
@@ -100,6 +319,63 @@ export function initializeEventListeners() {
     initializeVarDropdownListeners();   // Variable dropdown itself (search, close)
     initializeVariableInsertionListener(); // Global listener for {{...}} buttons
 
+    // --- WAVE2 node-features: command palette (Cmd/Ctrl+K) + add-node (Tab) ---
+    initializePaletteShortcuts();
+
+    /* === WAVE3 demo-mode === wire the presentation toggle + first-run coach-marks.
+       Both the toolbar button and the Ctrl/Cmd+Shift+D shortcut drive the same
+       controller. onChange re-fits the graph so nodes fill the enlarged viewport. */
+    demoModeController = initDemoMode({
+        toggleButton: domRefs.demoModeBtn,
+        onChange: () => {
+            // Present projects the FLOW: entering it from the Runs page would
+            // otherwise leave the runs board on screen (and persist demo-mode
+            // to localStorage with barely any visible change).
+            if (document.documentElement.classList.contains('demo-mode')) {
+                setActivePage('flow');
+            }
+            // Re-fit the graph so nodes fill the resized viewport. resetZoom() is
+            // a documented public method in docs/visualizer-contract.md; called
+            // defensively (graph view may be inactive).
+            if (appState.currentView === 'node-graph') {
+                appState.visualizerComponent?.resetZoom?.();
+            }
+        },
+    });
+
+    /* === WAVE3 demo-mode === show the dismissible first-run onboarding once.
+       No-op after the user dismisses it (persisted via localStorage). Skipped
+       entirely in Demo Mode so a live presentation never gets coach-marks. */
+    if (!demoModeController?.isActive?.()) {
+        maybeShowOnboarding({ host: domRefs.onboardingHost });
+    }
+
+    /* === WAVE3 demo-mode === upgrade the static "no flow open" placeholder into
+       a teaching empty-state that names the New/Open actions. Additive: swaps the
+       inner content of the existing #workspace-placeholder, shown by uiUtils
+       whenever no flow is loaded. */
+    if (domRefs.workspacePlaceholder) {
+        domRefs.workspacePlaceholder.replaceChildren(renderEmptyState('no-flow-open'));
+
+        /* Wire the teaching empty-state's action rows to the real New/Open
+           controls. The rows advertise themselves as buttons (role/tabindex set
+           in firstRun.js), so honor both click and Enter/Space. A single
+           delegated listener survives content swaps. */
+        const triggerEmptyStateAction = (key) => {
+            if (key === 'new') document.getElementById('add-flow-btn')?.click();
+            else if (key === 'open') document.getElementById('open-flow-btn')?.click();
+        };
+        domRefs.workspacePlaceholder.addEventListener('click', (e) => {
+            const el = e.target.closest('.guided-empty-action');
+            if (el) triggerEmptyStateAction(el.dataset.action);
+        });
+        domRefs.workspacePlaceholder.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            const el = e.target.closest('.guided-empty-action');
+            if (el) { e.preventDefault(); triggerEmptyStateAction(el.dataset.action); }
+        });
+    }
+
     // Make step type dialog function globally accessible (if needed by other components)
     window.showAppStepTypeDialog = showAppStepTypeDialog;
 
@@ -122,6 +398,11 @@ export function initializeEventListeners() {
 
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+        // Runs page: the editor is display:none there, but programmatic clicks
+        // and model edits still work — so editor-scoped shortcuts would silently
+        // mutate an interface the user cannot see. Skip them; navigation (Cmd+K)
+        // and the always-visible run cluster (F5/F10/Esc, Cmd+S) stay live.
+        const onRunsPage = appState.activePage === 'runs';
 
         // File Operations
         if (ctrlOrCmd && e.key.toLowerCase() === 's') {
@@ -135,8 +416,27 @@ export function initializeEventListeners() {
             e.preventDefault();
              // Trigger open only if enabled
             if (!domRefs.openFlowBtn?.disabled) {
+                setActivePage('flow'); // opening a flow must be visible, not behind the runs board
                 handleOpenFile();
             }
+        }
+
+        // WAVE2 file-features: Undo / Redo over flow-model edits.
+        // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) = redo. Only fires when
+        // focus is OUTSIDE inputs (guarded above), so native text-field undo is
+        // untouched inside step editors and the search boxes.
+        // Layout undo (Tidy Up, below) takes precedence in graph view when
+        // available — otherwise one keypress would fire BOTH undos.
+        const layoutUndoWins = appState.currentView === 'node-graph'
+            && appState.visualizerComponent?.canUndoLayout?.();
+        if (ctrlOrCmd && e.key.toLowerCase() === 'z' && !e.shiftKey && !onRunsPage && !layoutUndoWins) {
+            e.preventDefault();
+            handleFlowRedoUndo('undo');
+        }
+        if (((ctrlOrCmd && e.key.toLowerCase() === 'z' && e.shiftKey)
+            || (ctrlOrCmd && e.key.toLowerCase() === 'y')) && !onRunsPage) {
+            e.preventDefault();
+            handleFlowRedoUndo('redo');
         }
 
         // Runner Controls
@@ -175,27 +475,75 @@ export function initializeEventListeners() {
             domRefs.zoomResetBtn?.click();
         }
 
-        // View/Panel Toggles
-        if (ctrlOrCmd && e.key === '1') {
+        // View/Panel Toggles (editor-scoped: inert on the Runs page)
+        if (ctrlOrCmd && e.key === '1' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleInfoBtn?.click(); // Simulate click on the button
         }
-        if (ctrlOrCmd && e.key === '2') {
+        if (ctrlOrCmd && e.key === '2' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleVariablesBtn?.click(); // Simulate click on the button
         }
-        if (ctrlOrCmd && e.key === '3') {
+        if (ctrlOrCmd && e.key === '3' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleViewBtn?.click(); // Simulate click on the button
         }
 
-        if (e.key.toLowerCase() === 'm' && appState.currentView === 'node-graph') {
+        /* === WAVE3 demo-mode === Ctrl/Cmd+Shift+D toggles the projector view.
+           Shift+D avoids clashing with any bare-key shortcut and with the
+           browser's Ctrl/Cmd+D (bookmark) intent. Drives the shared controller
+           so the toolbar button stays in sync. */
+        if (ctrlOrCmd && e.shiftKey && e.key.toLowerCase() === 'd') {
+            e.preventDefault();
+            demoModeController?.toggle();
+        }
+
+        if (e.key.toLowerCase() === 'm' && appState.currentView === 'node-graph' && !onRunsPage) {
             e.preventDefault();
             domRefs.toggleMinimapBtn?.click();
         }
+
+        // WAVE2 LANE canvas: single-key Cmd/Ctrl+Z undo for the last "Tidy Up".
+        if (ctrlOrCmd && !e.shiftKey && e.key.toLowerCase() === 'z' && !onRunsPage
+            && appState.currentView === 'node-graph'
+            && appState.visualizerComponent?.canUndoLayout?.()) {
+            e.preventDefault();
+            handleUndoTidyUp();
+        }
+    });
+
+    // --- WAVE2 file-features: live fuzzy-search inputs (files + steps) ---
+    // 'input' fires on every keystroke and on native clear (the search "x").
+    domRefs.fileSearchInput?.addEventListener('input', applyFileSearch);
+    domRefs.stepsSearchInput?.addEventListener('input', applyStepsSearch);
+    // Esc clears the box and restores the full list without stopping a run.
+    domRefs.fileSearchInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; applyFileSearch(); }
+    });
+    domRefs.stepsSearchInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); e.target.value = ''; applyStepsSearch(); }
     });
 
     logger.info("All core event listeners initialized.");
+}
+
+// --- WAVE2 file-features: Undo/Redo dispatch ---
+// Composes with the existing dirty flags: flowHistory reconciles appState.isDirty
+// against the last-saved baseline, then we re-render and refresh button states.
+export function handleFlowRedoUndo(direction) {
+    if (!appState.currentFlowModel) return;
+    const changed = direction === 'redo' ? redoFlow() : undoFlow();
+    if (!changed) return;
+    renderCurrentFlow();      // re-render list/graph from the restored model
+    updateDefinedVariables(); // structure may have changed
+    setDirty();               // reconcile Save/Cancel/Close button enablement
+    const verb = direction === 'redo' ? 'Redid' : 'Undid';
+    showMessage(`${verb} last change.`, 'info');
+}
+
+/** Exposed for tests / callers that want to know if undo/redo is available. */
+export function flowUndoRedoAvailability() {
+    return { canUndo: canUndoFlow(), canRedo: canRedoFlow() };
 }
 
 // --- View and Panel Toggles ---
@@ -211,25 +559,121 @@ export function handleToggleView() {
     if (appState.isVariablesPanelVisible) handleToggleVariablesPanel(false);
 }
 
-export function handleAutoArrangeLayout() {
-    if (!appState.currentFlowModel || !appState.visualizerComponent) return;
-    const layout = appState.visualizerComponent.getAutoLayout?.() || {};
-    const layoutEntries = Object.entries(layout);
-    if (layoutEntries.length === 0) {
-        showMessage('No steps available to arrange.', 'warning');
+// (The legacy grid "Auto Arrange" was removed in favor of the elkjs Tidy Up —
+// one layout affordance, one result. See handleTidyUp below.)
+
+// ================= WAVE2 LANE canvas: "Tidy Up" + error navigation =================
+
+/**
+ * Read the real rendered node bounding boxes so the auto-layout respects the
+ * actual card sizes (per the auto-layout spike handoff notes). Falls back to
+ * the visualizer defaults for any node that isn't measurable yet.
+ */
+function collectNodeSizes(visualizer) {
+    const sizes = {};
+    if (!visualizer?.nodes) return sizes;
+    visualizer.nodes.forEach((nodeData, stepId) => {
+        const el = nodeData?.element;
+        const width = el?.offsetWidth || nodeData?.width;
+        const height = el?.offsetHeight || nodeData?.height;
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+            sizes[stepId] = { width, height };
+        }
+    });
+    return sizes;
+}
+
+/**
+ * "Tidy Up": run the ELK/dagre adapter and apply the resulting {x,y} to the
+ * graph, animating the relayout and persisting into visualLayout. Honours a
+ * Tidy-all vs Tidy-selection distinction so manually-placed nodes can be kept:
+ * with `selectionOnly` and a selected step, only that step (and its subtree if
+ * it is a container) is repositioned. The move is undoable with a single
+ * Cmd/Ctrl+Z (applyLayout snapshots the pre-tidy positions).
+ *
+ * @param {{ selectionOnly?: boolean }} [options]
+ */
+export async function handleTidyUp({ selectionOnly = false } = {}) {
+    const visualizer = appState.visualizerComponent;
+    if (!appState.currentFlowModel || !visualizer) return;
+
+    const steps = appState.currentFlowModel.steps || [];
+    if (steps.length === 0) {
+        showMessage('No steps available to tidy.', 'warning');
         return;
     }
 
-    appState.currentFlowModel.visualLayout = layout;
-    appState.isDirty = true;
-    setDirty();
-    renderCurrentFlow();
+    let onlyStepIds = null;
+    if (selectionOnly) {
+        const selectedId = appState.selectedStepId;
+        if (!selectedId) {
+            showMessage('Select a step first to tidy just that part of the flow.', 'warning');
+            return;
+        }
+        // Tidy-selection: only the selected step (and its descendants, if any).
+        onlyStepIds = [selectedId];
+        const collect = visualizer.nodes; // rendered nodes only
+        const info = findStepInfoRecursive(steps, selectedId);
+        const selectedStep = info?.step;
+        if (selectedStep) {
+            const gatherDescendants = (branchArrays) => {
+                branchArrays.forEach((arr) => {
+                    (arr || []).forEach((child) => {
+                        if (child?.id && collect.has(child.id)) onlyStepIds.push(child.id);
+                        gatherDescendants([
+                            child?.thenSteps, child?.elseSteps, child?.loopSteps,
+                        ]);
+                    });
+                });
+            };
+            gatherDescendants([
+                selectedStep.thenSteps, selectedStep.elseSteps, selectedStep.loopSteps,
+            ]);
+        }
+    }
 
-    const firstStepId = appState.currentFlowModel.steps?.[0]?.id;
-    if (firstStepId) {
-        requestAnimationFrame(() => {
-            appState.visualizerComponent?.focusNode(firstStepId);
-        });
+    try {
+        const nodeSizes = collectNodeSizes(visualizer);
+        const { positions } = await computeLayout(steps, { nodeSizes, direction: 'DOWN' });
+        if (!positions || Object.keys(positions).length === 0) {
+            showMessage('Auto-layout produced no positions.', 'warning');
+            return;
+        }
+
+        const applied = visualizer.applyLayout(positions, { animate: true, onlyStepIds });
+        if (applied > 0) {
+            appState.isDirty = true;
+            setDirty();
+            showMessage(
+                selectionOnly ? 'Tidied the selected step.' : 'Tidied up the flow. Press Cmd/Ctrl+Z to undo.',
+                'success',
+            );
+        }
+    } catch (err) {
+        logger.error('[HANDLER handleTidyUp] Auto-layout failed:', err);
+        showMessage('Could not compute an auto-layout.', 'error');
+    }
+}
+
+/** Revert the last "Tidy Up" in a single keystroke (Cmd/Ctrl+Z). */
+export function handleUndoTidyUp() {
+    const visualizer = appState.visualizerComponent;
+    if (!visualizer?.canUndoLayout?.()) return;
+    const undone = visualizer.undoLayout();
+    if (undone) {
+        appState.isDirty = true;
+        setDirty();
+        showMessage('Reverted the last Tidy Up.', 'info');
+    }
+}
+
+/** Jump the viewport to the next failed step, cycling in document order. */
+export function handleJumpToNextError() {
+    const visualizer = appState.visualizerComponent;
+    if (!visualizer?.jumpToNextError) return;
+    const stepId = visualizer.jumpToNextError();
+    if (!stepId) {
+        showMessage('No failed steps to jump to.', 'info');
     }
 }
 
@@ -336,12 +780,16 @@ export function handleBuilderFlowVarsUpdate(staticVars) { // Called by app.js gl
 
 // --- Component Callbacks (FlowBuilderComponent, FlowVisualizer) ---
 
-export function handleBuilderStepSelect(stepId) {
+export async function handleBuilderStepSelect(stepId) {
     if (appState.selectedStepId === stepId) return; // No action if already selected
 
     // Check for unsaved changes in the *currently open* editor before switching
     if (appState.stepEditorIsDirty) {
-         if (!confirm("You have unsaved changes in the current step editor. Discard changes and select the new step?")) {
+         const discard = await showConfirmDialog(
+             "You have unsaved changes in the current step editor. Discard changes and select the new step?",
+             { title: 'Unsaved changes', confirmText: 'Discard changes', cancelText: 'Keep editing', danger: true }
+         );
+         if (!discard) {
              // User cancelled, do not proceed with selection change
              // Optionally, re-highlight the original step if UI deselects on click attempt
              renderCurrentFlow(); // Re-render to ensure selection remains correct
@@ -424,7 +872,7 @@ export function handleBuilderStepEdit(updatedStepData) {
     }
 }
 
-export function handleBuilderStepUpdate(action) {
+export async function handleBuilderStepUpdate(action) {
      // Handles actions like add, delete, move, clone originating from UI interactions (list view or visualizer)
      if (!appState.currentFlowModel) return;
 
@@ -476,7 +924,11 @@ export function handleBuilderStepUpdate(action) {
                  const stepToDeleteInfo = findStepInfoRecursive(appState.currentFlowModel.steps, action.stepId);
                  const stepName = stepToDeleteInfo ? stepToDeleteInfo.step.name : `step ${action.stepId}`;
 
-                 if (confirm(`Are you sure you want to delete step "${escapeHTML(stepName)}"? This cannot be undone and includes any nested steps.`)) {
+                 const confirmed = await showConfirmDialog(
+                     `Delete step "${stepName}"? This cannot be undone and includes any nested steps.`,
+                     { title: 'Delete step', confirmText: 'Delete', cancelText: 'Cancel', danger: true }
+                 );
+                 if (confirmed) {
                      modelChanged = deleteStepFromModel(action.stepId);
                      if (modelChanged) {
                          if (appState.selectedStepId === action.stepId) newSelectedStepId = null; // Deselect if deleted
@@ -716,5 +1168,289 @@ export function handleBuilderEditorDirtyChange(isEditorDirty) {
         appState.stepEditorIsDirty = isEditorDirty;
         // Update overall dirty state (which affects Save/Cancel buttons)
         setDirty();
+    }
+}
+
+
+// ================================================================
+// WAVE2 node-features: command/search palette + add-node overlays
+// ================================================================
+//
+// Two consumers of the reusable palette (palette.js):
+//   - Cmd/Ctrl+K  → global command palette (actions + navigation + open-recent)
+//   - Tab / dblclick empty canvas → add-node search (pre-wired to add-step)
+//
+// The palette instance is created lazily on first use and mounted into
+// #palette-host (falls back to <body>). All wiring here is ADDITIVE.
+
+let paletteInstance = null;
+
+function getPalette() {
+    if (!paletteInstance) {
+        const host = document.getElementById('palette-host') || document.body;
+        paletteInstance = createPalette({ mount: host });
+    }
+    return paletteInstance;
+}
+
+/**
+ * Build the list of command-palette items from the app's current state.
+ * Only enabled/relevant actions are included so the palette never offers a
+ * no-op. Navigation + open-recent round out the list.
+ */
+function buildCommandItems() {
+    const items = [];
+    const hasFlow = !!appState.currentFlowModel;
+
+    const push = (label, action, hint) => items.push({ id: label, label, action, hint });
+
+    // --- File actions --- (leave the Runs page first: the editor is hidden there)
+    push('New Flow', () => { setActivePage('flow'); handleCreateNewFlow(); }, 'Create a new flow');
+    push('Open Flow…', () => { setActivePage('flow'); handleOpenFile(); }, 'Open a .flow.json file');
+    if (hasFlow && domRefs.saveFlowBtn && !domRefs.saveFlowBtn.disabled) {
+        push('Save Flow', () => saveCurrentFlow(false), 'Ctrl/Cmd+S');
+    }
+    if (hasFlow && domRefs.saveAsFlowBtn && !domRefs.saveAsFlowBtn.disabled) {
+        push('Save Flow As…', () => handleSaveAs(), 'Save to a new file');
+    }
+    if (hasFlow && domRefs.closeFlowBtn && !domRefs.closeFlowBtn.disabled) {
+        push('Close Flow', () => handleCloseFlow(), 'Close the current flow');
+    }
+
+    // --- Editing ---
+    if (hasFlow) {
+        push('Add Step…', () => handleBuilderRequestAddStep(), 'Insert a new step');
+    }
+
+    // --- Inspect ---
+    if (hasFlow) {
+        push('Toggle View as JSON', () => { toggleJsonView(); }, 'Read-only flow JSON + diff');
+    }
+
+    // --- Navigation / view ---
+    if (hasFlow) {
+        push('Toggle View (List / Graph)', () => domRefs.toggleViewBtn?.click(), 'Ctrl/Cmd+3');
+        push('Toggle Flow Info', () => domRefs.toggleInfoBtn?.click(), 'Ctrl/Cmd+1');
+        push('Toggle Variables', () => domRefs.toggleVariablesBtn?.click(), 'Ctrl/Cmd+2');
+    }
+    if (appState.currentView === 'node-graph') {
+        push('Tidy Up', () => domRefs.tidyUpBtn?.click(), 'Auto-layout the graph');
+        push('Toggle Minimap', () => domRefs.toggleMinimapBtn?.click(), 'Show/hide minimap');
+    }
+    push(appState.activePage === 'runs' ? 'Back to Editor' : 'Background Runs',
+        () => setActivePage(appState.activePage === 'runs' ? 'flow' : 'runs'),
+        appState.activePage === 'runs' ? 'Return to the flow editor' : 'Launch + monitor flows in the background');
+
+    // --- Runner ---
+    if (hasFlow && domRefs.runFlowBtn && !domRefs.runFlowBtn.disabled) {
+        push('Run Flow', () => handleRunFlow(), 'F5');
+    }
+
+    // --- Open recent ---
+    let recent = [];
+    try {
+        recent = getRecentFiles() || [];
+    } catch (err) {
+        logger.warn('[palette] failed to read recent files:', err);
+    }
+    recent.slice(0, 12).forEach((entry) => {
+        const filePath = typeof entry === 'string' ? entry : (entry?.path || entry?.filePath);
+        if (!filePath) return;
+        const base = filePath.split(/[\\/]/).pop() || filePath;
+        const label = (typeof entry === 'object' && entry?.name) ? entry.name : base;
+        push(`Open Recent: ${label}`, () => handleSelectFlow(filePath), base);
+    });
+
+    return items;
+}
+
+/**
+ * Open the global command palette (Cmd/Ctrl+K).
+ */
+export function openCommandPalette() {
+    const palette = getPalette();
+    palette.open({
+        items: buildCommandItems(),
+        placeholder: 'Type a command or search recent flows…',
+        emptyText: 'No matching commands',
+    });
+}
+
+/**
+ * Open the add-node search palette, pre-wired to the existing add-step
+ * plumbing. If `afterStepId` is provided the new step is inserted after it;
+ * otherwise it is appended at the top level.
+ *
+ * @param {string|null} [afterStepId]
+ */
+export function openAddNodePalette(afterStepId = null) {
+    if (!appState.currentFlowModel) return;
+    const palette = getPalette();
+    const items = getStepTypeItems();
+    palette.open({
+        items,
+        placeholder: 'Search step types…',
+        emptyText: 'No matching step type',
+        onSelect: (item) => {
+            if (!item || !item.type) return;
+            const newStep = createNewStep(item.type);
+
+            if (afterStepId) {
+                // Insert directly after the selected step. We call the model
+                // helper (rather than handleBuilderRequestAddStepAfter, which
+                // re-opens the step-type modal) because the palette already
+                // chose the type.
+                const inserted = insertStepAfterInModel(afterStepId, newStep);
+                if (!inserted) {
+                    showMessage('Failed to add step after the selected node.', 'error');
+                    return;
+                }
+                appState.isDirty = true;
+                appState.selectedStepId = newStep.id;
+                setDirty();
+                updateDefinedVariables();
+                renderCurrentFlow();
+                showMessage(`Step "${escapeHTML(newStep.name || 'New Step')}" added.`, 'success');
+            } else {
+                // Top-level add: reuse the central step-update handler.
+                handleBuilderStepUpdate({
+                    type: 'add',
+                    step: newStep,
+                    parentId: null,
+                    branch: null,
+                });
+            }
+        },
+    });
+}
+
+/**
+ * Install the Cmd/Ctrl+K (command palette) and Tab (add-node) shortcuts, plus
+ * a double-click-on-empty-canvas trigger for the add-node palette. All handlers
+ * are additive and defer to the palette overlay, which owns its own Escape /
+ * Enter / arrow handling once open.
+ */
+export function initializePaletteShortcuts() {
+    document.addEventListener('keydown', (e) => {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const ctrlOrCmd = isMac ? e.metaKey : e.ctrlKey;
+
+        // Cmd/Ctrl+K → command palette (works even from inputs).
+        if (ctrlOrCmd && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            if (paletteInstance && paletteInstance.isOpen()) {
+                paletteInstance.close();
+            } else {
+                openCommandPalette();
+            }
+            return;
+        }
+
+        // Tab → add-node search. Only when a flow is open, the palette is not
+        // already up, and focus is NOT inside a text field (so Tab keeps its
+        // normal focus-navigation role in forms/editors).
+        if (e.key === 'Tab' && !ctrlOrCmd && !e.altKey) {
+            const target = e.target;
+            const tag = (target?.tagName || '').toLowerCase();
+            const inField = tag === 'input' || tag === 'textarea'
+                || tag === 'select' || target?.isContentEditable;
+            if (!inField && appState.currentFlowModel
+                && appState.activePage !== 'runs' // Runs page: Tab must walk the launcher form, not edit the hidden flow
+                && !(paletteInstance && paletteInstance.isOpen())) {
+                e.preventDefault();
+                openAddNodePalette(appState.selectedStepId || null);
+            }
+        }
+    });
+
+    // Double-click an empty area of the visualizer canvas → add-node palette.
+    const visualizerMount = domRefs.flowVisualizerMount
+        || document.getElementById('flow-visualizer-mount');
+    if (visualizerMount) {
+        visualizerMount.addEventListener('dblclick', (e) => {
+            // Only treat clicks on empty canvas (not on a node) as "add here".
+            if (e.target.closest && e.target.closest('.flow-node')) return;
+            if (!appState.currentFlowModel) return;
+            openAddNodePalette(appState.selectedStepId || null);
+        });
+    }
+
+    logger.info('[palette] command/add-node palette shortcuts initialized.');
+}
+
+
+// ================================================================
+// WAVE2 node-features: read-only View-as-JSON panel (jsonView.js)
+// ================================================================
+//
+// A read-only panel that shows the current flow's canonical .flow.json and a
+// line diff against the last-saved bytes on disk. Editing is deferred until
+// round-trip safety is proven. The panel mounts into #json-view-mount and is
+// toggled via the command palette ("Toggle View as JSON").
+
+let jsonViewInstance = null;
+let jsonViewVisible = false;
+
+function getJsonView() {
+    if (!jsonViewInstance) {
+        const mount = document.getElementById('json-view-mount');
+        if (!mount) {
+            logger.warn('[jsonView] #json-view-mount not found; cannot create panel.');
+            return null;
+        }
+        jsonViewInstance = createJsonView({ mount });
+    }
+    return jsonViewInstance;
+}
+
+/**
+ * Read the last-saved bytes for the current flow and normalize them through the
+ * same serialization the panel uses, so cosmetic formatting never shows as a
+ * diff. Returns the normalized pretty JSON string, or null when the flow has
+ * never been saved (or the file can't be read).
+ */
+async function readSavedFlowJson() {
+    const filePath = appState.currentFilePath;
+    if (!filePath || !window.electronAPI || typeof window.electronAPI.readFile !== 'function') {
+        return null;
+    }
+    try {
+        const result = await window.electronAPI.readFile(filePath);
+        if (!result || !result.success || typeof result.data !== 'string') return null;
+        const parsed = JSON.parse(result.data);
+        // Normalize via the internal model so the baseline matches what the
+        // current model would serialize to.
+        return flowToPrettyJson(jsonToFlowModel(parsed));
+    } catch (err) {
+        logger.warn('[jsonView] failed to read/normalize last-saved flow:', err);
+        return null;
+    }
+}
+
+/**
+ * Refresh the JSON view panel from the current model + last-saved bytes.
+ */
+export async function refreshJsonView() {
+    if (!jsonViewVisible) return;
+    const view = getJsonView();
+    if (!view) return;
+    const savedJson = await readSavedFlowJson();
+    view.update({ model: appState.currentFlowModel, savedJson });
+}
+
+/**
+ * Show/hide the read-only View-as-JSON panel.
+ * @param {boolean|null} [forceState]
+ */
+export async function toggleJsonView(forceState = null) {
+    const mount = document.getElementById('json-view-mount');
+    if (!mount) return;
+
+    const willShow = forceState ?? !jsonViewVisible;
+    jsonViewVisible = willShow;
+    mount.style.display = willShow ? '' : 'none';
+
+    if (willShow) {
+        await refreshJsonView();
     }
 }

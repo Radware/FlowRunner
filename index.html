@@ -15,28 +15,182 @@
 </head>
 
 <body>
+    <!-- Inline SVG icon sprite (Lucide-style, CSP-safe, themeable via currentColor).
+         Referenced with <svg class="icon"><use href="#i-name"/></svg>. Stroke/fill inherit
+         from .icon in styles.css; filled glyphs add .icon--fill. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+        <symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+        <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+        <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></symbol>
+        <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 10v6M9 13h6"/></symbol>
+        <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3l4 4L8 20l-5 1 1-5z"/></symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></symbol>
+        <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4a1 1 0 0 1 1-1h10l4 4v12a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/><path d="M8 3v5h7"/><path d="M8 21v-6h8v6"/></symbol>
+        <symbol id="i-rotate-ccw" viewBox="0 0 24 24"><path d="M3 4v6h6"/><path d="M4 14a8 8 0 1 0 2-8L3 10"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+        <symbol id="i-git-branch" viewBox="0 0 24 24"><path d="M6 15V3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol>
+        <symbol id="i-braces" viewBox="0 0 24 24"><path d="M8 3H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1"/><path d="M16 3h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 5v14l11-7z"/></symbol>
+        <symbol id="i-step" viewBox="0 0 24 24"><path d="M6 5l9 7-9 7z"/><path d="M18 5v14"/></symbol>
+        <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+        <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3"/><circle cx="9" cy="12" r="1.3"/><circle cx="9" cy="18" r="1.3"/><circle cx="15" cy="6" r="1.3"/><circle cx="15" cy="12" r="1.3"/><circle cx="15" cy="18" r="1.3"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+        <symbol id="i-presentation" viewBox="0 0 24 24"><path d="M2 4h20"/><path d="M4 4v11a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V4"/><path d="M12 16v4M9 20h6"/></symbol>
+        <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"/></symbol>
+        <symbol id="i-alert-triangle" viewBox="0 0 24 24"><path d="M12 3l9.5 17H2.5z"/><path d="M12 9v5"/><path d="M12 17h.01"/></symbol>
+        <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></symbol>
+        <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3z"/><path d="M9 3v15M15 6v15"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M9 7V4h6v3"/></symbol>
+        <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 4h18l-7 8v6l-4 2v-8z"/></symbol>
+        <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/></symbol>
+        <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+        <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></symbol>
+        <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></symbol>
+        <symbol id="i-code" viewBox="0 0 24 24"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></symbol>
+        <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6"/></symbol>
+        <symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></symbol>
+    </svg>
     <div class="app-container">
-        <!-- Sidebar: Flow List & Management -->
-        <aside class="sidebar collapsible-pane" id="sidebar">
-            <!-- Branding Element -->
-            <div class="app-branding">
+        <!-- ============ Sentinel v2 shell ============
+             Icon rail (global surfaces) | top app bar (flow context + view tabs +
+             hero run cluster) | flows drawer | workspace | tabbed inspector.
+             Element IDs are preserved from the previous shell so every handler,
+             palette entry, and test keeps working. -->
+
+        <!-- Icon rail -->
+        <nav class="app-rail" id="app-rail" aria-label="Global">
+            <button id="sidebar-toggle-btn" class="rail-btn" aria-pressed="true" title="Flows: recent files, new, open">
+                <svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>
+            </button>
+            <span class="rail-divider" aria-hidden="true"></span>
+            <button id="rail-palette-btn" class="rail-btn" title="Command palette (Ctrl/Cmd+K)">
+                <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+            </button>
+            <button id="rail-runs-btn" class="rail-btn" aria-pressed="false" aria-label="Background Runs"
+                title="Background Runs — launch flows and monitor them while you keep working">
+                <svg class="icon" aria-hidden="true"><use href="#i-repeat"/></svg>
+                <span class="rail-badge" id="rail-runs-badge" aria-hidden="true" hidden></span>
+            </button>
+            <span class="rail-spacer" aria-hidden="true"></span>
+            <button id="theme-toggle-btn" class="rail-btn theme-toggle" aria-pressed="false" title="Toggle light/dark theme">
+                <svg class="icon theme-toggle-icon" aria-hidden="true"><use href="#i-moon"/></svg>
+            </button>
+            <button id="demo-mode-btn" class="rail-btn" aria-pressed="false"
+                title="Present: full-screen demo view for projecting a live flow (Ctrl/Cmd+Shift+D)">
+                <svg class="icon" aria-hidden="true"><use href="#i-presentation"/></svg>
+            </button>
+        </nav>
+
+        <!-- Top app bar -->
+        <header class="app-topbar" id="app-topbar">
+            <div class="topbar-brand">
                 <img src="assets/ASE-logo.svg" alt="Radware ASE Group Logo" class="ase-logo">
-                <!-- Removed the SVG graphic between logo and FlowRunner -->
                 <span class="app-name-text">FlowRunner</span>
+                <!-- System Status Pip (signature): bound to the engine run-state via data-state -->
+                <span class="status-pip" id="system-status-pip" data-state="idle" title="Engine status">
+                    <svg class="icon icon--fill status-dot" aria-hidden="true"><use href="#i-dot"/></svg>
+                    <span class="status-word" aria-live="polite">IDLE</span>
+                </span>
             </div>
-            <!-- Sidebar Header -->
+            <div class="topbar-flow">
+                <h2 id="workspace-title">Select or Create a Flow</h2>
+                <span class="dirty-flag" id="dirty-flag" hidden aria-live="polite" title="Unsaved changes">
+                    <svg class="icon icon--fill status-dot" aria-hidden="true"><use href="#i-dot"/></svg>
+                    <span class="dirty-label">UNSAVED</span>
+                </span>
+                <div class="workspace-file-controls">
+                    <button id="save-flow-btn" class="btn btn-sm btn-primary" disabled
+                        title="Save current flow (Ctrl+S)"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-save"/></svg><span>Save</span></button>
+                    <button id="save-as-flow-btn" class="btn btn-sm btn-ghost btn-icon" disabled
+                        title="Save current flow to a new file"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-copy"/></svg></button>
+                    <button id="cancel-flow-btn" class="btn btn-sm btn-ghost btn-icon" disabled
+                        title="Cancel changes and revert to last saved"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-rotate-ccw"/></svg></button>
+                    <button id="close-flow-btn" class="btn btn-sm btn-ghost btn-icon" disabled
+                        title="Close the current flow"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-log-out"/></svg></button>
+                </div>
+            </div>
+            <div class="topbar-view">
+                <!-- Legacy single toggle kept for JS compatibility; hidden (segmented control replaces it) -->
+                <button id="toggle-view-btn" class="btn btn-sm btn-secondary" style="display: none;"
+                    title="Switch Views (Ctrl+3)">Visual View</button>
+                <div class="segmented" id="view-segmented" role="tablist" aria-label="Editor view" style="display: none;">
+                    <span class="segmented__thumb" aria-hidden="true"></span>
+                    <button class="segmented__cell" role="tab" data-view="list-editor" aria-selected="true"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg><span>List</span></button>
+                    <button class="segmented__cell" role="tab" data-view="node-graph" aria-selected="false"><svg class="icon" aria-hidden="true"><use href="#i-git-branch"/></svg><span>Visual</span></button>
+                </div>
+                <!-- Hidden compat toggles: the palette and Ctrl+1/2 shortcuts click these;
+                     their handlers now activate the inspector tabs. -->
+                <button class="btn btn-sm btn-ghost btn-toggle-info" id="toggle-info-btn" style="display: none;"
+                    title="Show/Hide Flow Information (Ctrl+1)">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-info"/></svg>
+                    <span class="btn-text">Info</span>
+                    <span class="toggle-icon" hidden>-</span>
+                </button>
+                <button class="btn btn-sm btn-ghost btn-toggle-variables" id="toggle-variables-btn" style="display: none;"
+                    title="Show/Hide Defined Variables (Ctrl+2)">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-braces"/></svg>
+                    <span class="btn-text">Variables</span>
+                    <span class="toggle-icon" hidden>-</span>
+                </button>
+            </div>
+            <div class="bg-runs-strip" id="bg-runs-strip" aria-label="Background runs"></div>
+            <!-- Hero run cluster: the run is the single most projected signal -->
+            <div class="topbar-run" id="topbar-run">
+                <span class="run-verdict" id="run-verdict" data-state="idle" hidden aria-live="polite">
+                    <svg class="icon icon--fill status-dot" aria-hidden="true"><use href="#i-dot"/></svg>
+                    <span class="run-verdict-word">PASSED</span>
+                </span>
+                <button id="step-flow-btn" class="btn btn-run-step" disabled
+                    title="Execute the next step (F10)"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-step"/></svg><span>Step</span></button>
+                <button id="step-into-flow-btn" class="btn btn-run-step" disabled style="display: none;"
+                    title="Step into nested steps (Not Implemented)">Step Into</button>
+                <button id="stop-flow-btn" class="btn btn-run-stop" disabled
+                    title="Stop the current execution (Esc)"><svg class="icon icon--fill icon-sm" aria-hidden="true"><use href="#i-stop"/></svg><span>Stop</span></button>
+                <button id="run-flow-btn" class="btn btn-run-go" disabled
+                    title="Run the entire flow (F5)"><svg class="icon icon--fill icon-sm" aria-hidden="true"><use href="#i-play"/></svg><span>Run</span></button>
+            </div>
+        </header>
+
+        <!-- Flows drawer (the old sidebar, re-homed): togglable from the rail -->
+        <aside class="sidebar collapsible-pane flows-drawer" id="sidebar">
             <div class="sidebar-header">
-                <h2>Recent Flows</h2>
-                <button class="btn-toggle-collapse sidebar-toggle" id="sidebar-toggle-btn" title="Toggle Sidebar">
-                    <svg viewBox="0 0 24 24" width="24" height="24">
-                        <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z" />
-                    </svg>
+                <h2>Flows</h2>
+                <button id="drawer-close-btn" class="btn btn-sm btn-ghost btn-icon" title="Hide Flows">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-chevron-left"/></svg>
                 </button>
             </div>
             <div class="sidebar-content">
                 <div class="sidebar-actions">
-                    <button id="add-flow-btn" class="btn btn-primary">+ New Flow</button>
-                    <button id="open-flow-btn" class="btn btn-secondary">Open Flow</button>
+                    <button id="add-flow-btn" class="btn btn-primary"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg><span>New Flow</span></button>
+                    <button id="open-flow-btn" class="btn btn-ghost"><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg><span>Open Flow</span></button>
+                    <button id="import-curl-btn" class="btn btn-ghost" title="Import a cURL command as a request step"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg><span>Import cURL</span></button>
+                    <button id="import-har-btn" class="btn btn-ghost" title="Import request steps from a HAR file"><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span>Import HAR</span></button>
+                    <input id="import-har-file-input" type="file" accept=".har,application/json" style="display: none;" />
+                </div>
+                <!-- WAVE2 file-features: fuzzy search over recent files -->
+                <div class="sidebar-search search-field" id="file-search-wrap">
+                    <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
+                    <input type="search" id="file-search-input" class="sidebar-search-input"
+                        placeholder="filter recent…" autocomplete="off" spellcheck="false"
+                        aria-label="Search recent files">
+                </div>
+                <div class="drawer-section-head">
+                    <span class="drawer-section-label">Flows</span>
+                    <button id="new-folder-btn" class="btn btn-sm btn-ghost btn-icon" title="New folder">
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder-plus"/></svg>
+                    </button>
                 </div>
                 <div class="flow-list-container">
                     <ul id="flow-list" class="flow-list">
@@ -48,48 +202,143 @@
 
         <!-- Main Workspace: Flow Editor / Visualizer -->
         <main class="workspace" id="workspace">
-            <div class="workspace-header">
-                <h2 id="workspace-title">Select or Create a Flow</h2>
-                <div class="workspace-file-controls">
-                    <button id="save-flow-btn" class="btn btn-sm btn-primary" disabled
-                        title="Save current flow (Ctrl+S)">Save</button>
-                    <button id="save-as-flow-btn" class="btn btn-sm btn-secondary" disabled
-                        title="Save current flow to a new file">Save As...</button>
-                    <button id="cancel-flow-btn" class="btn btn-sm btn-warning" disabled
-                        title="Cancel changes and revert to last saved">Cancel</button>
-                    <button id="close-flow-btn" class="btn btn-sm btn-danger" disabled
-                        title="Close the current flow">Close</button>
-                </div>
-                <div class="workspace-view-controls">
-                    <button id="toggle-view-btn" class="btn btn-sm btn-secondary" style="display: none;"
-                        title="Switch Views (Ctrl+3)">Visual View</button>
-                    <button class="btn btn-sm btn-toggle-info" id="toggle-info-btn" style="display: none;"
-                        title="Show/Hide Flow Information (Ctrl+1)">
-                        <span class="btn-text">Info</span>
-                        <span class="toggle-icon">▼</span>
-                    </button>
-                    <button class="btn btn-sm btn-toggle-variables" id="toggle-variables-btn" style="display: none;"
-                        title="Show/Hide Defined Variables (Ctrl+2)">
-                        <span class="btn-text">Show Variables</span>
-                        <span class="toggle-icon">▼</span>
-                    </button>
-                    <button id="zoom-out-btn" class="btn btn-sm" title="Zoom Out" style="display: none;">-</button>
-                    <button id="zoom-in-btn" class="btn btn-sm" title="Zoom In" style="display: none;">+</button>
-                    <button id="zoom-reset-btn" class="btn btn-sm" title="Reset Zoom" style="display: none;">100%</button>
-                    <button id="auto-layout-btn" class="btn btn-sm btn-secondary" title="Auto arrange nodes" style="display: none;">Auto Arrange</button>
-                    <button id="toggle-minimap-btn" class="btn btn-sm" title="Show/Hide Minimap" style="display: none;">Hide Minimap</button>
-                </div>
+            <!-- Floating graph toolbar (visible only in the Visual/node view) -->
+            <div class="canvas-toolbar" id="canvas-toolbar" role="toolbar" aria-label="Graph tools">
+                <button id="zoom-out-btn" class="btn btn-sm btn-ghost btn-icon" title="Zoom Out" style="display: none;">−</button>
+                <button id="zoom-reset-btn" class="btn btn-sm btn-ghost ct-zoom" title="Reset Zoom" style="display: none;">100%</button>
+                <button id="zoom-in-btn" class="btn btn-sm btn-ghost btn-icon" title="Zoom In" style="display: none;">+</button>
+                <span class="ct-divider" aria-hidden="true"></span>
+                <button id="tidy-up-btn" class="btn btn-sm btn-ghost btn-icon" title="Tidy Up — auto-layout the graph (hold Alt to tidy only the selected step)" style="display: none;"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkles"/></svg><span>Tidy Up</span></button>
+                <button id="next-error-btn" class="btn btn-sm btn-ghost btn-icon" title="Jump to next failed step" style="display: none;"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-alert-triangle"/></svg><span>Next Error</span></button>
+                <button id="toggle-minimap-btn" class="btn btn-sm btn-ghost btn-icon" title="Show/Hide Minimap" style="display: none;"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-map"/></svg><span>Minimap</span></button>
             </div>
 
             <div class="workspace-content" id="workspace-content">
                 <div class="placeholder-message" id="workspace-placeholder">
-                    <p>Select a flow from the sidebar, or click "Open Flow" / "+ New Flow".</p>
+                    <p>Open a flow from the Flows drawer, or press Ctrl/Cmd+K.</p>
                 </div>
 
-                <!-- MOVED & UPDATED: Flow Info Overlay Area -->
+                <!-- WAVE2 file-features: fuzzy search over the current flow's steps -->
+                <div class="steps-search" id="steps-search-wrap" style="display: none;">
+                    <input type="search" id="steps-search-input" class="steps-search-input"
+                        placeholder="Search steps…" autocomplete="off" spellcheck="false"
+                        aria-label="Search steps in this flow">
+                    <span class="steps-search-count" id="steps-search-count" aria-live="polite"></span>
+                </div>
+
+                <div id="flow-builder-mount" class="view-mode list-editor-view">
+                    <!-- Builder content injected here -->
+                </div>
+
+                <div id="flow-visualizer-mount" class="view-mode node-graph-view">
+                    <!-- Visualizer content injected here -->
+                </div>
+
+                <!-- WAVE2 node-features: read-only View-as-JSON panel mount (jsonView.js) -->
+                <div id="json-view-mount" class="json-view-mount" style="display: none;">
+                    <!-- JSON view panel injected here -->
+                </div>
+
+                <div class="flow-messages" id="builder-messages"></div>
+            </div>
+        </main>
+
+        <!-- Background Runs page: a full-workspace mission control, toggled from the
+             rail. While active (.app-container.page-runs) it replaces the drawer,
+             workspace and inspector; the topbar and rail stay. -->
+        <section class="runs-page" id="runs-page" hidden aria-label="Background Runs">
+            <header class="runs-page-head">
+                <div class="runs-page-title">
+                    <h2>Background Runs</h2>
+                    <p class="runs-page-sub" id="runs-page-summary">Each run executes a snapshot of a flow, so you can keep editing while it works.</p>
+                </div>
+                <form class="runs-launcher" id="runs-launcher">
+                    <label class="runs-launcher-field runs-launcher-flow" for="runs-launch-select">
+                        <span class="runs-launcher-label">Flow</span>
+                        <select id="runs-launch-select" aria-label="Flow to run in the background"></select>
+                    </label>
+                    <label class="runs-launcher-check" title="Repeat the flow until you stop it">
+                        <input type="checkbox" id="runs-launch-continuous" checked>
+                        <span>Continuous</span>
+                    </label>
+                    <label class="runs-launcher-field runs-launcher-delay" for="runs-launch-delay"
+                        title="Delay between steps, and between iterations in Continuous mode">
+                        <span class="runs-launcher-label">Delay</span>
+                        <input type="number" id="runs-launch-delay" value="1000" min="0" step="100">
+                        <span class="runs-launcher-unit">ms</span>
+                    </label>
+                    <button type="submit" id="runs-launch-btn" class="btn btn-primary">
+                        <svg class="icon icon--fill icon-sm" aria-hidden="true"><use href="#i-play"/></svg><span>Start run</span>
+                    </button>
+                </form>
+            </header>
+            <ul class="bg-runs-list" id="bg-runs-list"></ul>
+        </section>
+
+        <!-- Inspector (formerly the Runner panel): Results | Variables | Info tabs -->
+        <aside class="runner-panel collapsible-pane" id="runner-panel">
+            <div class="runner-header">
+                <div class="inspector-tabs" id="inspector-tabs" role="tablist" aria-label="Inspector panes">
+                    <button class="inspector-tab" data-tab="results" role="tab" aria-selected="true">Results</button>
+                    <button class="inspector-tab" data-tab="variables" role="tab" aria-selected="false">Variables</button>
+                    <button class="inspector-tab" data-tab="info" role="tab" aria-selected="false">Config</button>
+                </div>
+                <button class="btn-toggle-collapse runner-toggle" id="runner-toggle-btn" title="Toggle Inspector">
+                    <svg viewBox="0 0 24 24" width="24" height="24">
+                        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="runner-content">
+                <section class="inspector-pane inspector-pane-results" id="inspector-pane-results">
+                    <!-- === WAVE3 assertions === Test-summary panel (PASS/FAIL counts). -->
+                    <div id="runner-test-summary" class="runner-test-summary" style="display:none;"></div>
+                    <!-- Runner Status Message Area -->
+                    <div id="runner-status-messages" class="runner-status-messages"></div>
+                    <div class="runner-options">
+                        <label class="runner-option" title="Run the flow repeatedly. 'Delay (ms)' is used between full runs.">
+                            <input type="checkbox" id="continuous-run-checkbox" disabled>
+                            <span>Continuous</span>
+                        </label>
+                        <label class="runner-option" title="URL-encode variable values inserted into URLs">
+                            <input type="checkbox" id="encode-url-vars-checkbox">
+                            <span>Encode URL vars</span>
+                        </label>
+                        <label class="runner-option runner-option-delay" for="request-delay" title="Delay between steps during 'Run', and between full runs in 'Continuous'">
+                            <span>Delay</span>
+                            <input type="number" id="request-delay" value="1000" min="0" step="100">
+                            <span class="runner-option-unit">ms</span>
+                        </label>
+                        <button id="bg-run-btn" class="btn btn-secondary btn-sm" disabled
+                            title="Run this flow in the background (a snapshot: keep editing while it runs; uses Continuous + Delay above)">
+                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-repeat"/></svg><span>Background</span></button>
+                        <button id="clear-results-btn" class="btn btn-secondary btn-sm" title="Clear execution results" disabled>Clear</button>
+                    </div>
+                    <div class="runner-results-container">
+                        <div class="results-filter">
+                            <input type="text" id="results-search" placeholder="Search results...">
+                            <select id="results-status-filter">
+                                <option value="">All Statuses</option>
+                                <option value="success">Success</option>
+                                <option value="error">Error</option>
+                                <option value="running">Running</option>
+                                <option value="skipped">Skipped</option>
+                                <option value="stopped">Stopped</option>
+                            </select>
+                            <div class="results-actions">
+                                <button id="export-results-json-btn" class="btn btn-sm btn-secondary" title="Export results to JSON" disabled>JSON</button>
+                                <button id="export-results-csv-btn" class="btn btn-sm btn-secondary" title="Export results to CSV" disabled>CSV</button>
+                            </div>
+                        </div>
+                        <ul id="runner-results" class="runner-results-list">
+                            <li class="no-results">Run a flow to see results here.</li>
+                        </ul>
+                    </div>
+                </section>
+
                 <div class="flow-info-overlay" data-ref="infoOverlay">
                     <div class="info-header">
-                        <h4>Flow Information</h4>
+                        <h3 class="pane-heading">Flow Information</h3>
                         <button class="btn btn-sm btn-secondary" id="actual-close-info-btn">Close Info</button>
                     </div>
                     <div class="form-group">
@@ -115,6 +364,14 @@
                         </div>
                     </div>
 
+                </div>
+
+                <!-- Variables Panel (matching info overlay structure) -->
+                <div class="variables-panel" data-ref="variablesPanel">
+                    <div class="variables-header">
+                        <h3 class="pane-heading">Variables</h3>
+                        <button class="btn btn-sm btn-secondary" id="actual-close-variables-btn">Close Variables</button>
+                    </div>
                     <div class="form-group flow-variables-section">
                         <button class="collapsible-header" data-ref="flowVarsToggle">
                             <span class="header-label">Flow Variables</span>
@@ -127,101 +384,41 @@
                             <button class="btn-add-flow-var" data-ref="addFlowVarBtn" style="margin-top: 10px;">+ Add Variable</button>
                         </div>
                     </div>
-                </div>
-                <!-- End MOVED -->
-
-                <!-- Variables Panel (matching info overlay structure) -->
-                <div class="variables-panel" data-ref="variablesPanel">
-                    <div class="variables-header">
-                        <h4>Variables</h4>
-                        <button class="btn btn-sm btn-secondary" id="actual-close-variables-btn">Close Variables</button>
-                    </div>
                     <div class="variables-container" data-ref="variablesContainer">
                         <!-- Variables content rendered here -->
                     </div>
                 </div>
 
-                <div id="flow-builder-mount" class="view-mode list-editor-view">
-                    <!-- Builder content injected here -->
-                </div>
-
-                <div id="flow-visualizer-mount" class="view-mode node-graph-view">
-                    <!-- Visualizer content injected here -->
-                </div>
-
-                <div class="flow-messages" id="builder-messages"></div>
-            </div>
-        </main>
-
-        <!-- Runner Panel: Flow Execution -->
-        <aside class="runner-panel collapsible-pane" id="runner-panel">
-            <div class="runner-header">
-                <h2>Flow Runner</h2>
-                <button class="btn-toggle-collapse runner-toggle" id="runner-toggle-btn" title="Toggle Runner Panel">
-                    <svg viewBox="0 0 24 24" width="24" height="24">
-                        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
-                    </svg>
-                </button>
-                <button id="clear-results-btn" class="btn btn-secondary btn-sm" title="Clear execution results"
-                    disabled>Clear Results</button>
-            </div>
-            <div class="runner-content">
-                <div class="runner-controls">
-                    <div class="control-group">
-                        <button id="run-flow-btn" class="btn btn-success" disabled
-                            title="Run the entire flow (F5)">▶ Run</button>
-                        <button id="step-flow-btn" class="btn btn-warning" disabled
-                            title="Execute the next step (F10)">Step</button>
-                        <button id="step-into-flow-btn" class="btn btn-warning" disabled style="display: none;"
-                            title="Step into nested steps (Not Implemented)">Step Into</button>
-                        <button id="stop-flow-btn" class="btn btn-danger" disabled
-                            title="Stop the current execution (Esc)">⏹ Stop</button>
-                    </div>
-                    <div class="control-group">
-                        <input type="checkbox" id="continuous-run-checkbox" style="margin-right: 5px; accent-color: var(--primary-color);" disabled>
-                        <label for="continuous-run-checkbox" style="margin-right: 10px; cursor:pointer;" title="Run the flow repeatedly. The 'Delay (ms)' setting will be used as the delay between each full flow run.">Continuous Run</label>
-                        <input type="checkbox" id="encode-url-vars-checkbox" style="margin-right: 5px; accent-color: var(--primary-color);">
-                        <label for="encode-url-vars-checkbox" style="margin-right: 10px; cursor:pointer;" title="URL-encode variable values inserted into URLs">Encode URL Vars</label>
-                    </div>
-                    <div class="control-group delay-group">
-                        <label for="request-delay">Delay (ms):</label>
-                        <input type="number" id="request-delay" value="1000" min="0" step="100"
-                            title="Delay between steps during 'Run' mode, and between full runs in 'Continuous Run' mode">
-                    </div>
-                </div>
-
-                <!-- Runner Status Message Area -->
-                <div id="runner-status-messages" class="runner-status-messages">
-                    <!-- showMessage will populate this -->
-                </div>
-                <!-- End Runner Status Message Area -->
-
-                <div class="runner-results-container">
-                    <h3>Execution Results</h3>
-                    <div class="results-filter">
-                        <input type="text" id="results-search" placeholder="Search results...">
-                        <select id="results-status-filter">
-                            <option value="">All Statuses</option>
-                            <option value="success">Success</option>
-                            <option value="error">Error</option>
-                            <option value="running">Running</option>
-                            <option value="skipped">Skipped</option>
-                            <option value="stopped">Stopped</option>
-                        </select>
-                        <div class="results-actions">
-                            <button id="export-results-json-btn" class="btn btn-sm btn-secondary" title="Export results to JSON" disabled>Export JSON</button>
-                            <button id="export-results-csv-btn" class="btn btn-sm btn-secondary" title="Export results to CSV" disabled>Export CSV</button>
-                        </div>
-                    </div>
-                    <ul id="runner-results" class="runner-results-list">
-                        <li class="no-results">Run a flow to see results here.</li>
-                    </ul>
-                </div>
             </div>
         </aside>
     </div>
 
     <!-- Step-Type Selection Dialog -->
+    <!-- Generic in-app input dialog (replacement for window.prompt, which Electron does not support) -->
+    <div class="app-confirm-dialog app-input-dialog" id="app-input-dialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="app-input-title">
+        <div class="app-confirm-container">
+            <h3 class="app-confirm-title" id="app-input-title">Input</h3>
+            <p class="app-confirm-message" id="app-input-message"></p>
+            <textarea id="app-input-textarea" class="app-input-textarea" rows="6" spellcheck="false" autocomplete="off"></textarea>
+            <div class="app-confirm-actions">
+                <button type="button" class="btn btn-secondary" id="app-input-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="app-input-ok">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic in-app confirm dialog (non-blocking replacement for native confirm()) -->
+    <div class="app-confirm-dialog" id="app-confirm-dialog" style="display: none;" role="alertdialog" aria-modal="true" aria-labelledby="app-confirm-title" aria-describedby="app-confirm-message">
+        <div class="app-confirm-container">
+            <h3 class="app-confirm-title" id="app-confirm-title">Are you sure?</h3>
+            <p class="app-confirm-message" id="app-confirm-message"></p>
+            <div class="app-confirm-actions">
+                <button type="button" class="btn btn-secondary" id="app-confirm-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="app-confirm-ok">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div class="step-type-dialog" id="step-type-dialog" style="display: none;">
         <div class="step-type-container">
             <div class="step-type-header">
@@ -262,6 +459,12 @@
         <div class="var-list"></div>
         <div class="no-results-msg" style="display: none;">No matching variables</div>
     </div>
+
+    <!-- WAVE2 node-features: command/search palette overlay host (palette.js) -->
+    <div id="palette-host"></div>
+
+    <!-- === WAVE3 demo-mode === guided first-run onboarding overlay host (firstRun.js) -->
+    <div id="onboarding-host"></div>
 
     <!-- Global Loading Overlay -->
     <div class="loading-overlay global-loading" id="global-loading-overlay" style="display: none;">

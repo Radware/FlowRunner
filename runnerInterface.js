@@ -2,7 +2,7 @@
 
 import { appState, domRefs } from './state.js';
 import { DEFAULT_REQUEST_DELAY } from './config.js';
-import { showMessage, clearListViewHighlights, highlightStepInList, updateDefinedVariables } from './uiUtils.js';
+import { showMessage, clearListViewHighlights, highlightStepInList, updateDefinedVariables, setSystemStatus } from './uiUtils.js';
 import { findStepById, escapeHTML } from './flowCore.js'; // findStepById needed for result rendering
 import { logger } from './logger.js';
 
@@ -177,6 +177,15 @@ export function updateRunnerUI() {
     if(domRefs.clearResultsBtn) {
         domRefs.clearResultsBtn.disabled = controlsDisabled;
     }
+    // Background launcher: independent of the foreground runner's business —
+    // it only needs a flow with steps.
+    {
+        const bgBtn = document.getElementById('bg-run-btn');
+        if (bgBtn) {
+            const model = appState.currentFlowModel;
+            bgBtn.disabled = !model || !(model.steps && model.steps.length);
+        }
+    }
     if(domRefs.continuousRunCheckbox) {
         domRefs.continuousRunCheckbox.disabled = !flowLoaded || controlsDisabled;
         // Reflect the app's state, not the runner's internal flag (which might be briefly false between iterations)
@@ -212,6 +221,7 @@ export function handleClearResults() {
     // 1. Clear App State results array
     appState.executionResults = [];
     appState.lastRuntimeContext = null;
+    setSystemStatus('idle'); // Sentinel status pip back to idle (a run will set 'running' after this)
 
     // 2. Clear Results List UI
     if(domRefs.runnerResultsList) {
@@ -221,6 +231,13 @@ export function handleClearResults() {
     if(domRefs.runnerStatusMessages) {
         domRefs.runnerStatusMessages.innerHTML = '';
     }
+    // === WAVE3 assertions === hide/clear the test-summary panel on reset
+    const testSummaryPanel = document.getElementById('runner-test-summary');
+    if (testSummaryPanel) {
+        testSummaryPanel.style.display = 'none';
+        testSummaryPanel.innerHTML = '';
+    }
+    // === END WAVE3 assertions ===
 
 
     // 4. Reset Runner's internal state
@@ -260,6 +277,7 @@ export async function handleRunFlow() {
     handleClearResults();
     // <<< --- CHANGE HERE --- >>>
     showMessage(`Flow execution started${isContinuousChecked ? ' (Continuous)' : ''}...`, "info", domRefs.runnerStatusMessages); // Use correct container
+    setSystemStatus('running'); // Sentinel status pip
     // <<< --- END CHANGE --- >>>
 
     appState.isContinuousRunActive = isContinuousChecked; // Set the app's state flag immediately
@@ -296,7 +314,7 @@ export async function handleStepFlow() {
      } else {
          // If not the first step, just clear previous "running" highlights before the next step
          if (appState.visualizerComponent) appState.visualizerComponent.clearHighlights('active-step'); // Clear only active step highlight
-         clearListViewHighlights(); // Clear all previous list highlights? Or maybe just running? Let's clear all for simplicity for now.
+         clearListViewHighlights(['step-running']); // running is exclusive; terminal tints persist
      }
 
      updateRunnerUI(); // Disable buttons during step
@@ -352,7 +370,8 @@ export function handleRunnerStepStart(step, executionPath) {
 export function handleRunnerStepComplete(resultIndex, step, result, context, executionPath) {
     logger.debug(`[RUNNER CALLBACK] handleRunnerStepComplete: stepId=${step.id}, status=${result.status}, error=${result.error}, failures=${result.extractionFailures?.length}`);
     // Update the result entry with final status and details
-    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || [], result.extractedValues || {});
+    // === WAVE3 assertions === thread the per-step assertion test-summary through.
+    updateResultEntry(resultIndex, result.status, result.output, result.error, result.extractionFailures || [], result.extractedValues || {}, result.assertionSummary || null);
     // Update the defined variables list based on the latest context
     updateDefinedVariables(context);
 
@@ -386,6 +405,9 @@ export function handleRunnerFlowComplete(finalContext, results) {
     // <<< --- CHANGE HERE --- >>>
     showMessage("Flow execution finished.", "success", domRefs.runnerStatusMessages); // Use correct container
     // <<< --- END CHANGE --- >>>
+    // Sentinel status pip: reflect whether any step errored
+    setSystemStatus(document.querySelector('#runner-results .result-item.error') ? 'error' : 'success');
+    renderTestSummaryPanel(); // === WAVE3 assertions === show aggregate PASS/FAIL after a run
     updateRunnerUI();
     // Leave final step highlights visible
 }
@@ -396,6 +418,7 @@ export function handleRunnerFlowComplete(finalContext, results) {
     appState.isContinuousRunActive = false; // Ensure flag is cleared
     // <<< --- CHANGE HERE --- >>>
     showMessage("Flow execution stopped.", "warning", domRefs.runnerStatusMessages); // Changed message slightly, use correct container
+    setSystemStatus(document.querySelector('#runner-results .result-item.error') ? 'error' : 'stopped'); // Sentinel status pip
     // <<< --- END CHANGE --- >>>
 
     let stoppedStepId = null;
@@ -409,6 +432,8 @@ export function handleRunnerFlowComplete(finalContext, results) {
          }
     }
 
+    renderTestSummaryPanel(); // === WAVE3 assertions === reflect assertions evaluated before the stop
+
     // Update UI highlight for the stopped step, or clear if stop happened between steps
     if (stoppedStepId) {
         if (appState.currentView === 'node-graph' && appState.visualizerComponent) {
@@ -417,9 +442,13 @@ export function handleRunnerFlowComplete(finalContext, results) {
              highlightStepInList(stoppedStepId, 'step-stopped');
         }
     } else {
-         // Clear only active highlights if stop was between steps
-         if (appState.visualizerComponent) appState.visualizerComponent.clearHighlights(); // Clear all for safety
-         clearListViewHighlights();
+         // Stop landed between steps (or after a terminal failure): clear ONLY the
+         // running indicator. Wiping everything here was the bug that erased the
+         // red FAIL tint the instant onFailure=stop fired.
+         if (appState.visualizerComponent?.clearRunningHighlight) {
+             appState.visualizerComponent.clearRunningHighlight();
+         }
+         clearListViewHighlights(['step-running']);
     }
 
     updateRunnerUI(); // Ensure UI reflects the stopped state
@@ -479,6 +508,58 @@ export function handleRunnerContextUpdate(newContext) {
 }
 
 
+// === WAVE3 assertions ===
+/**
+ * Render the aggregate PASS/FAIL test-summary panel from the current run's
+ * results. Aggregates every step's `assertionSummary`. Hidden entirely when the
+ * run defined no assertions, so flows without assertions look unchanged.
+ * Purely presentational — reads appState.executionResults, never mutates it.
+ */
+export function renderTestSummaryPanel() {
+    const panel = document.getElementById('runner-test-summary');
+    if (!panel) return;
+
+    const results = Array.isArray(appState.executionResults) ? appState.executionResults : [];
+    let total = 0;
+    let passed = 0;
+    let failed = 0;
+    let criticalFailed = false;
+    let stepsWithAssertions = 0;
+
+    for (const r of results) {
+        const s = r && r.assertionSummary;
+        if (!s || !s.total) continue;
+        stepsWithAssertions++;
+        total += s.total;
+        passed += s.passed;
+        failed += s.failed;
+        if (s.criticalFailed) criticalFailed = true;
+    }
+
+    if (total === 0) {
+        // No assertions this run — keep the panel out of the way.
+        panel.style.display = 'none';
+        panel.innerHTML = '';
+        return;
+    }
+
+    const allPassed = failed === 0;
+    const stateClass = allPassed ? 'summary-pass' : (criticalFailed ? 'summary-critical' : 'summary-fail');
+    const verdict = allPassed ? 'PASS' : 'FAIL';
+    panel.className = `runner-test-summary ${stateClass}`;
+    panel.style.display = '';
+    panel.innerHTML = `
+        <div class="test-summary-verdict">${escapeHTML(verdict)}</div>
+        <div class="test-summary-counts">
+            <span class="test-summary-count pass"><strong>${passed}</strong> passed</span>
+            <span class="test-summary-count fail"><strong>${failed}</strong> failed</span>
+            <span class="test-summary-count total">${total} assertion${total === 1 ? '' : 's'} across ${stepsWithAssertions} step${stepsWithAssertions === 1 ? '' : 's'}</span>
+            ${criticalFailed ? '<span class="test-summary-count critical">critical failure</span>' : ''}
+        </div>
+    `;
+}
+// === END WAVE3 assertions ===
+
 // --- Runner Result Rendering ---
 
 export function addResultEntry(step, status = 'pending', executionPath = [], output = null, error = null, extractionFailures = [], extractedValues = {}) {
@@ -505,6 +586,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
         executionPath: executionPath || [],
         extractionFailures: extractionFailures || [],
         extractedValues: extractedValues || {},
+        assertionSummary: null, // === WAVE3 assertions === populated on step complete
         searchText: searchText,
     };
     appState.executionResults.push(resultData);
@@ -524,7 +606,7 @@ export function addResultEntry(step, status = 'pending', executionPath = [], out
     return resultIndex;
 }
 
-export function updateResultEntry(index, status, output, error, extractionFailures = [], extractedValues = {}) {
+export function updateResultEntry(index, status, output, error, extractionFailures = [], extractedValues = {}, assertionSummary = null) {
     if (index < 0 || index >= appState.executionResults.length || !domRefs.runnerResultsList) return;
 
     const resultData = appState.executionResults[index];
@@ -533,6 +615,8 @@ export function updateResultEntry(index, status, output, error, extractionFailur
     resultData.error = error;
     resultData.extractionFailures = extractionFailures || [];
     resultData.extractedValues = extractedValues || {};
+    // === WAVE3 assertions === keep the per-step test-summary on the result row.
+    resultData.assertionSummary = assertionSummary || null;
     resultData.searchText = computeSearchText(resultData.stepName, output, error, extractedValues);
 
     const li = domRefs.runnerResultsList.querySelector(`li.result-item[data-result-index="${index}"]`);
@@ -555,7 +639,7 @@ export function updateResultEntry(index, status, output, error, extractionFailur
 }
 
 export function renderResultItemContent(listItem, resultData) {
-    const { stepName, stepId, status, output, error, extractionFailures, extractedValues } = resultData;
+    const { stepName, stepId, status, output, error, extractionFailures, extractedValues, assertionSummary } = resultData;
     const stepType = findStepById(appState.currentFlowModel?.steps, stepId)?.type || 'System'; // Default to System if step not found
 
     const statusClass = status === 'success' ? 'success'
@@ -614,18 +698,90 @@ export function renderResultItemContent(listItem, resultData) {
         `;
     }
 
+    // === WAVE3 assertions === per-step assertion results (PASS/FAIL rows + a header badge).
+    let assertionsHtml = '';
+    let headerBadgeHtml = '';
+    if (assertionSummary && assertionSummary.total > 0) {
+        const s = assertionSummary;
+        const badgeClass = s.allPassed ? 'assert-pass' : (s.criticalFailed ? 'assert-critical' : 'assert-fail');
+        const badgeText = s.allPassed ? `✓ ${s.passed}/${s.total}` : `✗ ${s.passed}/${s.total}`;
+        headerBadgeHtml = `<span class="result-assert-badge ${badgeClass}" title="${s.passed} of ${s.total} assertions passed">${escapeHTML(badgeText)}</span>`;
+        const rows = (s.results || []).map(r => {
+            const rowClass = r.passed ? 'assert-pass' : 'assert-fail';
+            const mark = r.passed ? '✓' : '✗';
+            let actualStr;
+            try { actualStr = typeof r.actual === 'object' ? JSON.stringify(r.actual) : String(r.actual); }
+            catch (_) { actualStr = String(r.actual); }
+            const critTag = r.critical ? '<span class="assert-crit-tag" title="Critical: a failure stops the flow">critical</span>' : '';
+            const actualHtml = r.passed ? '' : `<span class="assert-actual" title="Actual value">got ${escapeHTML(actualStr)}</span>`;
+            return `<li class="assert-row ${rowClass}"><span class="assert-mark">${mark}</span><code class="assert-label">${escapeHTML(r.label)}</code>${critTag}${actualHtml}</li>`;
+        }).join('');
+        assertionsHtml = `
+            <div class="result-assertions ${s.allPassed ? 'all-pass' : 'has-fail'}">
+                <strong>Assertions: ${s.passed}/${s.total} passed${s.allPassed ? '' : (s.criticalFailed ? ' (critical failed)' : '')}</strong>
+                <ul>${rows}</ul>
+            </div>
+        `;
+    }
+    // === END WAVE3 assertions ===
+
     listItem.className = `result-item ${statusClass}`; // Set class based on status
 
+    // Console-grammar header: pip · name · method/code/duration meta · status.
+    const step = findStepById(appState.currentFlowModel?.steps, stepId);
+    const method = step?.method || null;
+    const httpStatus = output?.status ?? null;
+    const duration = output?.duration ?? null;
+    const metaHtml = [
+        method ? `<span class="request-method ${escapeHTML(method)}">${escapeHTML(method)}</span>` : '',
+        httpStatus != null ? `<span class="result-code ${httpStatus >= 400 ? 'bad' : httpStatus >= 300 ? 'warn' : 'ok'}">${escapeHTML(String(httpStatus))}</span>` : '',
+        duration != null ? `<span class="result-ms">${Math.round(duration)} ms</span>` : '',
+    ].filter(Boolean).join('');
+
+    // Detail is expanded when the row is NOTABLE (error, extraction issues or
+    // extracted values); plain 2xx rows collapse to a line. Manual toggles win.
+    const hasDetail = Boolean(error || outputHtml || assertionsHtml || extractionFailuresHtml || extractedValuesHtml);
+    let expanded;
+    if (listItem.dataset.userExpanded === 'true') expanded = true;
+    else if (listItem.dataset.userExpanded === 'false') expanded = false;
+    else expanded = Boolean(error
+        || (extractionFailures && extractionFailures.length)
+        || (extractedValues && Object.keys(extractedValues).length)
+        || (assertionSummary && assertionSummary.total > 0 && !assertionSummary.allPassed));
+
+    listItem.classList.toggle('collapsed', hasDetail && !expanded);
+    listItem.classList.toggle('no-detail', !hasDetail);
+
     listItem.innerHTML = `
-        <div class="result-header">
-            <span class="result-step-name" title="ID: ${escapeHTML(stepId)}">${escapeHTML(stepName)} (${escapeHTML(stepType)})</span>
-            <span class="result-status">${status.toUpperCase()}</span>
+        <div class="result-header" role="button" tabindex="0" title="${escapeHTML(stepName)} — ID: ${escapeHTML(stepId)}${hasDetail ? ' (click to expand)' : ''}">
+            <span class="result-step-name">${escapeHTML(stepName)}</span>
+            <span class="result-meta">${metaHtml}</span>
+            <span class="result-header-right">${headerBadgeHtml}<span class="result-status">${status.toUpperCase()}</span>${hasDetail ? '<svg class="icon icon-sm result-chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg>' : ''}</span>
         </div>
+        <div class="result-detail">
         ${errorHtml}
+        ${assertionsHtml}
         ${extractionFailuresHtml}
         ${extractedValuesHtml}
         ${outputHtml}
+        </div>
     `;
+
+    if (hasDetail) {
+        const header = listItem.querySelector('.result-header');
+        const toggle = () => {
+            const nowCollapsed = listItem.classList.toggle('collapsed');
+            listItem.dataset.userExpanded = String(!nowCollapsed);
+        };
+        header.addEventListener('click', (e) => {
+            if (e.target.closest('button')) return; // copy buttons etc.
+            toggle();
+        });
+        header.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+        });
+    }
+
 
     if (outputHtml) {
         const resultBody = listItem.querySelector('.result-body');

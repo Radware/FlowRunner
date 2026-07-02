@@ -34,10 +34,13 @@ describe('FlowRunner', () => {
     let originalGlobalClearTimeout;
 
     beforeEach(() => {
-        jest.useFakeTimers({ now: Date.now() });
+        // Capture the REAL globals BEFORE useFakeTimers swaps them out —
+        // otherwise afterEach "restores" the fake timer functions and every
+        // later test in the file inherits a clock nobody advances.
         originalGlobalFetch = global.fetch;
         originalGlobalSetTimeout = global.setTimeout;
         originalGlobalClearTimeout = global.clearTimeout;
+        jest.useFakeTimers({ now: Date.now() });
 
         global.fetch = jest.fn(() => Promise.resolve({
             ok: true,
@@ -788,7 +791,7 @@ describe('FlowRunner', () => {
             await processAsyncOps(3);
             expect(executedStepIds).toEqual(['r1']);
             expect(mockOnFlowStopped).toHaveBeenCalled();
-            expect(mockOnMessage).toHaveBeenCalledWith(expect.stringContaining('Execution stopped: Request step "Req1" failed'), "error");
+            expect(mockOnMessage).toHaveBeenCalledWith(expect.stringContaining('Stopped: "Req1" failed and its On Failure setting is Stop.'), "error");
         });
 
         it('should continue flow on request error if onFailure is continue', async () => {
@@ -957,5 +960,163 @@ describe('FlowRunner', () => {
             expect(seen[0]).toEqual({ G: '1', Shared: 'global' });
             expect(seen[1]).toEqual({ G: '1', Shared: 'step', Step: '2' });
         });
+    });
+
+    describe('per-request retries with backoff (WAVE2 engine-features)', () => {
+        // Helper to build a mock Response object for global.fetch.
+        const mockResponse = (status, { ok } = {}) => ({
+            ok: ok !== undefined ? ok : status >= 200 && status < 300,
+            status,
+            json: async () => ({}),
+            text: async () => "",
+            headers: {
+                get: jest.fn(h => h.toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null),
+                forEach: jest.fn(cb => cb('application/json; charset=utf-8', 'content-type')),
+                [Symbol.iterator]: function* () { yield ['content-type', 'application/json; charset=utf-8']; }
+            }
+        });
+
+        const baseStep = (overrides = {}) => ({
+            ...createNewStep('request'),
+            id: 'r1',
+            name: 'Retryable',
+            method: 'GET',
+            url: 'https://example.test/api',
+            ...overrides
+        });
+
+        // The suite uses fake timers; the backoff _sleep would otherwise never
+        // resolve without manual timer advancement. Stub it to resolve immediately
+        // while still recording the delay values passed to it.
+        let sleepSpy;
+        beforeEach(() => {
+            sleepSpy = jest.spyOn(runner, '_sleep').mockResolvedValue(undefined);
+        });
+        afterEach(() => {
+            sleepSpy.mockRestore();
+        });
+
+        it('does NOT retry by default (0 retries preserves today\'s behavior)', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(500)));
+            const step = baseStep({ onFailure: 'continue' });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+            // onFailure=continue => non-2xx reported as success passthrough
+            expect(result.output.status).toBe(500);
+        });
+
+        it('retries a failing (non-2xx) request up to retries.count times', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(503)));
+            const step = baseStep({ onFailure: 'stop', retries: { count: 2, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            // 1 initial attempt + 2 retries = 3 total
+            expect(global.fetch).toHaveBeenCalledTimes(3);
+            expect(result.status).toBe('error');
+        });
+
+        it('stops retrying once a request succeeds', async () => {
+            global.fetch = jest.fn()
+                .mockResolvedValueOnce(mockResponse(500))
+                .mockResolvedValueOnce(mockResponse(200));
+            const step = baseStep({ retries: { count: 3, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(2);
+            expect(result.status).toBe('success');
+            expect(result.output.status).toBe(200);
+        });
+
+        it('retries on network/fetch errors', async () => {
+            global.fetch = jest.fn(() => Promise.reject(new Error('Failed to fetch')));
+            const step = baseStep({ retries: { count: 2, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(3);
+            expect(result.status).toBe('error');
+        });
+
+        it('recovers from network errors when a later attempt succeeds', async () => {
+            global.fetch = jest.fn()
+                .mockRejectedValueOnce(new Error('Failed to fetch'))
+                .mockRejectedValueOnce(new Error('Failed to fetch'))
+                .mockResolvedValueOnce(mockResponse(200));
+            const step = baseStep({ retries: { count: 5, delayMs: 0 } });
+            const result = await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(3);
+            expect(result.status).toBe('success');
+        });
+
+        it('waits retries.delayMs between attempts (backoff via _sleep)', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(500)));
+            const step = baseStep({ retries: { count: 2, delayMs: 250 } });
+            await runner._executeRequestStep(step, {}, {});
+            // One sleep before each retry attempt (2 retries => 2 sleeps)
+            expect(sleepSpy).toHaveBeenCalledTimes(2);
+            expect(sleepSpy).toHaveBeenCalledWith(250);
+        });
+
+        it('does not retry after a user-requested stop/abort', async () => {
+            const abortErr = new Error('aborted');
+            abortErr.name = 'AbortError';
+            global.fetch = jest.fn(() => Promise.reject(abortErr));
+            runner.state.stopRequested = true;
+            const step = baseStep({ retries: { count: 3, delayMs: 0 } });
+            await runner._executeRequestStep(step, {}, {});
+            // Aborted by user => no retry attempts
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+        });
+
+        it('treats a missing/zero retries field as no retries', async () => {
+            global.fetch = jest.fn(() => Promise.resolve(mockResponse(500)));
+            const step = baseStep({ retries: { count: 0, delayMs: 100 }, onFailure: 'continue' });
+            await runner._executeRequestStep(step, {}, {});
+            expect(global.fetch).toHaveBeenCalledTimes(1);
+        });
+    });
+});
+
+// --- Wave 3.11: stop() between continuous iterations must complete the stop ---
+// During the wait window the scheduled next iteration is cancelled, but no
+// execution loop is alive to observe stopRequested — the engine must fire
+// onFlowStopped itself or callers hang on "running" forever.
+describe('continuous stop during the between-iterations wait window', () => {
+    it('fires onFlowStopped when stop() lands between iterations', async () => {
+        global.fetch = jest.fn(() => Promise.resolve({
+            ok: true, status: 200,
+            json: async () => ({}),
+            text: async () => '',
+            headers: {
+                get: (h) => (h.toLowerCase() === 'content-type' ? 'application/json; charset=utf-8' : null),
+                forEach: (cb) => cb('application/json; charset=utf-8', 'content-type'),
+                [Symbol.iterator]: function* () { yield ['content-type', 'application/json; charset=utf-8']; },
+            },
+        }));
+
+        const onFlowStopped = jest.fn();
+        const onIterationStart = jest.fn();
+        let scheduled;
+        const scheduledPromise = new Promise((res) => { scheduled = res; });
+
+        const runner = new FlowRunner({
+            delay: 150,
+            evaluatePathFn: () => undefined,
+            substituteVariablesFn: (step) => ({ processedStep: step, unquotedPlaceholders: {} }),
+            onFlowStopped,
+            onIterationStart,
+            onMessage: (msg) => { if (/Scheduling next/i.test(msg)) scheduled(); },
+        });
+
+        const model = {
+            name: 'loop', headers: {}, staticVars: {},
+            steps: [{ id: 's1', name: 'S', type: 'request', method: 'GET', url: 'http://x' }],
+        };
+
+        const runPromise = runner.run(model, true);
+        await scheduledPromise;              // now inside the wait window
+        runner.stop();
+
+        expect(onFlowStopped).toHaveBeenCalledTimes(1);
+        const iterationsAtStop = onIterationStart.mock.calls.length;
+        await new Promise((r) => setTimeout(r, 400));
+        expect(onIterationStart.mock.calls.length).toBe(iterationsAtStop); // no zombie iterations
+        await runPromise;
     });
 });

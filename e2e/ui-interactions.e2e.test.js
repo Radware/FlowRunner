@@ -130,7 +130,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
   /* // Temporarily removing this test due to isDirty/save button issues
   test('Drag Node in Graph View → Save → Reload → Layout Persists', async () => {
     // switch to graph view
-    await page.locator('#toggle-view-btn').click();
+    await page.locator('#view-segmented .segmented__cell[aria-selected="false"]').first().click();
     await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/);
 
     const node = page.locator('.flow-node[data-step-id="a"]');
@@ -149,11 +149,11 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     await expect(saveBtn).toBeDisabled();
 
     // reload & validate persisted coords in file
-    await page.locator('#toggle-view-btn').click();      // back to list (forces file save)
+    await page.locator('#view-segmented .segmented__cell[aria-selected="false"]').first().click();      // back to list (forces file save)
     await page.locator(
       `#flow-list .recent-file-item[data-file-path="${esc(flowPath)}"]`
     ).click();
-    await page.locator('#toggle-view-btn').click();      // graph again
+    await page.locator('#view-segmented .segmented__cell[aria-selected="false"]').first().click();      // graph again
 
     const file = JSON.parse(await fs.readFile(flowPath, 'utf8'));
     const { x: sx, y: sy } = file.visualLayout.a;
@@ -164,7 +164,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
   */
 
   test('Graph View Zoom Controls and Minimap Pan', async () => {
-    await page.locator('#toggle-view-btn').click();
+    await page.locator('#view-segmented .segmented__cell[aria-selected="false"]').first().click();
     await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/);
 
     await page.waitForFunction(() => !!document.querySelector('#flow-visualizer-mount .visualizer-canvas'), { timeout: 5000 });
@@ -174,7 +174,7 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
 
     const parseTransform = (t) => {
       const scaleMatch = t.match(/scale\(([^)]+)\)/);
-      const translateMatch = t.match(/translate\(([^p]+)px,\\s*([^)]+)px\\)/);
+      const translateMatch = t.match(/translate\(([^p]+)px,\s*([^)]+)px\)/);
       return {
         scale: scaleMatch ? parseFloat(scaleMatch[1]) : 1,
         translateX: translateMatch ? parseFloat(translateMatch[1]) : 0,
@@ -211,6 +211,10 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
   });
 
     test('Minimap stays fixed during pan', async () => {
+        // Self-sufficient: ensure graph view regardless of prior test state.
+        const graphCell = page.locator('#view-segmented .segmented__cell[data-view="node-graph"]');
+        if ((await graphCell.getAttribute('aria-selected')) !== 'true') await graphCell.click();
+        await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/, { timeout: 5000 });
         const mount = page.locator('#flow-visualizer-mount');
         const canvas = mount.locator('.visualizer-canvas').first();
         await page.waitForFunction(
@@ -220,13 +224,13 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
 
         const minimap = page.locator('.visualizer-minimap');
         const mmBoxBefore = await minimap.boundingBox();
-        const canvasBox = await canvas.boundingBox();
+        const mountBox = await mount.boundingBox();
 
-        await canvas.hover();
+        await page.mouse.move(mountBox.x + mountBox.width / 2, mountBox.y + mountBox.height / 2);
         await page.mouse.down();
         await page.mouse.move(
-            canvasBox.x + canvasBox.width / 2 - 100,
-            canvasBox.y + canvasBox.height / 2 - 50,
+            mountBox.x + mountBox.width / 2 - 100,
+            mountBox.y + mountBox.height / 2 - 50,
             { steps: 10 }
         );
         await page.mouse.up();
@@ -237,6 +241,10 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
     });
 
     test('Viewport updates while panning', async () => {
+        // Self-sufficient: ensure graph view regardless of prior test state.
+        const graphCell = page.locator('#view-segmented .segmented__cell[data-view="node-graph"]');
+        if ((await graphCell.getAttribute('aria-selected')) !== 'true') await graphCell.click();
+        await expect(page.locator('#flow-visualizer-mount')).toHaveClass(/active/, { timeout: 5000 });
         const mount = page.locator('#flow-visualizer-mount');
         const canvas = mount.locator('.visualizer-canvas').first();
         await page.waitForFunction(
@@ -250,12 +258,12 @@ test.describe('E2E: UI Interactions (drag‑drop & graph)', () => {
             top: el.style.top
         }));
 
-        const canvasBox = await canvas.boundingBox();
-        await canvas.hover();
+        const mountBox = await mount.boundingBox();
+        await page.mouse.move(mountBox.x + mountBox.width / 2, mountBox.y + mountBox.height / 2);
         await page.mouse.down();
         await page.mouse.move(
-            canvasBox.x + canvasBox.width / 2 + 120,
-            canvasBox.y + canvasBox.height / 2 + 60,
+            mountBox.x + mountBox.width / 2 + 120,
+            mountBox.y + mountBox.height / 2 + 60,
             { steps: 10 }
         );
         await page.mouse.up();

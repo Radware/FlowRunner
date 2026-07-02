@@ -1,13 +1,18 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "FlowRunner Flow v1.0",
-  "$comment": "CROSS-APP CONTRACT: this .flow.json format is shared by FlowRunner UI (JS), flowrunner-cli (Python; 24/7 headless; stricter parser), and the ShowRunner Demo-Management-Portal. Evolve additive-only; never rename/repurpose staticVars, the wire keys then/else/steps (not thenSteps/elseSteps/loopSteps), onFailure, type, the ##VAR:type:name## body markers, conditionData operators, or the extract namespaces. No schemaVersion field exists yet. See the FlowRunner repo architecture.md / gotchas.md / masterplan.md and docs/flowmap-evolution.md.",
+  "$comment": "CROSS-APP CONTRACT: this .flow.json format is shared by FlowRunner UI (JS), flowrunner-cli (Python; 24/7 headless; stricter parser), and the ShowRunner Demo-Management-Portal. Evolve additive-only; never rename/repurpose staticVars, the wire keys then/else/steps (not thenSteps/elseSteps/loopSteps), onFailure, type, the ##VAR:type:name## body markers, conditionData operators, or the extract namespaces. schemaVersion is OPTIONAL and additive: a string \"MAJOR.MINOR\"; ABSENCE means \"1.0\". Readers tolerate an unknown MINOR (degrade gracefully) and are expected to reject an unknown MAJOR loudly (see docs/schema-versioning.md). Never make schemaVersion required and never gate the wire format on it. See the FlowRunner repo architecture.md / gotchas.md / masterplan.md and docs/flowmap-evolution.md.",
   "type": "object",
   "required": ["id", "name", "steps"],
   "properties": {
     "id": {"type": "string"},
     "name": {"type": "string"},
     "description": {"type": "string"},
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "$comment": "OPTIONAL additive version tag, string \"MAJOR.MINOR\" (e.g. \"1.0\"). Absence is treated as \"1.0\". Additive-only: MUST NOT be added to the required array, MUST NOT change the wire format. Unknown MINOR ⇒ tolerate/degrade; unknown MAJOR ⇒ reject loudly (reader policy, not schema-enforced)."
+    },
     "headers": {
       "type": "object",
       "additionalProperties": {"type": "string"}

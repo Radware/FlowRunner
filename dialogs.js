@@ -57,6 +57,174 @@ export function hideAppStepTypeDialog(selectedType) {
     }
 }
 
+// --- Generic Confirm Dialog (non-blocking replacement for native confirm()) ---
+// Native confirm()/alert() freeze the renderer (and kill a projected demo);
+// this promise-based dialog keeps the event loop alive and inherits the theme.
+
+let activeConfirmResolve = null;
+
+/**
+ * Show the in-app confirm dialog. Resolves true on confirm, false on
+ * cancel / Escape / backdrop click. Only one dialog can be open at a time;
+ * a second call while open resolves the first as cancelled.
+ *
+ * @param {string} message  Body text (plain text).
+ * @param {object} [opts]
+ * @param {string} [opts.title='Are you sure?']
+ * @param {string} [opts.confirmText='Confirm']
+ * @param {string} [opts.cancelText='Cancel']
+ * @param {boolean} [opts.danger=false]  Destructive action → red confirm button.
+ * @returns {Promise<boolean>}
+ */
+export function showConfirmDialog(message, opts = {}) {
+    const overlay = document.getElementById('app-confirm-dialog');
+    if (!overlay) {
+        // Fallback keeps behavior correct if the markup is ever missing.
+        return Promise.resolve(window.confirm(message));
+    }
+
+    if (activeConfirmResolve) {
+        activeConfirmResolve(false);
+        activeConfirmResolve = null;
+    }
+
+    const titleEl = overlay.querySelector('#app-confirm-title');
+    const messageEl = overlay.querySelector('#app-confirm-message');
+    const okBtn = overlay.querySelector('#app-confirm-ok');
+    const cancelBtn = overlay.querySelector('#app-confirm-cancel');
+
+    titleEl.textContent = opts.title || 'Are you sure?';
+    messageEl.textContent = message || '';
+    okBtn.textContent = opts.confirmText || 'Confirm';
+    cancelBtn.textContent = opts.cancelText || 'Cancel';
+    okBtn.classList.toggle('btn-danger', !!opts.danger);
+    okBtn.classList.toggle('btn-primary', !opts.danger);
+
+    const previouslyFocused = document.activeElement;
+    overlay.style.display = 'flex';
+
+    return new Promise((resolve) => {
+        activeConfirmResolve = resolve;
+
+        const close = (result) => {
+            overlay.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            overlay.removeEventListener('mousedown', onBackdrop);
+            document.removeEventListener('keydown', onKey, true);
+            if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+                try { previouslyFocused.focus(); } catch { /* element may be gone */ }
+            }
+            if (activeConfirmResolve === resolve) activeConfirmResolve = null;
+            resolve(result);
+        };
+
+        const onOk = () => close(true);
+        const onCancel = () => close(false);
+        const onBackdrop = (e) => { if (e.target === overlay) close(false); };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.stopPropagation(); close(false); }
+            else if (e.key === 'Enter') {
+                e.stopPropagation();
+                // Respect focus: danger dialogs deliberately focus Cancel, so
+                // Enter there must cancel, not destroy.
+                close(document.activeElement !== cancelBtn);
+            }
+        };
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        overlay.addEventListener('mousedown', onBackdrop);
+        document.addEventListener('keydown', onKey, true);
+
+        // Danger defaults focus to the safe action; normal confirms to the primary.
+        (opts.danger ? cancelBtn : okBtn).focus();
+    });
+}
+
+// --- Generic Input Dialog (replacement for window.prompt) ------------------
+// Electron renderers do not support window.prompt() at all (it throws), and
+// native dialogs freeze the event loop anyway. Same non-blocking pattern as
+// showConfirmDialog: resolves the entered string, or null on cancel/Escape.
+
+let activeInputResolve = null;
+
+/**
+ * @param {object} [opts]
+ * @param {string} [opts.title='Input']
+ * @param {string} [opts.message='']      Short helper text above the field.
+ * @param {string} [opts.placeholder='']
+ * @param {string} [opts.confirmText='Import']
+ * @param {string} [opts.initialValue='']
+ * @param {boolean} [opts.mono=true]      Monospace field (code-like input).
+ * @returns {Promise<string|null>}
+ */
+export function showInputDialog(opts = {}) {
+    const overlay = document.getElementById('app-input-dialog');
+    if (!overlay) return Promise.resolve(null);
+
+    if (activeInputResolve) {
+        activeInputResolve(null);
+        activeInputResolve = null;
+    }
+
+    const titleEl = overlay.querySelector('#app-input-title');
+    const messageEl = overlay.querySelector('#app-input-message');
+    const field = overlay.querySelector('#app-input-textarea');
+    const okBtn = overlay.querySelector('#app-input-ok');
+    const cancelBtn = overlay.querySelector('#app-input-cancel');
+
+    titleEl.textContent = opts.title || 'Input';
+    messageEl.textContent = opts.message || '';
+    messageEl.style.display = opts.message ? '' : 'none';
+    field.placeholder = opts.placeholder || '';
+    field.value = opts.initialValue || '';
+    field.classList.toggle('mono', opts.mono !== false);
+    const multiline = opts.multiline !== false;
+    field.classList.toggle('single', !multiline);
+    field.rows = multiline ? 6 : 1;
+    okBtn.textContent = opts.confirmText || 'Import';
+
+    const previouslyFocused = document.activeElement;
+    overlay.style.display = 'flex';
+
+    return new Promise((resolve) => {
+        activeInputResolve = resolve;
+
+        const close = (result) => {
+            overlay.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            overlay.removeEventListener('mousedown', onBackdrop);
+            document.removeEventListener('keydown', onKey, true);
+            if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+                try { previouslyFocused.focus(); } catch { /* element may be gone */ }
+            }
+            if (activeInputResolve === resolve) activeInputResolve = null;
+            resolve(result);
+        };
+
+        const onOk = () => close(field.value);
+        const onCancel = () => close(null);
+        const onBackdrop = (e) => { if (e.target === overlay) close(null); };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.stopPropagation(); close(null); }
+            // Multiline: Cmd/Ctrl+Enter confirms (plain Enter = newline).
+            // Single-line: plain Enter confirms.
+            else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !multiline)) {
+                e.preventDefault(); e.stopPropagation(); close(field.value);
+            }
+        };
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        overlay.addEventListener('mousedown', onBackdrop);
+        document.addEventListener('keydown', onKey, true);
+
+        field.focus();
+    });
+}
+
 function handleVarDropdownListClick(e) {
     const varItem = e.target.closest('.var-item');
     if (varItem && varItem.dataset.var) {

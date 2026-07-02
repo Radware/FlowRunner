@@ -18,6 +18,7 @@ import {
     highlightStepInList, clearListViewHighlights,
     syncPanelVisibility
 } from './uiUtils.js';
+import { hasLiveBackgroundRuns, stopAllBackgroundRuns } from './backgroundRuns.js';
 
 // --- Application Features ---
 import {
@@ -34,6 +35,9 @@ import {
 
 // --- HAR Export ---
 import { generateHAR } from './harExporter.js';
+
+// --- cURL / HAR Import (WAVE2 engine-features) ---
+import { initializeImportCurlHar } from './importCurlHarUI.js';
 
 // --- Event Handlers (Callbacks for Components) ---
 import {
@@ -55,10 +59,18 @@ import {
 // --- Component Classes & Dialog Initializers ---
 import { FlowBuilderComponent } from './flowBuilderComponent.js';
 import { FlowVisualizer } from './flowVisualizer.js';
+/* === WAVE3 react-island === */
+// Flag-gated alternative visualizer engine. Drawflow (FlowVisualizer above) stays
+// the DEFAULT; the React Flow island is opt-in via localStorage
+// 'flowrunner.visualizerEngine'==='react'. See reactFlowVisualizer.js +
+// visualizer-island/ + docs/engine-decision.md.
+import { ReactFlowVisualizer } from './reactFlowVisualizer.js';
+/* === END WAVE3 react-island === */
 import {
     initializeStepTypeDialogListeners,
     initializeVarDropdownListeners,
-    initializeVariableInsertionListener
+    initializeVariableInsertionListener,
+    showConfirmDialog
 } from './dialogs.js';
 
 // --- Runner and Execution Components ---
@@ -85,18 +97,14 @@ async function handleHARExport() {
         // Check if execution results exist
         if (!appState.executionResults || appState.executionResults.length === 0) {
             logger.warn('[Renderer] No execution results found. Cannot export HAR.');
-            if (window.alert) {
-                alert('Please run a flow first before exporting HAR file.');
-            }
+            showMessage('Run a flow first, then export the HAR of that run.', 'warning');
             return;
         }
 
         // Check if current flow model exists
         if (!appState.currentFlowModel || !appState.currentFlowModel.steps) {
             logger.error('[Renderer] No flow model found. Cannot export HAR.');
-            if (window.alert) {
-                alert('No flow loaded. Please load or create a flow first.');
-            }
+            showMessage('No flow loaded. Open or create a flow first.', 'warning');
             return;
         }
 
@@ -107,9 +115,7 @@ async function handleHARExport() {
         // Check if any request entries were found
         if (!harData.log.entries || harData.log.entries.length === 0) {
             logger.warn('[Renderer] No HTTP requests found in execution results.');
-            if (window.alert) {
-                alert('No HTTP requests found in the last flow execution. Only request steps are included in HAR export.');
-            }
+            showMessage('No HTTP requests in the last run. Only request steps are included in HAR export.', 'warning');
             return;
         }
 
@@ -124,9 +130,7 @@ async function handleHARExport() {
 
         if (result && result.success && !result.cancelled) {
             logger.info(`[Renderer] HAR file exported successfully to: ${result.filePath}`);
-            if (window.alert) {
-                alert(`HAR file exported successfully!\n\nLocation: ${result.filePath}`);
-            }
+            showMessage(`HAR file saved to ${result.filePath}`, 'success', undefined, 'HAR exported');
         } else if (result && result.cancelled) {
             logger.info('[Renderer] HAR export cancelled by user');
         } else {
@@ -134,11 +138,47 @@ async function handleHARExport() {
         }
     } catch (error) {
         logger.error('[Renderer] Error during HAR export:', error);
-        if (window.alert) {
-            alert(`Error exporting HAR file: ${error.message}`);
-        }
+        showMessage(`Error exporting HAR file: ${error.message}`, 'error');
     }
 }
+
+// --- Theme (light / dark) ------------------------------------------------
+// The projector default is light (PRODUCT.md), but an SE presenting from a
+// dark-mode machine needs to force it. Persist an explicit choice; when none is
+// set the app follows the OS via prefers-color-scheme (styles.css). Applied at
+// module load (before DOMContentLoaded) to minimize any theme flash.
+const THEME_KEY = 'flowrunner-theme';
+function applyStoredTheme() {
+    try {
+        const saved = localStorage.getItem(THEME_KEY);
+        if (saved === 'light' || saved === 'dark') {
+            document.documentElement.setAttribute('data-theme', saved);
+        }
+    } catch (_) { /* localStorage unavailable */ }
+}
+function effectiveTheme() {
+    const explicit = document.documentElement.getAttribute('data-theme');
+    if (explicit === 'light' || explicit === 'dark') return explicit;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function updateThemeToggleUI() {
+    const btn = document.getElementById('theme-toggle-btn');
+    if (!btn) return;
+    const isDark = effectiveTheme() === 'dark';
+    btn.setAttribute('aria-pressed', String(isDark));
+    btn.title = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+    const iconUse = btn.querySelector('.theme-toggle-icon use');
+    if (iconUse) iconUse.setAttribute('href', isDark ? '#i-sun' : '#i-moon');
+}
+function toggleTheme() {
+    const next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem(THEME_KEY, next); } catch (_) { /* ignore */ }
+    updateThemeToggleUI();
+    // Canvas-painted surfaces don't track CSS variables; repaint them.
+    appState.visualizerComponent?.refreshMinimap?.();
+}
+applyStoredTheme();
 
 // --- Main Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -149,14 +189,23 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAppComponents();
     initializeRunner();
     initializeEventListeners(); // <-- Call the consolidated listener setup from eventHandlers.js
+    initializeImportCurlHar(); // WAVE2 engine-features: wire sidebar cURL/HAR import controls
     setupGlobalOverlayListeners(); // For the global Info Overlay *content* listeners (inputs, adds)
     initializeResultFilters();
+
+    // Theme toggle: wire the control and sync its icon to the active theme.
+    const themeToggleBtn = document.getElementById('theme-toggle-btn');
+    if (themeToggleBtn) themeToggleBtn.addEventListener('click', toggleTheme);
+    updateThemeToggleUI();
 
     updateRunnerUI();
     updateViewToggle();
     updateWorkspaceTitle();
     setDirty(); // Initialize dirty state/UI
     loadPersistedUIStates();
+    // Abort in-flight background-run fetches when the window actually closes
+    // (the quit guard above has already given the user their chance to say no).
+    window.addEventListener('beforeunload', () => { try { stopAllBackgroundRuns(); } catch (_) { /* teardown */ } });
     checkElectronAPI();
     checkForUpdate(); // Startup update check (silent on failure)
 
@@ -166,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof window.electronAPI.onCheckDirtyState === 'function') {
             window.electronAPI.onCheckDirtyState(() => {
                 // Combine flow dirty state, step editor dirty state, and continuous run state
-                const needsUserAttention = appState.isDirty || appState.stepEditorIsDirty || appState.isContinuousRunActive;
+                const needsUserAttention = appState.isDirty || appState.stepEditorIsDirty || appState.isContinuousRunActive || hasLiveBackgroundRuns();
                 logger.debug('[Renderer] IPC: Received check-dirty-state, responding with (needsUserAttention):', needsUserAttention);
                 if (typeof window.electronAPI.sendDirtyStateResponse === 'function') {
                     window.electronAPI.sendDirtyStateResponse(needsUserAttention);
@@ -258,7 +307,13 @@ function initializeVisualizer() {
         logger.error("FlowVisualizer mount point not found. Cannot initialize visualizer.");
         return;
     }
-    appState.visualizerComponent = new FlowVisualizer(
+    /* === WAVE3 react-island === */
+    // Engine selection: Drawflow is the DEFAULT. The React Flow island is used
+    // ONLY when explicitly opted in via localStorage. Both engines honor the same
+    // FlowVisualizer contract (docs/visualizer-contract.md), so the callbacks and
+    // every downstream call site are identical regardless of which is chosen.
+    const VisualizerEngine = selectVisualizerEngine();
+    appState.visualizerComponent = new VisualizerEngine(
         domRefs.flowVisualizerMount,
         {
             // Callbacks handled by eventHandlers.js
@@ -268,12 +323,35 @@ function initializeVisualizer() {
             onDeleteStep: (stepId) => handleBuilderStepUpdate({ type: 'delete', stepId }), // Delete requested from node
             onStepEdit: handleBuilderStepEdit, // Save in graph editor modal
             onEditorDirtyChange: handleBuilderEditorDirtyChange, // Track dirty state in graph editor modal
-            onRequestAddStepAfter: handleBuilderRequestAddStepAfter // Add step after current node
+            onRequestAddStepAfter: handleBuilderRequestAddStepAfter, // Add step after current node
+            // Non-blocking dialog + toast injection (native confirm/alert freeze the renderer)
+            confirmDiscard: (msg) => showConfirmDialog(msg, {
+                title: 'Unsaved changes', confirmText: 'Discard changes', cancelText: 'Keep editing', danger: true
+            }),
+            onShowError: (msg) => showMessage(msg, 'error', undefined, 'Step error')
             // Add other callbacks like onCloneStep if needed
         }
     );
-    logger.info("FlowVisualizer initialized in app.js.");
+    logger.info(`FlowVisualizer initialized in app.js (engine: ${VisualizerEngine === ReactFlowVisualizer ? 'react-island' : 'drawflow'}).`);
 }
+
+/* === WAVE3 react-island === */
+// Returns the visualizer constructor to use. DEFAULT is Drawflow (FlowVisualizer);
+// the React Flow island is opt-in only, and any failure to read the flag falls
+// back to Drawflow so nothing breaks. The flag can be flipped by a Settings toggle
+// that writes localStorage['flowrunner.visualizerEngine'] = 'react'.
+function selectVisualizerEngine() {
+    try {
+        if (typeof localStorage !== 'undefined'
+            && localStorage.getItem('flowrunner.visualizerEngine') === 'react') {
+            return ReactFlowVisualizer;
+        }
+    } catch (err) {
+        logger.warn('Could not read visualizerEngine flag; defaulting to Drawflow.', err);
+    }
+    return FlowVisualizer;
+}
+/* === END WAVE3 react-island === */
 
 function initializeDialogs() {
     initializeStepTypeDialogListeners();
@@ -319,7 +397,10 @@ function loadPersistedUIStates() {
         if (sidebarCollapsed && domRefs.sidebar) {
             appState.isSidebarCollapsed = true;
             domRefs.sidebar.classList.add('collapsed');
-            if (domRefs.sidebarToggleBtn) domRefs.sidebarToggleBtn.setAttribute('aria-expanded', 'false');
+            if (domRefs.sidebarToggleBtn) {
+                domRefs.sidebarToggleBtn.setAttribute('aria-expanded', 'false');
+                domRefs.sidebarToggleBtn.setAttribute('aria-pressed', 'false');
+            }
         }
         // Runner state
         if (runnerCollapsed && domRefs.runnerPanel) {

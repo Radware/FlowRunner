@@ -18,6 +18,7 @@ import {
   generateConditionString, // Used by Condition editor
   generateConditionPreview, // Used by Condition editor/renderer
   doesOperatorNeedValue, // Used by Condition editor
+  preProcessBody, // Used by inspector raw ##VAR## marker preview (READ-ONLY)
   escapeHTML, // General utility
   escapeRegExp // General utility
 } from './flowCore.js'; // <--- Ensure this path is correct
@@ -65,12 +66,12 @@ export function renderStep(step, options) {
   const header = document.createElement('div');
   header.className = 'flow-step-header';
   header.innerHTML = `
-    <span class="flow-step-drag-handle" title="Drag to reorder step" tabindex="0">☰</span>
+    <span class="flow-step-drag-handle" title="Drag to reorder step" tabindex="0"><svg class="icon icon-sm icon--fill" aria-hidden="true"><use href="#i-grip"/></svg></span>
     <span class="flow-step-icon">${getStepTypeIcon(step.type)}</span>
     <div class="flow-step-title" title="${escapeHTML(step.name || 'Unnamed Step')}">${escapeHTML(step.name || 'Unnamed Step')}</div>
     <div class="flow-step-actions">
-      <button class="btn-clone" title="Clone this step">⧉</button>
-      <button class="btn-delete btn-delete-node" title="Delete this step">✕</button>
+      <button class="btn-clone" title="Clone this step"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-copy"/></svg></button>
+      <button class="btn-delete btn-delete-node" title="Delete this step"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
     </div>
   `;
 
@@ -167,10 +168,12 @@ function renderConditionStepContent(container, step, variables, options) {
 
     let conditionDisplay = 'No condition set';
     if (step.conditionData?.variable && step.conditionData.operator) {
-        conditionDisplay = generateConditionPreview(step.conditionData);
+        conditionDisplay = escapeHTML(generateConditionPreview(step.conditionData));
     } else if (step.condition) {
         const parsed = parseConditionString(step.condition);
-        conditionDisplay = parsed.preview || escapeHTML(step.condition); // Use preview or escaped original
+        // Previews carry raw user text (values may contain < / >) — escape
+        // before innerHTML, same as the visualizer does for this preview.
+        conditionDisplay = parsed.preview ? escapeHTML(parsed.preview) : escapeHTML(step.condition);
     }
 
     container.innerHTML = `
@@ -429,15 +432,22 @@ export function createStepEditor(step, options) {
 
   // --- Create Editor Structure (remains same) ---
   const editorEl = document.createElement('div');
-  editorEl.className = 'step-editor';
+  editorEl.className = 'step-editor inspector inspector-mode-basic';
   editorEl.innerHTML = `
     <div class="step-editor-content">
-      <div class="editor-header"> <h3>Edit: ${getStepTypeLabel(localStep.type)} Step</h3> </div>
+      <div class="editor-header">
+        <h3>Edit: ${getStepTypeLabel(localStep.type)} Step</h3>
+        <div class="inspector-disclosure" role="tablist" aria-label="Field disclosure level">
+          <button type="button" class="inspector-disclosure-btn active" data-disclosure="basic" role="tab" aria-selected="true" title="Show common fields only">Basic</button>
+          <button type="button" class="inspector-disclosure-btn" data-disclosure="power" role="tab" aria-selected="false" title="Reveal advanced fields">Power</button>
+        </div>
+      </div>
       <div class="form-group"> <label for="step-editor-name-${localStep.id}">Step Name</label> <input type="text" id="step-editor-name-${localStep.id}" value="${escapeHTML(localStep.name || '')}" placeholder="Enter a descriptive name"> </div>
-      <div class="step-save-message" style="display: none; color: green; margin: 0.5rem 0; font-weight: bold;"> Step changes saved! </div>
+      <div class="inspector-summary" data-ref="inspectorSummary" aria-live="polite"></div>
+      <div class="step-save-message" style="display: none; color: var(--run-success); margin: 0.5rem 0; font-weight: 600;"> Step changes saved! </div>
       <div class="editor-type-content"> <!-- Type-specific fields go here --> </div>
     </div>
-    <div class="step-editor-actions"> <button class="btn-save-step" title="Save changes to this step" disabled>Save Step</button> <button class="btn-cancel-step" title="Discard changes and revert">Cancel</button> </div>
+    <div class="step-editor-actions"> <button class="btn btn-primary btn-save-step" title="Save changes to this step" disabled>Save Step</button> <button class="btn btn-secondary btn-cancel-step" title="Discard changes and revert">Cancel</button> </div>
   `;
 
   // --- Get References (remains same) ---
@@ -446,6 +456,29 @@ export function createStepEditor(step, options) {
   const saveMessageEl = editorEl.querySelector('.step-save-message');
   const saveBtn = editorEl.querySelector('.btn-save-step');
   const cancelBtn = editorEl.querySelector('.btn-cancel-step');
+  const summaryEl = editorEl.querySelector('[data-ref="inspectorSummary"]');
+  const disclosureEl = editorEl.querySelector('.inspector-disclosure');
+
+  // --- Basic/Power progressive disclosure (view-only; NEVER marks dirty) ---
+  function setDisclosure(mode) {
+      const power = mode === 'power';
+      editorEl.classList.toggle('inspector-mode-power', power);
+      editorEl.classList.toggle('inspector-mode-basic', !power);
+      disclosureEl.querySelectorAll('.inspector-disclosure-btn').forEach(btn => {
+          const active = btn.dataset.disclosure === mode;
+          btn.classList.toggle('active', active);
+          btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+  }
+  disclosureEl.querySelectorAll('.inspector-disclosure-btn').forEach(btn => {
+      btn.addEventListener('click', () => setDisclosure(btn.dataset.disclosure));
+  });
+
+  // --- Basic-mode at-a-glance summary (common fields distilled) ---
+  function refreshInspectorSummary() {
+      if (summaryEl) summaryEl.innerHTML = buildInspectorSummary(localStep);
+  }
+  refreshInspectorSummary();
 
   // --- Populate Type-Specific Editor ---
   // Pass setDirtyState down
@@ -482,7 +515,7 @@ export function createStepEditor(step, options) {
                localStep.condition = generateConditionString(localStep.conditionData);
            } else {
                 // Validation: Condition requires variable and operator
-                alert("Condition Error: Please select both a variable and an operator.");
+                document.dispatchEvent(new CustomEvent('flowrunner:toast', { detail: { message: "Condition: select both a variable and an operator.", type: 'error', title: 'Cannot save step' } }));
                 const varSelect = editorEl.querySelector(`#cond-var-${localStep.id}`);
                 if (varSelect?.value === '') varSelect.focus();
                 else editorEl.querySelector(`#cond-op-${localStep.id}`)?.focus();
@@ -492,7 +525,7 @@ export function createStepEditor(step, options) {
       if (localStep.type === 'loop') {
           const loopVar = localStep.loopVariable?.trim();
           if (!loopVar || !/^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(loopVar)) {
-              alert("Loop Error: Invalid 'Item Variable Name'. Please use a valid JavaScript variable name.");
+              document.dispatchEvent(new CustomEvent('flowrunner:toast', { detail: { message: "Loop: 'Item Variable Name' must be a valid JavaScript variable name.", type: 'error', title: 'Cannot save step' } }));
               const varInput = editorEl.querySelector(`#loop-variable-${localStep.id}`);
               if (varInput) { varInput.focus(); varInput.style.borderColor = 'red'; }
               return; // Prevent saving invalid state
@@ -504,7 +537,7 @@ export function createStepEditor(step, options) {
           }
           localStep.source = sourceVar;
           if (!sourceVar) {
-              alert("Loop Error: 'Source' must be a variable reference like {{arrayVariable}}.");
+              document.dispatchEvent(new CustomEvent('flowrunner:toast', { detail: { message: "Loop: 'Source' must be a variable reference like {{arrayVariable}}.", type: 'error', title: 'Cannot save step' } }));
               const sourceInput = editorEl.querySelector(`#loop-source-${localStep.id}`);
               if (sourceInput) sourceInput.focus();
               return;
@@ -521,13 +554,18 @@ export function createStepEditor(step, options) {
            saveMessageEl.style.display = 'block';
            setTimeout(() => { if (saveMessageEl) saveMessageEl.style.display = 'none'; }, 2500);
       }
+      refreshInspectorSummary(); // Reflect saved values in the Basic-mode summary
       setDirtyState(false); // Reset dirty state after successful save
   });
 
   // Cancel Button
-  cancelBtn.addEventListener('click', () => {
-      if (isDirty && !confirm("Discard unsaved changes to this step?")) {
-          return; // User canceled the discard action
+  cancelBtn.addEventListener('click', async () => {
+      if (isDirty) {
+          // Lazy import avoids a static cycle (dialogs.js imports from this module).
+          const { showConfirmDialog } = await import('./dialogs.js');
+          const discard = await showConfirmDialog("Discard unsaved changes to this step?",
+              { title: 'Unsaved changes', confirmText: 'Discard', cancelText: 'Keep editing', danger: true });
+          if (!discard) return; // User canceled the discard action
       }
 
       // If discarding or wasn't dirty, reset state and UI
@@ -539,6 +577,7 @@ export function createStepEditor(step, options) {
 
       // Reset the UI by re-rendering the editor with original data
       nameInput.value = localStep.name || ''; // Reset name input
+      refreshInspectorSummary(); // Reflect reverted values in the Basic-mode summary
       typeContentContainer.innerHTML = ''; // Clear current specific fields
 
        // Re-create sub-editor with original data and pass the *same* setDirtyState function
@@ -658,14 +697,22 @@ function createRequestEditor(container, options) {
 
     // --- MODIFICATION START: Add onFailure HTML ---
     container.innerHTML = `
-        <div class="form-group"> <label for="request-method-${localStep.id}">Method</label> <select id="request-method-${localStep.id}">${getHttpMethods().map(m => `<option value="${m}" ${localStep.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select> </div>
-        <div class="form-group"> <label for="request-url-${localStep.id}">URL</label> <div class="input-with-vars"> <input type="text" id="request-url-${localStep.id}" value="${escapeHTML(localStep.url || '')}" placeholder="e.g., https://api.example.com/users/{{userId}}"> <button class="btn-insert-var" data-target-input="request-url-${localStep.id}">{{…}}</button> <button class="btn btn-secondary btn-copy-curl" type="button" title="Copy request as cURL">Copy cURL</button> </div> </div>
+        <div class="form-group">
+            <label for="request-url-${localStep.id}">Request</label>
+            <div class="request-bar" data-method="${escapeHTML(localStep.method || 'GET')}">
+                <select id="request-method-${localStep.id}" class="request-bar-method" aria-label="HTTP method">${getHttpMethods().map(m => `<option value="${m}" ${localStep.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
+                <input type="text" id="request-url-${localStep.id}" class="request-bar-url" value="${escapeHTML(localStep.url || '')}" placeholder="https://api.example.com/users/{{userId}}" spellcheck="false">
+                <button class="btn-insert-var request-bar-seg" data-target-input="request-url-${localStep.id}" title="Insert a variable">{{…}}</button>
+                <button class="btn-copy-curl request-bar-seg" type="button" title="Copy request as cURL"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-terminal"/></svg><span>cURL</span></button>
+            </div>
+        </div>
 
-        <div class="form-tabs">
+        <div class="form-tabs power-only">
             <div class="tab-buttons">
                  <button class="tab-button active" data-tab="headers">Headers (${Object.keys(localStep.headers || {}).length})</button>
                  <button class="tab-button" data-tab="body">Body</button>
                  <button class="tab-button" data-tab="extract">Extract (${Object.keys(localStep.extract || {}).length})</button>
+                 <button class="tab-button" data-tab="assertions">Assertions (${Array.isArray(localStep.assertions) ? localStep.assertions.length : 0})</button> <!-- === WAVE3 assertions === -->
                  <button class="tab-button" data-tab="options">Options</button> <!-- Optional: New tab for options like onFailure -->
             </div>
 
@@ -673,11 +720,21 @@ function createRequestEditor(container, options) {
                 <div class="headers-editor"><div class="headers-list"></div><button class="btn-add-header" style="margin-top:10px;">+ Add Header</button><p class="form-hint">Header values support variables (e.g., <code>{{varName}}</code>) and special variables like <code>{{RANDOM_IP}}</code>, <code>{{RANDOM_INT(1,1000)}}</code>, or <code>{{RANDOM_STRING(16)}}</code>.</p></div>
             </div>
             <div class="tab-content" id="tab-body-${localStep.id}">
-                <div class="form-group"><label for="request-body-${localStep.id}">Request Body (JSON)</label><textarea id="request-body-${localStep.id}" rows="10" placeholder='e.g.,\n{\n "key": "value",\n "id": {{var}}\n}'>${escapeHTML(localStep.body || '')}</textarea><div class="form-hint">Use "{{var}}" for strings, {{var}} for numbers/booleans.</div><div class="body-actions"><button class="btn-format-json">Format</button><button class="btn-insert-var" data-target-input="request-body-${localStep.id}">Insert Var</button></div><div class="json-validation-error" style="color:red;margin-top:5px;font-size:0.9em;display:none;"></div></div>
+                <div class="form-group"><label for="request-body-${localStep.id}">Request Body (JSON)</label><textarea id="request-body-${localStep.id}" rows="10" placeholder='e.g.,\n{\n "key": "value",\n "id": {{var}}\n}'>${escapeHTML(localStep.body || '')}</textarea><div class="form-hint">Use "{{var}}" for strings, {{var}} for numbers/booleans.</div><div class="body-actions"><button type="button" class="btn btn-sm btn-secondary btn-format-json">Format JSON</button><button type="button" class="btn btn-sm btn-secondary btn-insert-var" data-target-input="request-body-${localStep.id}">{{…}} Insert variable</button></div><div class="json-validation-error" style="color:var(--run-error);margin-top:5px;font-size:0.9em;display:none;"></div></div>
+                <div class="form-group raw-body-markers-group" data-ref="rawBodyGroup" style="display:none;">
+                    <label for="request-body-markers-${localStep.id}">Stored body (##VAR## markers, read-only)</label>
+                    <textarea id="request-body-markers-${localStep.id}" class="raw-body-markers" rows="8" readonly aria-readonly="true" tabindex="-1" spellcheck="false"></textarea>
+                    <div class="form-hint">Read-only preview of exactly what is persisted after <code>{{var}}</code> placeholders are converted to <code>##VAR##</code> markers. Edit the body above, never this view.</div>
+                </div>
             </div>
             <div class="tab-content" id="tab-extract-${localStep.id}">
                 <div class="extract-editor"><div class="extracts-list"></div><button class="btn-add-extract" style="margin-top:10px;">+ Add Extraction</button><p class="form-hint">Extract values via dot notation (<code>body.data.token</code>), array index (<code>body.items[0].id</code>), or keywords (<code>.status</code>, <code>headers.Content-Type</code>, <code>body</code>).</p></div>
             </div>
+            <!-- === WAVE3 assertions === -->
+            <div class="tab-content" id="tab-assertions-${localStep.id}">
+                <div class="assertions-editor"><div class="assertions-list"></div><button class="btn-add-assertion" style="margin-top:10px;">+ Add Assertion</button><p class="form-hint">Assertions check a step's result after it runs. Target <code>status</code>, <code>duration</code> (ms), <code>headers.Name</code>, or <code>body.path</code> (e.g. <code>body.data.id</code>). A failed <em>critical</em> assertion stops the flow; others are non-blocking.</p></div>
+            </div>
+            <!-- === END WAVE3 assertions === -->
              <div class="tab-content" id="tab-options-${localStep.id}">
                  <div class="form-group">
                     <label for="request-onfailure-${localStep.id}">On Failure (Network Error or Non-2xx Status)</label>
@@ -686,6 +743,21 @@ function createRequestEditor(container, options) {
                         <option value="continue" ${localStep.onFailure === 'continue' ? 'selected' : ''}>Continue Flow Execution</option>
                     </select>
                     <p class="form-hint">Choose behavior when a request fails (network error or status >= 300). 'Stop' halts the entire flow. 'Continue' logs the result and proceeds.</p>
+                </div>
+                <div class="form-group">
+                    <label for="request-retry-count-${localStep.id}">Retries</label>
+                    <div class="retries-row">
+                        <label class="retries-field">Extra attempts
+                            <input type="number" id="request-retry-count-${localStep.id}" min="0" max="10" step="1"
+                                value="${Number.isFinite(localStep.retries?.count) ? localStep.retries.count : 0}">
+                        </label>
+                        <label class="retries-field">Delay between attempts
+                            <input type="number" id="request-retry-delay-${localStep.id}" min="0" step="100"
+                                value="${Number.isFinite(localStep.retries?.delayMs) ? localStep.retries.delayMs : 1000}">
+                            <span class="retries-unit">ms</span>
+                        </label>
+                    </div>
+                    <p class="form-hint">Retry a failed request (network error or non-2xx) this many extra times before applying On Failure. 0 = single attempt, exactly today's behavior.</p>
                 </div>
             </div>
         </div>`;
@@ -699,14 +771,56 @@ function createRequestEditor(container, options) {
     const bodyError = container.querySelector('.json-validation-error');
     const headersTabBtn = container.querySelector('[data-tab="headers"]');
     const extractTabBtn = container.querySelector('[data-tab="extract"]');
+    const rawBodyGroup = container.querySelector('[data-ref="rawBodyGroup"]');
+    const rawBodyView = container.querySelector('.raw-body-markers');
+
+    // --- READ-ONLY raw ##VAR## marker preview ---
+    // Renders exactly what preProcessBody() would persist. This view is display-only:
+    // a hand-typed {{var}} here MUST NEVER reach the saved body JSON, so we route the
+    // *body textarea* value through preProcessBody unchanged and never read this field back.
+    function refreshRawBodyMarkers() {
+        if (!rawBodyView || !rawBodyGroup) return;
+        const source = String(localStep.body || '');
+        if (!source.trim()) {
+            rawBodyGroup.style.display = 'none';
+            rawBodyView.value = '';
+            return;
+        }
+        rawBodyGroup.style.display = '';
+        try {
+            rawBodyView.value = preProcessBody(source);
+        } catch (error) {
+            logger.error('Failed to render raw body markers preview:', error);
+            rawBodyView.value = '';
+            rawBodyGroup.style.display = 'none';
+        }
+    }
+    refreshRawBodyMarkers();
     // --- MODIFICATION START: Get onFailure select ---
     const onFailureSelect = container.querySelector(`#request-onfailure-${localStep.id}`);
     // --- MODIFICATION END ---
 
     // --- Existing listeners + NEW onFailure listener ---
-    methodSelect.addEventListener('change', () => { localStep.method = methodSelect.value; setDirtyState(true); });
+    methodSelect.addEventListener('change', () => {
+        localStep.method = methodSelect.value;
+        methodSelect.closest('.request-bar')?.setAttribute('data-method', methodSelect.value);
+        setDirtyState(true);
+    });
+
+    // Retries ({ count, delayMs } — engine contract in flowRunner; model round-trip in flowCore).
+    const retryCountInput = container.querySelector(`#request-retry-count-${localStep.id}`);
+    const retryDelayInput = container.querySelector(`#request-retry-delay-${localStep.id}`);
+    const syncRetries = () => {
+        const count = Math.max(0, Math.floor(Number(retryCountInput.value) || 0));
+        const delayMs = Math.max(0, Number(retryDelayInput.value) || 0);
+        if (count > 0) localStep.retries = { count, delayMs };
+        else delete localStep.retries;
+        setDirtyState(true);
+    };
+    retryCountInput?.addEventListener('change', syncRetries);
+    retryDelayInput?.addEventListener('change', syncRetries);
     urlInput.addEventListener('input', () => { localStep.url = urlInput.value; setDirtyState(true); });
-    bodyTextarea.addEventListener('input', () => { localStep.body = bodyTextarea.value; bodyError.style.display = 'none'; setDirtyState(true); });
+    bodyTextarea.addEventListener('input', () => { localStep.body = bodyTextarea.value; bodyError.style.display = 'none'; refreshRawBodyMarkers(); setDirtyState(true); });
     // --- MODIFICATION START: Add listener for onFailure ---
     onFailureSelect.addEventListener('change', () => {
         localStep.onFailure = onFailureSelect.value;
@@ -741,6 +855,21 @@ function createRequestEditor(container, options) {
         setDirtyState(true); // Ensure sub-editor changes mark dirty
     });
 
+    // === WAVE3 assertions ===
+    const assertionsTabBtn = container.querySelector('[data-tab="assertions"]');
+    setupAssertionsEditor(container.querySelector('.assertions-editor'), localStep.assertions || [], (asserts) => {
+        // Keep the model additive: drop the key entirely when empty so a step
+        // never carries an empty `assertions: []` (byte-stable, CLI-safe).
+        if (asserts.length > 0) {
+            localStep.assertions = asserts;
+        } else {
+            delete localStep.assertions;
+        }
+        if (assertionsTabBtn) assertionsTabBtn.textContent = `Assertions (${asserts.length})`;
+        setDirtyState(true);
+    });
+    // === END WAVE3 assertions ===
+
     // Tab switching logic
     container.querySelectorAll('.tab-button').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -755,6 +884,7 @@ function createRequestEditor(container, options) {
       if (btn.dataset.tab === 'headers') btn.title = 'Edit request headers';
       else if (btn.dataset.tab === 'body') btn.title = 'Edit request body';
       else if (btn.dataset.tab === 'extract') btn.title = 'Extract variables from response';
+      else if (btn.dataset.tab === 'assertions') btn.title = 'Assert on the response (status, headers, body, duration)';
       else if (btn.dataset.tab === 'options') btn.title = 'Request options and error handling';
     });
 
@@ -1199,6 +1329,147 @@ function setupExtractEditor(container, initialExtracts, onChange) {
     setupKeyValueEditor(container, initialExtracts, [], onChange, { listSelector: '.extracts-list', addBtnSelector: '.btn-add-extract', itemClass: 'extract-row', keyClass: 'extract-var-name', valueClass: 'extract-path', removeBtnClass: 'btn-remove-extract', noItemsMsg: 'No extractions defined', keyPlaceholder: 'Variable Name', valuePlaceholder: 'JSON Path (e.g., body.id)', includeVarInsert: false });
 }
 
+// === WAVE3 assertions ===
+// Operator vocabulary offered in the assertion editor. A curated subset of the
+// frozen conditionData operators (the ones that make sense on a request result).
+// Values MUST match evaluateCondition's switch cases exactly (frozen contract).
+const ASSERTION_OPERATORS = [
+    { value: 'equals', label: 'equals' },
+    { value: 'not_equals', label: 'not equals' },
+    { value: 'greater_than', label: '> (number)' },
+    { value: 'less_than', label: '< (number)' },
+    { value: 'greater_equals', label: '>= (number)' },
+    { value: 'less_equals', label: '<= (number)' },
+    { value: 'contains', label: 'contains' },
+    { value: 'not_contains', label: 'not contains' },
+    { value: 'starts_with', label: 'starts with' },
+    { value: 'ends_with', label: 'ends with' },
+    { value: 'matches_regex', label: 'matches regex' },
+    { value: 'exists', label: 'exists' },
+    { value: 'not_exists', label: 'does not exist' },
+    { value: 'is_empty', label: 'is empty' },
+    { value: 'is_not_empty', label: 'is not empty' },
+];
+
+// Operators that need no comparison value (value input is hidden for these).
+const ASSERTION_VALUELESS_OPS = new Set(['exists', 'not_exists', 'is_empty', 'is_not_empty', 'is_null', 'is_not_null', 'is_true', 'is_false']);
+
+/**
+ * Structured editor for a request step's `step.assertions[]`.
+ * Each row = { target, operator, value, critical }. Purely additive: onChange
+ * receives a normalized array (empty rows filtered out). Never mutates the
+ * incoming array — callers own persistence + dirty-state.
+ * @param {HTMLElement} container - The `.assertions-editor` element.
+ * @param {Array} initialAssertions - step.assertions (may be empty/undefined).
+ * @param {(assertions:Array)=>void} onChange - Called on every edit.
+ */
+function setupAssertionsEditor(container, initialAssertions, onChange) {
+    if (!container) return;
+    const listEl = container.querySelector('.assertions-list');
+    const addBtn = container.querySelector('.btn-add-assertion');
+    if (!listEl || !addBtn) return;
+
+    // Working copy — never mutate the caller's array in place.
+    const rows = (Array.isArray(initialAssertions) ? initialAssertions : [])
+        .filter(a => a && typeof a === 'object')
+        .map(a => ({
+            target: typeof a.target === 'string' ? a.target : '',
+            operator: typeof a.operator === 'string' ? a.operator : 'equals',
+            value: a.value !== undefined ? a.value : '',
+            critical: a.critical === true,
+        }));
+
+    function emit() {
+        const normalized = rows
+            .filter(r => r.target.trim() && r.operator.trim())
+            .map(r => {
+                const out = { target: r.target.trim(), operator: r.operator.trim() };
+                if (!ASSERTION_VALUELESS_OPS.has(out.operator)) {
+                    out.value = coerceAssertionValue(r.value);
+                }
+                if (r.critical) out.critical = true;
+                return out;
+            });
+        onChange(normalized);
+    }
+
+    function render() {
+        listEl.innerHTML = '';
+        if (rows.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'assertions-empty form-hint';
+            empty.textContent = 'No assertions defined';
+            listEl.appendChild(empty);
+            return;
+        }
+        rows.forEach((row, index) => {
+            const rowEl = document.createElement('div');
+            rowEl.className = 'assertion-row';
+            const valueless = ASSERTION_VALUELESS_OPS.has(row.operator);
+            rowEl.innerHTML = `
+                <input type="text" class="assertion-target" value="${escapeHTML(String(row.target))}" placeholder="status, duration, headers.X, body.path" aria-label="Assertion target">
+                <select class="assertion-operator" aria-label="Assertion operator">
+                    ${ASSERTION_OPERATORS.map(op => `<option value="${op.value}" ${row.operator === op.value ? 'selected' : ''}>${escapeHTML(op.label)}</option>`).join('')}
+                </select>
+                <input type="text" class="assertion-value" value="${escapeHTML(String(row.value ?? ''))}" placeholder="Expected value" aria-label="Assertion value"${valueless ? ' style="visibility:hidden;"' : ''}>
+                <label class="assertion-critical" title="Stop the flow if this assertion fails">
+                    <input type="checkbox" class="assertion-critical-input" ${row.critical ? 'checked' : ''}> Critical
+                </label>
+                <button type="button" class="btn-remove-assertion" title="Remove assertion" aria-label="Remove assertion">×</button>
+            `;
+
+            const targetInput = rowEl.querySelector('.assertion-target');
+            const opSelect = rowEl.querySelector('.assertion-operator');
+            const valueInput = rowEl.querySelector('.assertion-value');
+            const criticalInput = rowEl.querySelector('.assertion-critical-input');
+            const removeBtn = rowEl.querySelector('.btn-remove-assertion');
+
+            targetInput.addEventListener('input', () => { row.target = targetInput.value; emit(); });
+            opSelect.addEventListener('change', () => {
+                row.operator = opSelect.value;
+                valueInput.style.visibility = ASSERTION_VALUELESS_OPS.has(row.operator) ? 'hidden' : '';
+                emit();
+            });
+            valueInput.addEventListener('input', () => { row.value = valueInput.value; emit(); });
+            criticalInput.addEventListener('change', () => { row.critical = criticalInput.checked; emit(); });
+            removeBtn.addEventListener('click', () => { rows.splice(index, 1); render(); emit(); });
+
+            listEl.appendChild(rowEl);
+        });
+    }
+
+    addBtn.addEventListener('click', () => {
+        rows.push({ target: '', operator: 'equals', value: '', critical: false });
+        render();
+        // Note: no emit() here — an all-empty new row is filtered out anyway and
+        // emitting would needlessly mark the step dirty before the user types.
+    });
+
+    render();
+}
+
+/**
+ * Coerce a string-entered assertion value into the most natural JS type so
+ * numeric/boolean comparisons behave (e.g. status "200" → 200, "true" → true).
+ * Leaves anything ambiguous as the original string. Mirrors how a user expects
+ * `status equals 200` to compare numerically.
+ */
+function coerceAssertionValue(raw) {
+    if (typeof raw !== 'string') return raw;
+    const trimmed = raw.trim();
+    if (trimmed === '') return '';
+    if (trimmed === 'true') return true;
+    if (trimmed === 'false') return false;
+    if (trimmed === 'null') return null;
+    // Numeric (integer or float), but not things like "1.2.3" or "007abc".
+    if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+        const n = Number(trimmed);
+        if (Number.isFinite(n)) return n;
+    }
+    return raw;
+}
+// === END WAVE3 assertions ===
+
 function parseTransformValue(raw) {
     const trimmed = String(raw ?? '').trim();
     if (!trimmed) return '';
@@ -1265,8 +1536,9 @@ export function showStepTypeDialog(onSelect) {
         window.showAppStepTypeDialog(onSelect); // Call the function exposed by app.js
     } else {
         logger.error("App's step type dialog function (window.showAppStepTypeDialog) not found.");
-        alert("Error: Cannot open step type selector.");
-        // Fallback or alternative behavior if needed
+        document.dispatchEvent(new CustomEvent('flowrunner:toast', {
+            detail: { message: 'Cannot open the step type selector.', type: 'error' }
+        }));
     }
 }
 
@@ -1300,4 +1572,71 @@ function getStepTypeLabel(type) {
     case 'transform': return 'Transform';
     default: return 'Step';
   }
+}
+
+/**
+ * Builds the Basic-mode at-a-glance summary chips for a step.
+ * Purely presentational — distills the common fields so the author keeps
+ * context without expanding into Power mode. Never mutates the step.
+ * @param {Object} step - The (local) step being edited.
+ * @return {string} HTML string of summary chips.
+ */
+function buildInspectorSummary(step) {
+    if (!step || !step.type) return '';
+    const chips = [];
+    const chip = (label, value, cls = '') =>
+        `<span class="inspector-chip ${cls}"><span class="inspector-chip-label">${escapeHTML(label)}</span><span class="inspector-chip-value">${escapeHTML(value)}</span></span>`;
+
+    switch (step.type) {
+        case 'request': {
+            // Method and URL are visible form fields in both modes; chips here
+            // digest only the fields Basic mode hides.
+            const headerKeys = Object.keys(step.headers || {});
+            if (headerKeys.length) {
+                const shown = headerKeys.slice(0, 3).join(', ');
+                const extra = headerKeys.length > 3 ? ` +${headerKeys.length - 3}` : '';
+                chips.push(chip('Headers', `${shown}${extra}`));
+            }
+            const extractKeys = Object.keys(step.extract || {});
+            if (extractKeys.length) chips.push(chip('Extracts', String(extractKeys.length)));
+            if (step.body && String(step.body).trim()) chips.push(chip('Body', 'set'));
+            break;
+        }
+        case 'condition': {
+            let preview = '';
+            if (step.conditionData?.variable && step.conditionData.operator) {
+                preview = generateConditionPreview(step.conditionData);
+            } else if (step.condition) {
+                const parsed = parseConditionString(step.condition);
+                preview = parsed.preview || step.condition;
+            }
+            chips.push(chip('If', preview || 'Not set'));
+            chips.push(chip('Then', `${step.thenSteps?.length || 0} step(s)`));
+            chips.push(chip('Else', `${step.elseSteps?.length || 0} step(s)`));
+            break;
+        }
+        case 'loop': {
+            if (step.source) chips.push(chip('For each', `{{${step.source}}}`));
+            chips.push(chip('As', step.loopVariable || 'item'));
+            chips.push(chip('Body', `${step.loopSteps?.length || 0} step(s)`));
+            break;
+        }
+        case 'transform': {
+            const ops = Array.isArray(step.ops) ? step.ops : [];
+            chips.push(chip('Operations', String(ops.length)));
+            const outputs = ops.map(op => op && typeof op.set === 'string' ? op.set.trim() : '').filter(Boolean);
+            if (outputs.length) chips.push(chip('Outputs', outputs.slice(0, 3).join(', ')));
+            break;
+        }
+        default:
+            return '';
+    }
+    return chips.join('');
+}
+
+function truncateMiddle(text, max) {
+    const str = String(text || '');
+    if (str.length <= max) return str;
+    const half = Math.floor((max - 1) / 2);
+    return `${str.slice(0, half)}…${str.slice(str.length - half)}`;
 }

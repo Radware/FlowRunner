@@ -81,6 +81,17 @@ export class FlowVisualizer {
         this.nodeEditorDirty = false;
         this.activeEditorStepId = null;
 
+        // --- WAVE2 LANE canvas: Tidy Up undo + on-node error state ---
+        // nodeErrors: stepId -> error message string. Survives re-render (the
+        // records are the source of truth; badges are re-applied after render).
+        this.nodeErrors = new Map();
+        // Single-level undo snapshot for "Tidy Up": { [id]: {x, y} }.
+        this._layoutUndo = null;
+        // Rotating cursor for "jump to next failed step".
+        this._errorJumpIndex = -1;
+        // Pending timers that strip the transient relayout-animation class.
+        this._relayoutTimers = new Set();
+
         this._createBaseStructure();
         this._initializeEditor();
         this._bindMinimapListeners();
@@ -368,10 +379,14 @@ export class FlowVisualizer {
         this.nodeEditorModal.setAttribute('aria-hidden', 'false');
     }
 
-    _closeNodeEditor(force = false) {
+    async _closeNodeEditor(force = false) {
         if (!this.nodeEditorModal) return;
         if (this.nodeEditorDirty && !force) {
-            const shouldClose = confirm('You have unsaved changes. Close the editor and discard them?');
+            // Never call native confirm() here: it freezes the renderer mid-demo.
+            // The host injects a promise-based dialog via options.confirmDiscard.
+            const ask = this.options.confirmDiscard
+                || ((msg) => Promise.resolve(window.confirm(msg)));
+            const shouldClose = await ask('You have unsaved changes. Close the editor and discard them?');
             if (!shouldClose) return;
         }
 
@@ -380,6 +395,26 @@ export class FlowVisualizer {
         this.nodeEditorModal.setAttribute('aria-hidden', 'true');
         this.activeEditorStepId = null;
         this._setNodeEditorDirty(false);
+    }
+
+    /**
+     * Keep the node-editor modal honest across re-renders (undo/redo, external
+     * edits): close it if its step no longer exists; refresh it from the new
+     * model when the user has no unsaved edits. Dirty edits are left alone —
+     * the user's in-progress typing wins until they save or cancel.
+     */
+    _syncNodeEditorWithModel() {
+        if (!this.nodeEditorModal || this.nodeEditorModal.style.display !== 'flex') return;
+        const stepId = this.activeEditorStepId;
+        const step = stepId && this.flowModel
+            ? this._findStepById(this.flowModel.steps, stepId) : null;
+        if (!step) {
+            this._closeNodeEditor(true);
+            return;
+        }
+        if (!this.nodeEditorDirty) {
+            this._openNodeEditor(stepId);
+        }
     }
 
     _shouldStartCanvasPan(event) {
@@ -499,6 +534,7 @@ export class FlowVisualizer {
     render(flowModel, selectedStepId) {
         this.flowModel = flowModel;
         this.selectedNodeId = selectedStepId;
+        this._syncNodeEditorWithModel();
         this.nodes.clear();
         this.nodeIdByStepId.clear();
         this.stepIdByNodeId.clear();
@@ -529,6 +565,7 @@ export class FlowVisualizer {
         this._renderConnections();
         this._applyCollapsedVisibility();
         this._applySelection();
+        this._reapplyErrorBadges();
 
         this.isRendering = false;
         this._scheduleMinimapRefresh();
@@ -629,7 +666,7 @@ export class FlowVisualizer {
                 else this.collapsedNodes.add(step.id);
 
                 nodeData.collapsed = !wasCollapsed;
-                toggleBtn.textContent = nodeData.collapsed ? 'v' : '^';
+                toggleBtn.innerHTML = `<svg class="icon icon-sm" aria-hidden="true"><use href="#${nodeData.collapsed ? 'i-chevron-down' : 'i-chevron-up'}"/></svg>`;
                 nodeEl.classList.toggle('collapsed', nodeData.collapsed);
 
                 this.options.onNodeLayoutUpdate?.(step.id, nodeData.x, nodeData.y, { collapsed: nodeData.collapsed });
@@ -655,7 +692,7 @@ export class FlowVisualizer {
         const hasCollapse = step.type === 'condition' || step.type === 'loop';
         const name = escapeHTML(step.name || '');
         const collapseButton = hasCollapse
-            ? `<button class="btn-node-action btn-toggle-collapse node-collapse-toggle" title="Toggle Collapse">${collapsed ? 'v' : '^'}</button>`
+            ? `<button class="btn-node-action btn-toggle-collapse node-collapse-toggle" title="Toggle Collapse"><svg class="icon icon-sm" aria-hidden="true"><use href="#${collapsed ? 'i-chevron-down' : 'i-chevron-up'}"/></svg></button>`
             : '';
 
         return `
@@ -665,7 +702,7 @@ export class FlowVisualizer {
                     <span class="node-name">${name}</span>
                     <div class="node-actions">
                         ${collapseButton}${step.actions || ''}
-                        <button class="btn-node-action btn-delete-node" title="Delete step">x</button>
+                        <button class="btn-node-action btn-delete-node" title="Delete step" aria-label="Delete step"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>
                     </div>
                 </div>
                 <div class="node-content">
@@ -680,8 +717,7 @@ export class FlowVisualizer {
         try {
             switch (step.type) {
                 case 'request': {
-                    const urlPreview = (step.url || '').length > 30 ? step.url.substring(0, 27) + '...' : step.url;
-                    return `<span class="request-method ${step.method || 'GET'}">${step.method || 'GET'}</span> <code class="request-url" title="${escapeHTML(step.url)}">${escapeHTML(urlPreview)}</code>`;
+                    return `<div class="node-line"><span class="request-method ${step.method || 'GET'}">${step.method || 'GET'}</span><code class="request-url" title="${escapeHTML(step.url || '')}">${escapeHTML(step.url || '')}</code></div>`;
                 }
                 case 'condition': {
                     let conditionPreview = 'No condition set';
@@ -924,10 +960,35 @@ export class FlowVisualizer {
         if (nodeEl) nodeEl.classList.add('selected');
     }
 
+    /** Public: repaint the minimap with current theme tokens (called after a
+     *  theme switch; canvas pixels don't follow CSS variables on their own). */
+    refreshMinimap() {
+        this._updateMinimap();
+    }
+
+    /** Resolve minimap paint colors from the theme tokens so both themes render
+     *  correctly (a hardcoded white fill used to glare in dark mode). */
+    _minimapColors() {
+        const css = getComputedStyle(this.minimapContainer);
+        const v = (name, fallback) => (css.getPropertyValue(name) || '').trim() || fallback;
+        return {
+            node: v('--surface-raised', '#ffffff'),
+            nodeStroke: v('--border-strong', ROLE_COLORS.main),
+            selection: v('--accent', '#2563eb'),
+            roles: {
+                main: v('--border-strong', ROLE_COLORS.main),
+                then: v('--run-success', ROLE_COLORS.then),
+                else: v('--run-error', ROLE_COLORS.else),
+                loop: v('--accent', ROLE_COLORS.loop),
+            },
+        };
+    }
+
     _updateMinimap() {
         if (!this.minimapCanvas || !this.minimapContainer || !this.minimapVisible) return;
         const ctx = this.minimapCanvas.getContext('2d');
         if (!ctx) return;
+        const colors = this._minimapColors();
 
         const width = this.minimapContainer.clientWidth;
         const height = this.minimapContainer.clientHeight;
@@ -968,7 +1029,8 @@ export class FlowVisualizer {
 
         this.minimapScale = Math.min(
             (width - MINIMAP_PADDING * 2) / contentWidth,
-            (height - MINIMAP_PADDING * 2) / contentHeight
+            (height - MINIMAP_PADDING * 2) / contentHeight,
+            0.35 // cap: tiny flows shouldn't render one node as the whole map
         );
 
         this.minimapBounds = { minX, minY, maxX, maxY };
@@ -984,7 +1046,7 @@ export class FlowVisualizer {
             const endX = (toNode.x + NODE_WIDTH / 2 - minX) * this.minimapScale + MINIMAP_PADDING;
             const endY = (toNode.y + NODE_MIN_HEIGHT / 2 - minY) * this.minimapScale + MINIMAP_PADDING;
 
-            ctx.strokeStyle = ROLE_COLORS[conn.role] || ROLE_COLORS.main;
+            ctx.strokeStyle = colors.roles[conn.role] || colors.roles.main;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(startX, startY);
@@ -998,14 +1060,14 @@ export class FlowVisualizer {
             const w = NODE_WIDTH * this.minimapScale;
             const h = NODE_MIN_HEIGHT * this.minimapScale;
 
-            ctx.fillStyle = '#ffffff';
-            ctx.strokeStyle = '#94a3b8';
+            ctx.fillStyle = colors.node;
+            ctx.strokeStyle = colors.nodeStroke;
             ctx.lineWidth = 1;
             ctx.fillRect(x, y, w, h);
             ctx.strokeRect(x, y, w, h);
 
             if (node.id === this.selectedNodeId) {
-                ctx.strokeStyle = '#2563eb';
+                ctx.strokeStyle = colors.selection;
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(x - 1, y - 1, w + 2, h + 2);
             }
@@ -1188,9 +1250,14 @@ export class FlowVisualizer {
     }
 
     highlightNode(stepId, highlightType = 'active') {
-        this.clearHighlights();
+        // Running/active is exclusive; terminal states on OTHER nodes persist so
+        // the graph keeps telling the whole run's story on the projector.
+        this.clearRunningHighlight();
 
         const nodeData = this.nodes.get(stepId);
+        if (nodeData?.element) {
+            nodeData.element.classList.remove('active-step', 'success', 'error', 'stopped', 'skipped', 'running');
+        }
         if (!nodeData || !nodeData.element) {
             logger.warn(`Highlight Error: Node data or element not found for step ${stepId}.`);
             return;
@@ -1204,13 +1271,36 @@ export class FlowVisualizer {
 
         nodeData.element.classList.add(highlightClass);
 
+        // Surface an on-node error badge whenever a step is highlighted as failed.
+        if (highlightType === 'error') {
+            this.setNodeError(stepId, this.nodeErrors.get(stepId) || 'Step failed');
+        }
+
         const connectorPaths = Array.from(
             this.editor.precanvas?.querySelectorAll(`.connector-path[data-to="${stepId}"]`) || []
         );
 
         connectorPaths.forEach((path) => {
-            const statusClass = `status-${highlightType}`;
-            path.classList.add(CONNECTOR_ACTIVE_CLASS, statusClass);
+            // Per-connector exclusivity: one status at a time. OTHER connectors
+            // keep their terminal states so the executed route stays painted.
+            [...path.classList].filter((c) => c.startsWith('status-'))
+                .forEach((c) => path.classList.remove(c));
+            path.classList.add(CONNECTOR_ACTIVE_CLASS, `status-${highlightType}`);
+        });
+    }
+
+    /** Clear only the running/active markers, preserving terminal PASS/FAIL states. */
+    clearRunningHighlight() {
+        this.nodes.forEach((nodeData) => {
+            nodeData?.element?.classList.remove('active-step', 'running');
+        });
+        const connectorPaths = this.editor?.precanvas?.querySelectorAll('.connector-path') || [];
+        connectorPaths.forEach((path) => {
+            path.classList.remove('status-active', 'status-active-step');
+            // Keep the executed-route marker only where a terminal status remains.
+            if (![...path.classList].some((c) => c.startsWith('status-'))) {
+                path.classList.remove(CONNECTOR_ACTIVE_CLASS);
+            }
         });
     }
 
@@ -1230,6 +1320,9 @@ export class FlowVisualizer {
         connectorPaths.forEach((path) => {
             path.classList.remove(CONNECTOR_ACTIVE_CLASS, ...statusClasses);
         });
+
+        // A fresh run/clear also resets on-node error badges.
+        this.clearNodeErrors();
     }
 
     updateNodeRuntimeInfo(stepId, result) {
@@ -1248,17 +1341,34 @@ export class FlowVisualizer {
         runtimeInfoDiv.innerHTML = '';
         const detailsParts = [];
 
+        // Surface an on-node error badge from the run result the visualizer
+        // already receives. Reuse the same status field the list view keys on.
+        if (result && result.status === 'error') {
+            const message = result.error
+                || (result.output && result.output.status >= 400
+                    ? `HTTP ${result.output.status}`
+                    : 'Step failed');
+            this.setNodeError(stepId, String(message));
+        }
+
         if (nodeData.step.type === 'request') {
             let requestInfoHtml = '';
             let hasRequestInfo = false;
 
             if (result.output && result.output.status !== undefined && result.output.status !== null) {
                 const statusClass = result.output.status >= 400 ? 'error' : (result.output.status >= 300 ? 'warn' : 'success');
-                requestInfoHtml += `<span class="info-item status-${statusClass}">Status: <strong>${escapeHTML(result.output.status)}</strong></span>`;
+                requestInfoHtml += `<span class="nrt-chip nrt-${statusClass}">${escapeHTML(result.output.status)}</span>`;
+                if (result.output.duration != null) {
+                    requestInfoHtml += `<span class="nrt-chip nrt-ms">${Math.round(result.output.duration)} ms</span>`;
+                }
                 hasRequestInfo = true;
             } else if (result.status === 'error') {
-                requestInfoHtml += '<span class="info-item error">Request Error</span>';
+                requestInfoHtml += '<span class="nrt-chip nrt-error">FAILED</span>';
                 hasRequestInfo = true;
+            }
+            const extractedCount = result.extractedValues ? Object.keys(result.extractedValues).length : 0;
+            if (extractedCount > 0) {
+                requestInfoHtml += `<span class="nrt-chip nrt-vars" title="Variables extracted from this response">&rarr; ${extractedCount} var${extractedCount === 1 ? '' : 's'}</span>`;
             }
 
             const hasConfiguredExtractions = nodeData.step.extract && Object.keys(nodeData.step.extract).length > 0;
@@ -1280,8 +1390,8 @@ export class FlowVisualizer {
                 }
             }
 
-            if (extractionStatus !== 'N/A') {
-                requestInfoHtml += `<span class="info-item extract-${extractionStatusClass}">Extract: <strong>${extractionStatus}</strong></span>`;
+            if (extractionStatus === 'Failed') {
+                requestInfoHtml += `<span class="nrt-chip nrt-error">Extract failed</span>`;
                 hasRequestInfo = true;
             }
 
@@ -1340,6 +1450,276 @@ export class FlowVisualizer {
         return acc;
     }
 
+    // ================= WAVE2 LANE canvas: "Tidy Up" apply/undo =================
+
+    /**
+     * Apply a computed { [stepId]: { x, y } } position map to the graph nodes,
+     * persist it into flowModel.visualLayout, and (by default) animate the move.
+     *
+     * Contract:
+     *  - Positions for step ids that are not currently rendered are ignored
+     *    (stale/unknown ids never throw and never create phantom layout entries).
+     *  - `options.onlyStepIds` (array) restricts the apply to a subset — this is
+     *    how "Tidy selection" preserves manually-placed nodes: only the selected
+     *    ids move; everything else keeps its current position.
+     *  - Pushes a single-level undo snapshot of the PRE-apply positions of the
+     *    nodes it is about to move, so Cmd/Ctrl+Z can revert in one keystroke.
+     *  - Idempotent: applying the same map twice leaves the same state.
+     *
+     * @param {Object<string,{x:number,y:number}>} positions
+     * @param {{ animate?: boolean, onlyStepIds?: string[] }} [options]
+     * @returns {number} how many nodes were actually moved
+     */
+    applyLayout(positions, options = {}) {
+        if (!positions || typeof positions !== 'object') return 0;
+        const animate = options.animate !== false;
+        const restrict = Array.isArray(options.onlyStepIds)
+            ? new Set(options.onlyStepIds.map(String))
+            : null;
+
+        // Resolve the set of ids we will actually move: present in the map,
+        // rendered as a node, and (if restricting) in the selection.
+        const targets = [];
+        for (const rawId of Object.keys(positions)) {
+            const id = String(rawId);
+            const pos = positions[rawId];
+            if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) continue;
+            if (!this.nodes.has(id)) continue;
+            if (restrict && !restrict.has(id)) continue;
+            targets.push(id);
+        }
+        if (targets.length === 0) return 0;
+
+        // Snapshot pre-apply positions for single-level undo.
+        const snapshot = {};
+        targets.forEach((id) => {
+            const nodeData = this.nodes.get(id);
+            snapshot[id] = { x: nodeData.x, y: nodeData.y };
+        });
+        this._layoutUndo = snapshot;
+
+        this._writePositions(
+            targets.map((id) => ({ id, x: positions[id].x, y: positions[id].y })),
+            animate,
+        );
+        return targets.length;
+    }
+
+    /**
+     * Revert the most recent applyLayout() in a single step. Returns false when
+     * there is nothing to undo.
+     * @returns {boolean}
+     */
+    undoLayout() {
+        if (!this._layoutUndo) return false;
+        const snapshot = this._layoutUndo;
+        this._layoutUndo = null;
+        const moves = Object.keys(snapshot)
+            .filter((id) => this.nodes.has(id))
+            .map((id) => ({ id, x: snapshot[id].x, y: snapshot[id].y }));
+        this._writePositions(moves, true);
+        return true;
+    }
+
+    /** @returns {boolean} whether an applyLayout can currently be undone. */
+    canUndoLayout() {
+        return !!this._layoutUndo;
+    }
+
+    /**
+     * Write a batch of { id, x, y } moves: update node data, DOM position, the
+     * persisted visualLayout, and (optionally) run the ~200ms ease-out relayout
+     * animation via a transient class. Only transform/opacity-safe properties
+     * are animated (see the .tidy-relayout CSS block).
+     */
+    _writePositions(moves, animate) {
+        if (!Array.isArray(moves) || moves.length === 0) return;
+        if (this.flowModel) {
+            this.flowModel.visualLayout = this.flowModel.visualLayout || {};
+        }
+
+        moves.forEach(({ id, x, y }) => {
+            const nodeData = this.nodes.get(id);
+            if (!nodeData) return;
+            nodeData.x = x;
+            nodeData.y = y;
+
+            const drawflowId = this.nodeIdByStepId.get(id);
+            if (drawflowId != null) {
+                this._moveDrawflowNode(drawflowId, x, y, animate);
+            }
+
+            if (this.flowModel) {
+                const current = this.flowModel.visualLayout[id] || {};
+                this.flowModel.visualLayout[id] = { ...current, x, y };
+            }
+
+            this.options.onNodeLayoutUpdate?.(id, x, y);
+        });
+
+        this._scheduleMinimapRefresh();
+    }
+
+    /**
+     * Move a single Drawflow node to (x, y), keeping Drawflow's internal data
+     * model and the DOM element in lock-step (mirrors Drawflow.position()).
+     */
+    _moveDrawflowNode(drawflowId, x, y, animate) {
+        const nodeEl = this.editor?.container?.querySelector(`#node-${drawflowId}`);
+        if (!nodeEl) return;
+
+        // FLIP: the final position is committed to left/top immediately (so
+        // Drawflow's geometry + connection routing stay correct), then the
+        // *visual* delta is animated with `transform` only — never left/top —
+        // to keep the ~200ms ease-out relayout on the compositor.
+        const prevLeft = parseFloat(nodeEl.style.left) || 0;
+        const prevTop = parseFloat(nodeEl.style.top) || 0;
+
+        nodeEl.style.left = `${x}px`;
+        nodeEl.style.top = `${y}px`;
+
+        if (animate) {
+            const dx = prevLeft - x;
+            const dy = prevTop - y;
+            if (dx !== 0 || dy !== 0) {
+                // Start from the old spot (no transition), then transition to 0.
+                nodeEl.style.transition = 'none';
+                nodeEl.style.transform = `translate(${dx}px, ${dy}px)`;
+                // Force a reflow so the starting transform is committed.
+                void nodeEl.offsetWidth;
+                nodeEl.classList.add('tidy-relayout');
+                nodeEl.style.transition = '';
+                nodeEl.style.transform = '';
+            } else {
+                nodeEl.classList.add('tidy-relayout');
+            }
+            const timer = setTimeout(() => {
+                nodeEl.classList.remove('tidy-relayout');
+                this._relayoutTimers.delete(timer);
+            }, 240); // just past the ~200ms ease-out transition
+            this._relayoutTimers.add(timer);
+        }
+
+        // Keep Drawflow's data model consistent so subsequent drags/exports read
+        // the tidied coordinates.
+        const df = this.editor?.drawflow?.drawflow?.Home?.data?.[drawflowId];
+        if (df) {
+            df.pos_x = x;
+            df.pos_y = y;
+        }
+        this.editor?.updateConnectionNodes?.(`node-${drawflowId}`);
+    }
+
+    // ============= WAVE2 LANE canvas: on-node error badges + jump =============
+
+    /**
+     * Record + surface a per-step run error on its node (red border/pip + icon;
+     * the message is exposed via the badge title and click). No-ops for unknown
+     * step ids (idempotent / null-safe, per the visualizer contract).
+     * @param {string} stepId
+     * @param {string} message
+     */
+    setNodeError(stepId, message) {
+        if (!stepId) return;
+        const msg = message == null ? 'Step failed' : String(message);
+        this.nodeErrors.set(stepId, msg);
+        this._renderErrorBadge(stepId, msg);
+    }
+
+    /** @returns {string|null} the recorded error message for a step, if any. */
+    getNodeError(stepId) {
+        return this.nodeErrors.has(stepId) ? this.nodeErrors.get(stepId) : null;
+    }
+
+    /** @returns {string[]} ids of steps currently flagged as failed, doc order. */
+    getErrorStepIds() {
+        // Preserve document order (nodes Map is insertion-ordered by layout walk)
+        // so "jump to next" and any listing are stable.
+        const ordered = [];
+        this.nodes.forEach((_nodeData, id) => {
+            if (this.nodeErrors.has(id)) ordered.push(id);
+        });
+        // Include any recorded errors for ids not currently rendered (defensive).
+        this.nodeErrors.forEach((_msg, id) => {
+            if (!ordered.includes(id)) ordered.push(id);
+        });
+        return ordered;
+    }
+
+    /** Clear all on-node error badges and reset the jump cursor. */
+    clearNodeErrors() {
+        this.nodeErrors.forEach((_msg, id) => this._removeErrorBadge(id));
+        this.nodeErrors.clear();
+        this._errorJumpIndex = -1;
+    }
+
+    /**
+     * Focus the next failed step, cycling in document order. Returns the focused
+     * step id, or null when there are no errors.
+     * @returns {string|null}
+     */
+    jumpToNextError() {
+        const ids = this.getErrorStepIds();
+        if (ids.length === 0) {
+            this._errorJumpIndex = -1;
+            return null;
+        }
+        this._errorJumpIndex = (this._errorJumpIndex + 1) % ids.length;
+        const targetId = ids[this._errorJumpIndex];
+        this.focusNode(targetId);
+        return targetId;
+    }
+
+    /** Re-apply error badges after a full render() rebuilt the node elements. */
+    _reapplyErrorBadges() {
+        this.nodeErrors.forEach((msg, id) => {
+            this._renderErrorBadge(id, msg);
+        });
+    }
+
+    /** Attach the error class + badge element to a node (idempotent). */
+    _renderErrorBadge(stepId, message) {
+        const nodeData = this.nodes.get(stepId);
+        const nodeEl = nodeData?.element;
+        if (!nodeEl) return;
+
+        nodeEl.classList.add('has-run-error');
+
+        let badge = nodeEl.querySelector('.node-error-badge');
+        if (!badge) {
+            badge = document.createElement('button');
+            badge.type = 'button';
+            badge.className = 'node-error-badge';
+            badge.setAttribute('aria-label', 'Show step error');
+            badge.innerHTML = '<span class="node-error-badge-icon" aria-hidden="true">!</span>';
+            badge.addEventListener('mousedown', (event) => {
+                event.stopPropagation();
+                event.preventDefault();
+            });
+            badge.addEventListener('click', (event) => {
+                event.stopPropagation();
+                const current = this.nodeErrors.get(stepId);
+                if (!current) return;
+                // Surface through the host's toast system; alert() would block the page.
+                if (this.options.onShowError) this.options.onShowError(current);
+                else logger.error(`[FlowVisualizer] Step error: ${current}`);
+            });
+            const header = nodeEl.querySelector('.node-header') || nodeEl;
+            header.appendChild(badge);
+        }
+        badge.setAttribute('title', message);
+    }
+
+    /** Remove the error class + badge element from a node. */
+    _removeErrorBadge(stepId) {
+        const nodeData = this.nodes.get(stepId);
+        const nodeEl = nodeData?.element;
+        if (!nodeEl) return;
+        nodeEl.classList.remove('has-run-error');
+        const badge = nodeEl.querySelector('.node-error-badge');
+        if (badge) badge.remove();
+    }
+
     destroy() {
         this.mountPoint.removeEventListener('mousedown', this._handleCanvasPanStart, true);
         this.mountPoint.removeEventListener('keydown', this._handleKeydown, true);
@@ -1354,6 +1734,11 @@ export class FlowVisualizer {
         if (this.editor) {
             this.editor.clear();
         }
+
+        this._relayoutTimers.forEach((timer) => clearTimeout(timer));
+        this._relayoutTimers.clear();
+        this.nodeErrors.clear();
+        this._layoutUndo = null;
 
         this.nodes.clear();
         this.nodeIdByStepId.clear();

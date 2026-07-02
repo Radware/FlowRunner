@@ -11,9 +11,17 @@ import {
     escapeHTML, findStepById
 } from './flowCore.js';
 import { assignNewIdsRecursive } from './modelUtils.js';
+import { showConfirmDialog, showInputDialog } from './dialogs.js';
+import {
+    createEmptyWorkspace, parseWorkspace, serializeWorkspace,
+    addFolder, renameFolder, removeFolder, listChildFolders,
+    moveFlowToFolder, listFlowsInFolder, removeFlow,
+} from './workspaceManager.js';
 import { showValidationErrors } from './uiUtils.js';
 import { initializeAppComponents } from './app.js'; // <-- ADDED IMPORT
 import { logger } from './logger.js'; // <-- ADDED IMPORT
+// WAVE2 file-features: rebase the undo/redo "clean" baseline on save.
+import { markFlowHistorySaved } from './flowHistory.js';
 
 
 // Simple path shim for display purposes
@@ -23,10 +31,71 @@ const path = {
 
 
 // --- Recent Files Helpers ---
+//
+// Recent files are now PERSISTED across sessions via electron-store in the main
+// process (see main.js `store:*` IPC + preload `getRecentFiles`/`addRecentFile`/
+// etc.). To keep every existing SYNCHRONOUS caller working, localStorage remains
+// the fast in-renderer mirror and synchronous source of truth; every mutation is
+// ALSO pushed to electron-store (fire-and-forget) so the list survives a restart
+// and a cleared localStorage. `hydrateRecentFiles()` reconciles the durable store
+// back into localStorage on startup.
+
+/** Persist the current localStorage recent-files list to electron-store (async, best-effort). */
+function syncRecentFilesToStore(list) {
+    try {
+        if (window.electronAPI && typeof window.electronAPI.setRecentFiles === 'function') {
+            // Fire-and-forget; the durable store is a mirror of the local list.
+            Promise.resolve(window.electronAPI.setRecentFiles(list)).catch(err => {
+                logger.warn("Failed to persist recent files to electron-store:", err);
+            });
+        }
+    } catch (error) {
+        logger.warn("Error syncing recent files to electron-store:", error);
+    }
+}
+
+/**
+ * Reconcile the durable electron-store recent-files list into the renderer.
+ * Called once at startup (from loadFlowList). If the durable store has entries
+ * they become the source of truth (they survive a cleared localStorage); if it's
+ * empty but localStorage has entries (first run after upgrade), we seed the store
+ * from localStorage instead. Always re-renders the list when done.
+ */
+export async function hydrateRecentFiles() {
+    await hydrateWorkspace();
+    if (!window.electronAPI || typeof window.electronAPI.getRecentFiles !== 'function') {
+        // No durable store available (e.g. tests/browser) — render whatever localStorage has.
+        renderFlowList(getRecentFiles());
+        return;
+    }
+    try {
+        const result = await window.electronAPI.getRecentFiles();
+        const durable = (result && result.success && Array.isArray(result.recentFiles))
+            ? result.recentFiles
+            : [];
+        const local = getRecentFiles();
+
+        if (durable.length > 0) {
+            // Durable store wins; mirror it into localStorage.
+            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(durable));
+            renderFlowList(durable);
+        } else if (local.length > 0) {
+            // First run with persistence: seed the durable store from localStorage.
+            syncRecentFilesToStore(local);
+            renderFlowList(local);
+        } else {
+            renderFlowList([]);
+        }
+    } catch (error) {
+        logger.error("Error hydrating recent files from electron-store:", error);
+        renderFlowList(getRecentFiles());
+    }
+}
 
 // --- NEW HELPER FUNCTION ---
 /**
- * Adds a file path to the recent files list in localStorage.
+ * Adds a file path to the recent files list (localStorage mirror + durable
+ * electron-store).
  * @param {string} filePath
  * @param {boolean} [moveToTop=true] - If true the file is moved to the top of the list.
  */
@@ -54,10 +123,28 @@ export function addRecentFile(filePath, moveToTop = true) {
         }
 
         localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(recentFiles));
+        syncRecentFilesToStore(recentFiles);
         renderFlowList(recentFiles);
     } catch (error) {
         logger.error("Error updating recent files in localStorage:", error);
     }
+}
+
+/**
+ * Read a flow file into a model WITHOUT touching the open editor — used by the
+ * Runs page to launch background runs of flows that are not currently open.
+ * @param {string} filePath
+ * @returns {Promise<object>} flow model
+ */
+export async function readFlowModelFromPath(filePath) {
+    if (!window.electronAPI || typeof window.electronAPI.readFile !== 'function') {
+        throw new Error('Reading flow files from disk requires the desktop app.');
+    }
+    const result = await window.electronAPI.readFile(filePath);
+    if (!result || !result.success) {
+        throw new Error(result?.error || 'Could not read the file.');
+    }
+    return jsonToFlowModel(JSON.parse(result.data));
 }
 
 // --- NEW HELPER FUNCTION ---
@@ -130,9 +217,10 @@ export function loadFlowList() {
     logger.debug("Loading recent files list...");
     try {
         domRefs.flowList.innerHTML = '<li class="loading-flows">Loading recent files...</li>';
-        const recentFiles = getRecentFiles();
-        logger.debug("Retrieved recent files:", recentFiles);
-        renderFlowList(recentFiles);
+        // Render the local mirror immediately, then reconcile with the durable
+        // electron-store (which may add entries that survived a restart).
+        renderFlowList(getRecentFiles());
+        hydrateRecentFiles();
     } catch (error) {
         logger.debug("Error loading recent files:", error);
         domRefs.flowList.innerHTML = '<li class="error-flows">Error loading recent files.</li>';
@@ -140,72 +228,287 @@ export function loadFlowList() {
 }
 
 // --- MODIFIED FUNCTION ---
+// --- Flow manager: sidecar workspace (folders / organization) --------------
+// Data layer in workspaceManager.js; persisted via workspace IPC in Electron,
+// localStorage in the browser (degraded mode) so the manager works everywhere.
+
+const WORKSPACE_LS_KEY = 'flowrunnerWorkspace';
+const FOLDER_COLLAPSE_KEY = 'flowrunnerFolderCollapsed';
+let workspaceModel = createEmptyWorkspace();
+
+export async function hydrateWorkspace() {
+    try {
+        if (window.electronAPI && typeof window.electronAPI.loadWorkspace === 'function') {
+            const res = await window.electronAPI.loadWorkspace();
+            if (res && res.success && res.workspace) {
+                workspaceModel = parseWorkspace(res.workspace);
+                return;
+            }
+        } else if (typeof localStorage !== 'undefined') {
+            const raw = localStorage.getItem(WORKSPACE_LS_KEY);
+            if (raw) {
+                workspaceModel = parseWorkspace(JSON.parse(raw));
+                return;
+            }
+        }
+    } catch (error) {
+        logger.warn('Could not hydrate workspace (using empty):', error);
+    }
+    workspaceModel = createEmptyWorkspace();
+}
+
+function persistWorkspace() {
+    try {
+        const data = serializeWorkspace(workspaceModel);
+        if (window.electronAPI && typeof window.electronAPI.saveWorkspace === 'function') {
+            Promise.resolve(window.electronAPI.saveWorkspace(data)).catch((err) => {
+                logger.warn('Failed to persist workspace:', err);
+            });
+        } else if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(WORKSPACE_LS_KEY, JSON.stringify(data));
+        }
+    } catch (error) {
+        logger.warn('Error persisting workspace:', error);
+    }
+}
+
+function loadCollapsedFolders() {
+    try {
+        const raw = localStorage.getItem(FOLDER_COLLAPSE_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch { return new Set(); }
+}
+
+function saveCollapsedFolders(set) {
+    try { localStorage.setItem(FOLDER_COLLAPSE_KEY, JSON.stringify([...set])); } catch { /* ignore */ }
+}
+
+function rerenderFlowManager() {
+    renderFlowList(getRecentFiles());
+}
+
+/** Create a folder (root or subfolder) via the in-app input dialog. */
+async function promptNewFolder(parentId = null) {
+    const name = await showInputDialog({
+        title: parentId ? 'New subfolder' : 'New folder',
+        message: 'Folders organize your flows; the flow files themselves stay where they are.',
+        placeholder: 'Folder name',
+        confirmText: 'Create',
+        mono: false,
+        multiline: false,
+    });
+    if (!name || !name.trim()) return;
+    addFolder(workspaceModel, { name: name.trim(), parentId });
+    persistWorkspace();
+    rerenderFlowManager();
+}
+
+/** One-time wiring for the drawer's flow-manager chrome (New Folder button). */
+export function initializeFlowManager() {
+    document.getElementById('new-folder-btn')?.addEventListener('click', () => promptNewFolder(null));
+}
+
 export function renderFlowList(recentFiles) {
     if (!domRefs.flowList) return;
-    domRefs.flowList.innerHTML = ''; // Clear previous list
+    const list = domRefs.flowList;
+    list.innerHTML = '';
 
-    if (!recentFiles || recentFiles.length === 0) {
-        domRefs.flowList.innerHTML = '<li class="no-flows">No recent files.</li>';
-        return;
-    }
-
-    // Helper to get just the filename from a path
+    const recent = Array.isArray(recentFiles) ? recentFiles : [];
     const getFileName = (filePath) => path.basename(filePath);
+    const collapsed = loadCollapsedFolders();
+    const filedPaths = new Set(workspaceModel.flows.filter(f => f.folderId).map(f => f.path));
 
-    recentFiles.forEach(filePath => {
+    // ---- flow rows (same structure/classes as before: selection, open-on-click,
+    // remove button and reorder-drag all keep working) ----
+    const makeFlowRow = (filePath, { inFolder = false } = {}) => {
         const li = document.createElement('li');
         li.className = 'flow-list-item recent-file-item';
-        li.dataset.filePath = filePath; // Store the full path
-        li.title = filePath; // Show full path on hover
-
-        if (filePath === appState.currentFilePath) {
-            li.classList.add('selected');
-        }
+        if (inFolder) li.classList.add('in-folder');
+        li.dataset.filePath = filePath;
+        li.title = filePath;
+        if (filePath === appState.currentFilePath) li.classList.add('selected');
 
         li.innerHTML = `
             <div class="flow-item-content">
+                <svg class="icon flow-item-icon" aria-hidden="true"><use href="#i-file"/></svg>
                 <span class="flow-item-name">${escapeHTML(getFileName(filePath))}</span>
                 <button class="btn-remove-recent-file"
                         data-action="remove-recent"
                         title="Remove from recent list"
                         aria-label="Remove ${escapeHTML(getFileName(filePath))} from recent list">
-                    ✕
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg>
                 </button>
             </div>
         `;
 
-        // click the row to open the flow
         li.addEventListener('click', (e) => {
-            // Only trigger if the click wasn't on the remove button
             if (!e.target.closest('.btn-remove-recent-file')) {
                 handleFlowListActions({ target: li });
             }
         });
 
-        // --- Drag handlers ---
+        // Drag: reorder within Recent (existing behavior) + drop onto a folder.
         li.draggable = true;
-        li.addEventListener('dragstart', () => {
+        li.addEventListener('dragstart', (e) => {
             li.classList.add('dragging');
+            try { e.dataTransfer.setData('text/flow-path', filePath); } catch { /* jsdom */ }
+            if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
         });
         li.addEventListener('dragend', () => {
             li.classList.remove('dragging');
-            const order = [...domRefs.flowList.querySelectorAll('.recent-file-item')].map(el => el.dataset.filePath);
-            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(order));
-            renderFlowList(order);
+            // Persist the visual order of the TOP-LEVEL (unfiled) rows only;
+            // folder membership is workspace state, not recency order.
+            const order = [...list.querySelectorAll(':scope > .recent-file-item')].map(el => el.dataset.filePath);
+            const filed = getRecentFiles().filter(p => !order.includes(p));
+            const full = [...order, ...filed];
+            localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(full));
+            syncRecentFilesToStore(full);
+            renderFlowList(full);
         });
 
-        domRefs.flowList.appendChild(li);
-    });
+        return li;
+    };
 
-    domRefs.flowList.ondragover = (e) => {
+    // ---- folder rows ----
+    const renderFolder = (folder, depth, parentUl) => {
+        const li = document.createElement('li');
+        li.className = 'folder-item';
+        li.style.setProperty('--depth', depth);
+        const isCollapsed = collapsed.has(folder.id);
+        const flowsIn = listFlowsInFolder(workspaceModel, folder.id);
+        const childFolders = listChildFolders(workspaceModel, folder.id);
+
+        const row = document.createElement('div');
+        row.className = 'folder-row';
+        row.dataset.folderId = folder.id;
+        row.style.setProperty('--depth', depth);
+        row.innerHTML = `
+            <svg class="icon icon-sm folder-chevron${isCollapsed ? ' collapsed' : ''}" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder"/></svg>
+            <span class="folder-name">${escapeHTML(folder.name)}</span>
+            <span class="folder-actions">
+                <button data-folder-action="new-sub" title="New subfolder"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder-plus"/></svg></button>
+                <button data-folder-action="rename" title="Rename folder"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-pencil"/></svg></button>
+                <button data-folder-action="delete" title="Delete folder (flows are kept)"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-trash"/></svg></button>
+            </span>
+            <span class="folder-count">${flowsIn.length}</span>
+        `;
+
+        row.addEventListener('click', async (e) => {
+            const actionBtn = e.target.closest('[data-folder-action]');
+            if (actionBtn) {
+                e.stopPropagation();
+                const action = actionBtn.dataset.folderAction;
+                if (action === 'new-sub') {
+                    await promptNewFolder(folder.id);
+                } else if (action === 'rename') {
+                    const name = await showInputDialog({
+                        title: 'Rename folder', placeholder: 'Folder name',
+                        initialValue: folder.name, confirmText: 'Rename',
+                        mono: false, multiline: false,
+                    });
+                    if (name && name.trim()) {
+                        renameFolder(workspaceModel, folder.id, name.trim());
+                        persistWorkspace();
+                        rerenderFlowManager();
+                    }
+                } else if (action === 'delete') {
+                    const ok = await showConfirmDialog(
+                        `Delete folder "${folder.name}"? Flows inside are kept and return to Recent; subfolders move up a level.`,
+                        { title: 'Delete folder', confirmText: 'Delete', danger: true },
+                    );
+                    if (ok) {
+                        removeFolder(workspaceModel, folder.id);
+                        persistWorkspace();
+                        rerenderFlowManager();
+                    }
+                }
+                return;
+            }
+            // Row click toggles collapse.
+            const set = loadCollapsedFolders();
+            if (set.has(folder.id)) set.delete(folder.id); else set.add(folder.id);
+            saveCollapsedFolders(set);
+            rerenderFlowManager();
+        });
+
+        // Drop a flow onto the folder to file it.
+        row.addEventListener('dragover', (e) => { e.preventDefault(); row.classList.add('drop-target'); });
+        row.addEventListener('dragleave', () => row.classList.remove('drop-target'));
+        row.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            row.classList.remove('drop-target');
+            let flowPath = '';
+            try { flowPath = e.dataTransfer.getData('text/flow-path'); } catch { /* ignore */ }
+            if (!flowPath) flowPath = list.querySelector('.recent-file-item.dragging')?.dataset.filePath || '';
+            if (!flowPath) return;
+            moveFlowToFolder(workspaceModel, flowPath, folder.id);
+            persistWorkspace();
+            rerenderFlowManager();
+        });
+
+        li.appendChild(row);
+
+        const childUl = document.createElement('ul');
+        childUl.className = 'folder-children';
+        if (isCollapsed) childUl.style.display = 'none';
+        childFolders.forEach((cf) => renderFolder(cf, depth + 1, childUl));
+        flowsIn.forEach((entry) => childUl.appendChild(makeFlowRow(entry.path, { inFolder: true })));
+        if (!childUl.children.length) {
+            const empty = document.createElement('li');
+            empty.className = 'folder-empty';
+            empty.style.setProperty('--depth', depth);
+            empty.textContent = 'Empty — drag a flow here';
+            childUl.appendChild(empty);
+        }
+        li.appendChild(childUl);
+        parentUl.appendChild(li);
+    };
+
+    const rootFolders = listChildFolders(workspaceModel, null);
+    rootFolders.forEach((f) => renderFolder(f, 0, list));
+
+    const unfiled = recent.filter((p) => !filedPaths.has(p));
+
+    if (rootFolders.length === 0 && unfiled.length === 0) {
+        list.innerHTML = '<li class="no-flows">No recent files.</li>';
+        return;
+    }
+
+    if (rootFolders.length > 0) {
+        const head = document.createElement('li');
+        head.className = 'flow-list-section';
+        head.textContent = 'Recent';
+        // Dropping on the Recent header un-files a flow.
+        head.addEventListener('dragover', (e) => { e.preventDefault(); head.classList.add('drop-root-target'); });
+        head.addEventListener('dragleave', () => head.classList.remove('drop-root-target'));
+        head.addEventListener('drop', (e) => {
+            e.preventDefault();
+            head.classList.remove('drop-root-target');
+            let flowPath = '';
+            try { flowPath = e.dataTransfer.getData('text/flow-path'); } catch { /* ignore */ }
+            if (!flowPath) return;
+            moveFlowToFolder(workspaceModel, flowPath, null);
+            persistWorkspace();
+            rerenderFlowManager();
+        });
+        list.appendChild(head);
+    }
+
+    unfiled.forEach((filePath) => list.appendChild(makeFlowRow(filePath)));
+
+    // Reorder-drag positioning for the unfiled rows (existing behavior).
+    list.ondragover = (e) => {
         e.preventDefault();
-        const dragging = domRefs.flowList.querySelector('.recent-file-item.dragging');
+        const dragging = list.querySelector(':scope > .recent-file-item.dragging');
         if (!dragging) return;
-        const afterEl = getAfterElement(domRefs.flowList, e.clientY);
+        const afterEl = getAfterElement(list, e.clientY);
         if (afterEl == null) {
-            domRefs.flowList.appendChild(dragging);
-        } else {
-            domRefs.flowList.insertBefore(dragging, afterEl);
+            list.appendChild(dragging);
+        } else if (afterEl.parentElement === list) {
+            list.insertBefore(dragging, afterEl);
         }
     };
 }
@@ -224,6 +527,16 @@ export async function handleFlowListActions(event) {
                 let currentRecent = getRecentFiles();
                 currentRecent = currentRecent.filter(p => p !== filePathToRemove);
                 localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(currentRecent));
+                // Filed flows live in the workspace, not the recent list — drop
+                // them there too or the row re-renders inside its folder with a
+                // dead X (and folders keep referencing files deleted from disk).
+                removeFlow(workspaceModel, filePathToRemove);
+                persistWorkspace();
+                if (window.electronAPI && typeof window.electronAPI.removeRecentFile === 'function') {
+                    Promise.resolve(window.electronAPI.removeRecentFile(filePathToRemove)).catch(err => {
+                        logger.warn("Failed to remove recent file from electron-store:", err);
+                    });
+                }
                 renderFlowList(currentRecent);
 
                 // If we're removing the currently open flow, clear the current path but don't clear workspace
@@ -251,9 +564,13 @@ export async function handleFlowListActions(event) {
 }
 
 // --- [Modified Code] in app.js ---
-export function confirmDiscardChanges() {
+export async function confirmDiscardChanges() {
     if (appState.isDirty || appState.stepEditorIsDirty) {
-        if (!confirm("You have unsaved changes. Discard them and continue?")) {
+        const discard = await showConfirmDialog(
+            "You have unsaved changes. Discard them and continue?",
+            { title: 'Unsaved changes', confirmText: 'Discard changes', cancelText: 'Keep editing', danger: true }
+        );
+        if (!discard) {
             return false; // User canceled
         }
     }
@@ -278,7 +595,7 @@ export async function handleSelectFlow(filePath) {
         return;
     }
 
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User cancelled discarding changes
     }
 
@@ -298,7 +615,7 @@ export async function handleOpenFile() {
     if (!await confirmStopContinuousRun(`Opening a new file`)) {
         return;
     }
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User cancelled discarding changes
     }
 
@@ -354,7 +671,7 @@ export async function handleCreateNewFlow() {
         return;
     }
 
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User cancelled discarding changes
     }
 
@@ -636,6 +953,9 @@ export async function saveCurrentFlow(forceSaveAs = false) {
             appState.isDirty = false; // Reset flow dirty flag
             // stepEditorIsDirty should already be false from commit step, ensure it is.
             appState.stepEditorIsDirty = false;
+            // WAVE2 file-features: mark the just-saved model as the clean baseline
+            // so undo/redo back to this point reports the app as not-dirty.
+            markFlowHistorySaved();
 
             updateWorkspaceTitle(); // Update title (removes asterisk, shows new filename if Save As)
             addRecentFile(targetFilePath); // Update recent files list
@@ -694,7 +1014,7 @@ export async function handleCloseFlow() {
 
     // confirmDiscardChanges will prompt if dirty.
     // It also resets dirty flags and calls setDirty() if the user proceeds.
-    if (!confirmDiscardChanges()) {
+    if (!(await confirmDiscardChanges())) {
         return; // User chose not to discard changes (and thus not to close)
     }
 
@@ -743,7 +1063,11 @@ export async function handleCancelFlow() {
     }
 
     if (appState.isDirty || appState.stepEditorIsDirty) {
-        if (!confirm("You have unsaved changes. Are you sure you want to cancel and revert them?")) {
+        const revert = await showConfirmDialog(
+            "You have unsaved changes. Are you sure you want to cancel and revert them?",
+            { title: 'Revert changes', confirmText: 'Revert', cancelText: 'Keep editing', danger: true }
+        );
+        if (!revert) {
             return; // User chose not to discard changes
         }
     }
@@ -800,12 +1124,15 @@ export async function handleCancelFlow() {
 // --- NEW HELPER: Confirm stopping continuous run ---
 async function confirmStopContinuousRun(actionDescription = "This action") {
     if (appState.isContinuousRunActive) {
-        if (confirm(`${actionDescription} will stop the currently running continuous flow. Continue?`)) {
+        const proceed = await showConfirmDialog(
+            `${actionDescription} will stop the currently running continuous flow. Continue?`,
+            { title: 'Stop continuous run', confirmText: 'Stop and continue', cancelText: 'Cancel' }
+        );
+        if (proceed) {
             handleStopFlow(); // Stop the continuous flow
             return true; // User confirmed
-        } else {
-            return false; // User cancelled
         }
+        return false; // User cancelled
     }
     return true; // Not active, so proceed
 }

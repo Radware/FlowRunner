@@ -1,0 +1,412 @@
+// __tests__/visualizerContract.test.js
+//
+// Guards the FlowVisualizer <-> app boundary described in docs/visualizer-contract.md.
+//
+// The app talks to the node-graph engine through a small, fixed surface:
+//   - constructed as `new FlowVisualizer(mountPoint, options)`
+//   - a set of public methods (CONTRACT_METHODS)
+//   - a set of option callbacks the engine fires back (CONTRACT_CALLBACKS)
+//
+// This suite pins that surface so the engine can be swapped later without
+// touching the rest of the app:
+//   1. A `FakeVisualizer` double that implements exactly the contract, exercised
+//      the way the app exercises it (proves the contract is sufficient + coherent).
+//   2. A conformance test asserting the REAL FlowVisualizer exposes every method
+//      the app depends on as a function.
+//
+// If you add/remove a call into `appState.visualizerComponent` anywhere in the
+// app, update BOTH the arrays below AND docs/visualizer-contract.md.
+
+import { jest, describe, beforeEach, afterEach, test, expect } from '@jest/globals';
+import { FlowVisualizer } from '../flowVisualizer.js';
+// WAVE3 react-island: the flag-gated alternative engine must honor the SAME
+// contract as Drawflow so app.js can construct it identically. Pin it here.
+import { ReactFlowVisualizer } from '../reactFlowVisualizer.js';
+
+// --- The contract, as depended upon by the app (see docs/visualizer-contract.md) ---
+
+// Public methods the app calls on the visualizer instance. Sourced by grepping
+// every `visualizerComponent(?.).<method>` call across the renderer modules
+// (app.js, uiUtils.js, eventHandlers.js, runnerInterface.js, flowBuilderComponent.js).
+const CONTRACT_METHODS = [
+    'render',
+    'getAutoLayout',
+    'focusNode',
+    'highlightNode',
+    'clearHighlights',
+    'updateNodeRuntimeInfo',
+    'showMinimap',
+    'hideMinimap',
+    'isMinimapVisible',
+    'zoomIn',
+    'zoomOut',
+    'resetZoom',
+    'destroy',
+    // WAVE2 LANE canvas: "Tidy Up" apply/undo + jump-to-next-failed navigation.
+    'applyLayout',
+    'undoLayout',
+    'canUndoLayout',
+    'jumpToNextError',
+];
+
+// Option callbacks the app wires in app.js -> initializeVisualizer(). All optional;
+// the engine must tolerate any subset being present.
+const CONTRACT_CALLBACKS = [
+    'onNodeSelect',
+    'onNodeLayoutUpdate',
+    'onConnectionUpdate',
+    'onDeleteStep',
+    'onStepEdit',
+    'onEditorDirtyChange',
+    'onRequestAddStepAfter',
+];
+
+// --- A minimal fake/double that implements the contract ---
+//
+// This is the reference shape a replacement graph engine must satisfy. It records
+// interactions so tests can assert the app's usage patterns are expressible.
+class FakeVisualizer {
+    constructor(mountPoint, options = {}) {
+        if (!mountPoint) {
+            throw new Error('FlowVisualizer requires a valid mount point element.');
+        }
+        this.mountPoint = mountPoint;
+        this.options = options;
+
+        this.rendered = null;              // last { flowModel, selectedStepId }
+        this.highlights = new Map();       // stepId -> highlightType
+        this.runtimeInfo = new Map();      // stepId -> result
+        this.focusedStepId = null;
+        this.minimapVisible = false;
+        this.zoom = 1;
+        this.destroyed = false;
+    }
+
+    render(flowModel, selectedStepId) {
+        this.rendered = { flowModel, selectedStepId };
+    }
+
+    getAutoLayout() {
+        const layout = {};
+        const steps = this.rendered?.flowModel?.steps || [];
+        steps.forEach((step, index) => {
+            layout[step.id] = { x: index * 100, y: 0 };
+        });
+        return layout;
+    }
+
+    focusNode(stepId) {
+        // Must no-op (not throw) for unknown ids.
+        this.focusedStepId = stepId ?? null;
+        return true;
+    }
+
+    highlightNode(stepId, highlightType = 'active') {
+        if (stepId == null) return;
+        this.highlights.set(stepId, highlightType);
+    }
+
+    // App sometimes passes an argument here (runnerInterface.js:298); it must be
+    // safely ignorable. The app relies only on "highlights cleared".
+    clearHighlights(_ignoredType) {
+        this.highlights.clear();
+    }
+
+    updateNodeRuntimeInfo(stepId, result) {
+        if (stepId == null) return;
+        this.runtimeInfo.set(stepId, result);
+    }
+
+    showMinimap() {
+        this.minimapVisible = true;
+    }
+
+    hideMinimap() {
+        this.minimapVisible = false;
+    }
+
+    isMinimapVisible() {
+        return this.minimapVisible;
+    }
+
+    zoomIn() {
+        this.zoom += 0.1;
+    }
+
+    zoomOut() {
+        this.zoom -= 0.1;
+    }
+
+    resetZoom() {
+        this.zoom = 1;
+    }
+
+    destroy() {
+        this.destroyed = true;
+    }
+
+    // WAVE2 LANE canvas additions. A replacement engine may no-op these if it
+    // does not support auto-layout / error navigation; the app guards each call.
+    applyLayout(positions, _options) {
+        this.appliedLayout = positions;
+        this._undoAvailable = true;
+        return positions ? Object.keys(positions).length : 0;
+    }
+
+    undoLayout() {
+        if (!this._undoAvailable) return false;
+        this._undoAvailable = false;
+        return true;
+    }
+
+    canUndoLayout() {
+        return !!this._undoAvailable;
+    }
+
+    jumpToNextError() {
+        return null;
+    }
+}
+
+describe('FlowVisualizer contract', () => {
+    describe('contract definition sanity', () => {
+        test('method + callback names are unique and non-empty', () => {
+            expect(new Set(CONTRACT_METHODS).size).toBe(CONTRACT_METHODS.length);
+            expect(new Set(CONTRACT_CALLBACKS).size).toBe(CONTRACT_CALLBACKS.length);
+            for (const name of [...CONTRACT_METHODS, ...CONTRACT_CALLBACKS]) {
+                expect(typeof name).toBe('string');
+                expect(name.length).toBeGreaterThan(0);
+            }
+        });
+    });
+
+    describe('FakeVisualizer double implements the contract', () => {
+        let mount;
+        let callbacks;
+        let vis;
+
+        beforeEach(() => {
+            mount = document.createElement('div');
+            callbacks = Object.fromEntries(
+                CONTRACT_CALLBACKS.map((name) => [name, jest.fn()])
+            );
+            vis = new FakeVisualizer(mount, callbacks);
+        });
+
+        test('exposes every contract method as a function', () => {
+            for (const method of CONTRACT_METHODS) {
+                expect(typeof vis[method]).toBe('function');
+            }
+        });
+
+        test('constructing with a falsy mount point throws', () => {
+            expect(() => new FakeVisualizer(null, {})).toThrow();
+        });
+
+        test('constructing with no options object does not throw', () => {
+            expect(() => new FakeVisualizer(mount)).not.toThrow();
+        });
+
+        test('render + getAutoLayout round-trips a flow model (uiUtils/eventHandlers usage)', () => {
+            const flowModel = { steps: [{ id: 'a' }, { id: 'b' }] };
+            vis.render(flowModel, 'a');
+            const layout = vis.getAutoLayout?.() || {};
+            expect(Object.keys(layout)).toEqual(['a', 'b']);
+            expect(layout.a).toEqual(expect.objectContaining({ x: expect.any(Number), y: expect.any(Number) }));
+        });
+
+        test('highlight lifecycle matches runnerInterface usage', () => {
+            vis.highlightNode('step1', 'active-step');
+            vis.highlightNode('step2', 'error');
+            expect(vis.highlights.get('step1')).toBe('active-step');
+            expect(vis.highlights.get('step2')).toBe('error');
+
+            // clearHighlights is called both with and without an argument.
+            vis.clearHighlights('active-step');
+            expect(vis.highlights.size).toBe(0);
+
+            vis.highlightNode('step3', 'stopped');
+            vis.clearHighlights();
+            expect(vis.highlights.size).toBe(0);
+        });
+
+        test('highlight/focus/runtimeInfo no-op safely for unknown ids', () => {
+            expect(() => vis.highlightNode(null)).not.toThrow();
+            expect(() => vis.updateNodeRuntimeInfo(undefined, {})).not.toThrow();
+            expect(() => vis.focusNode(undefined)).not.toThrow();
+            expect(vis.highlights.size).toBe(0);
+            expect(vis.runtimeInfo.size).toBe(0);
+        });
+
+        test('updateNodeRuntimeInfo stores a run result', () => {
+            vis.updateNodeRuntimeInfo('step1', { status: 'success', duration: 12 });
+            expect(vis.runtimeInfo.get('step1')).toEqual({ status: 'success', duration: 12 });
+        });
+
+        test('minimap visibility toggles via isMinimapVisible + show/hide (eventHandlers usage)', () => {
+            expect(vis.isMinimapVisible()).toBe(false);
+            const willBeVisible = !vis.isMinimapVisible();
+            if (willBeVisible) vis.showMinimap(); else vis.hideMinimap();
+            expect(vis.isMinimapVisible()).toBe(true);
+
+            const willBeVisible2 = !vis.isMinimapVisible();
+            if (willBeVisible2) vis.showMinimap(); else vis.hideMinimap();
+            expect(vis.isMinimapVisible()).toBe(false);
+        });
+
+        test('zoom controls are callable (eventHandlers toolbar usage)', () => {
+            vis.zoomIn();
+            vis.zoomOut();
+            vis.resetZoom();
+            expect(vis.zoom).toBe(1);
+        });
+
+        test('destroy is callable and guardable via typeof check (uiUtils usage)', () => {
+            expect(typeof vis.destroy).toBe('function');
+            vis.destroy();
+            expect(vis.destroyed).toBe(true);
+        });
+    });
+
+    describe('real FlowVisualizer conforms to the contract', () => {
+        let mount;
+
+        beforeEach(() => {
+            mount = document.createElement('div');
+            mount.id = 'visualizer-contract-mount';
+            Object.defineProperty(mount, 'clientWidth', { configurable: true, value: 1200 });
+            Object.defineProperty(mount, 'clientHeight', { configurable: true, value: 1000 });
+            Object.defineProperty(mount, 'offsetParent', { configurable: true, get: () => document.body });
+            document.body.appendChild(mount);
+        });
+
+        afterEach(() => {
+            if (mount?.parentNode) mount.parentNode.removeChild(mount);
+        });
+
+        test('constructor throws without a mount point', () => {
+            expect(() => new FlowVisualizer(null)).toThrow();
+        });
+
+        test('prototype exposes every method the app depends on as a function', () => {
+            for (const method of CONTRACT_METHODS) {
+                expect(typeof FlowVisualizer.prototype[method]).toBe(
+                    'function',
+                    `FlowVisualizer is missing contract method: ${method}`
+                );
+            }
+        });
+
+        test('a constructed instance exposes every contract method as a function', () => {
+            const callbacks = Object.fromEntries(
+                CONTRACT_CALLBACKS.map((name) => [name, jest.fn()])
+            );
+            const vis = new FlowVisualizer(mount, callbacks);
+            try {
+                for (const method of CONTRACT_METHODS) {
+                    expect(typeof vis[method]).toBe('function');
+                }
+            } finally {
+                vis.destroy();
+            }
+        });
+
+        test('accepts a subset of the callback options without throwing', () => {
+            // The app passes exactly CONTRACT_CALLBACKS; a partial set (and none at
+            // all) must also be tolerated by the engine.
+            expect(() => {
+                const v = new FlowVisualizer(mount, { onNodeSelect: jest.fn() });
+                v.destroy();
+            }).not.toThrow();
+        });
+    });
+
+    // WAVE3 react-island: the flag-gated ReactFlowVisualizer facade must satisfy the
+    // SAME contract so app.js -> initializeVisualizer() can construct it identically
+    // to Drawflow. The facade loads its React island bundle asynchronously (a
+    // same-origin <script> that never resolves under jsdom), so these tests assert
+    // the SYNCHRONOUS contract surface only: construction, method presence, and the
+    // safe-to-call-early / nullable tolerances the app relies on. They do NOT
+    // require the island bundle to have been built.
+    describe('ReactFlowVisualizer facade conforms to the contract', () => {
+        let mount;
+
+        beforeEach(() => {
+            mount = document.createElement('div');
+            mount.id = 'react-visualizer-contract-mount';
+            document.body.appendChild(mount);
+        });
+
+        afterEach(() => {
+            if (mount?.parentNode) mount.parentNode.removeChild(mount);
+        });
+
+        test('constructor throws without a mount point', () => {
+            expect(() => new ReactFlowVisualizer(null)).toThrow();
+        });
+
+        test('prototype exposes every contract method as a function', () => {
+            for (const method of CONTRACT_METHODS) {
+                expect(typeof ReactFlowVisualizer.prototype[method]).toBe(
+                    'function',
+                    `ReactFlowVisualizer is missing contract method: ${method}`
+                );
+            }
+        });
+
+        test('a constructed instance exposes every contract method as a function', () => {
+            const callbacks = Object.fromEntries(
+                CONTRACT_CALLBACKS.map((name) => [name, jest.fn()])
+            );
+            const vis = new ReactFlowVisualizer(mount, callbacks);
+            try {
+                for (const method of CONTRACT_METHODS) {
+                    expect(typeof vis[method]).toBe('function');
+                }
+            } finally {
+                vis.destroy();
+            }
+        });
+
+        test('accepts a subset of the callback options without throwing', () => {
+            expect(() => {
+                const v = new ReactFlowVisualizer(mount, { onNodeSelect: jest.fn() });
+                v.destroy();
+            }).not.toThrow();
+        });
+
+        test('constructing with no options object does not throw', () => {
+            expect(() => {
+                const v = new ReactFlowVisualizer(mount);
+                v.destroy();
+            }).not.toThrow();
+        });
+
+        test('contract calls before the island loads are safe (queued/no-op) with contract-correct return types', () => {
+            // The bundle never resolves under jsdom, so _impl stays null. Every
+            // method must be safe to call and return the contract-correct fallback.
+            const vis = new ReactFlowVisualizer(mount, {});
+            try {
+                expect(() => vis.render({ steps: [] }, 'a')).not.toThrow();
+                expect(() => vis.highlightNode('x', 'error')).not.toThrow();
+                expect(() => vis.clearHighlights('active-step')).not.toThrow();
+                expect(() => vis.updateNodeRuntimeInfo('x', { status: 'ok' })).not.toThrow();
+                expect(() => vis.focusNode('missing')).not.toThrow();
+                // Return-value contract: readable fallbacks before the impl exists.
+                expect(vis.getAutoLayout()).toEqual({});
+                expect(vis.isMinimapVisible()).toBe(false);
+                expect(vis.applyLayout({ a: { x: 0, y: 0 } })).toBe(0);
+                expect(vis.undoLayout()).toBe(false);
+                expect(vis.canUndoLayout()).toBe(false);
+                expect(vis.jumpToNextError()).toBeNull();
+                // Optimistic minimap mirror flips without the impl.
+                vis.showMinimap();
+                expect(vis.isMinimapVisible()).toBe(true);
+                vis.hideMinimap();
+                expect(vis.isMinimapVisible()).toBe(false);
+            } finally {
+                vis.destroy();
+            }
+        });
+    });
+});
