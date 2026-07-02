@@ -2,6 +2,8 @@
 
 > Read this first when resuming the sprint in a new session. It records **what is done and verified**, **what is NOT done** (honestly), and **how to pick up**. The plan is [sprint-plan.md](sprint-plan.md); the rationale is [flowmap-evolution.md](flowmap-evolution.md) and [engine-decision.md](engine-decision.md).
 
+> **2026-07-02 branch consolidation:** ALL work now lives on **`dev`** (local + `FlowRunner/dev` remote). The 16 feature branches (sprint/roadmap-ux-overhaul, wave1-*/wave2-*/wave3-*, fix/js-graceful-degradation) were verified as ancestors of dev and pruned, remotely and locally; wave2-engine-spikes (React Flow POC + docs/engine-decision.md) was merged in first — it had never landed anywhere else. Every branch reference below that says `sprint/roadmap-ux-overhaul` now means `dev`.
+
 > **2026-07-02 update (Wave 3.7 — "Sentinel v2"):** the shell skeleton was overhauled (icon rail + top app bar with hero run cluster + Flows drawer + tabbed inspector absorbing the Info/Variables overlays), all native confirm()/alert() in the edit/run path replaced with an in-app dialog/toast system (demo-safe), node cards redesigned, and the **e2e suite resurrected: 20/20 passing** (was un-runnable on macOS). Jest 476/29 green. See changelog top entry. Still on the branch, not merged.
 
 ## Where we are
