@@ -1617,6 +1617,23 @@ body.flow-step-dragging { cursor: grabbing !important; }
 .app-confirm-message { margin: 0 0 var(--space-xl); font-size: var(--fs-base); color: var(--text-muted); line-height: 1.5; overflow-wrap: anywhere; }
 .app-confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
+.app-input-textarea {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 96px;
+    margin: 0 0 var(--space-xl);
+    padding: 10px 12px;
+    font-size: var(--fs-body);
+    color: var(--text);
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    outline: none;
+}
+.app-input-textarea.mono { font-family: var(--font-family-code); }
+.app-input-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+
 /* --- Node Editor Modal --- */
 .node-editor-modal {
     position: fixed;

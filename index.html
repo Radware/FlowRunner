@@ -341,6 +341,19 @@
     </div>
 
     <!-- Step-Type Selection Dialog -->
+    <!-- Generic in-app input dialog (replacement for window.prompt, which Electron does not support) -->
+    <div class="app-confirm-dialog app-input-dialog" id="app-input-dialog" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="app-input-title">
+        <div class="app-confirm-container">
+            <h3 class="app-confirm-title" id="app-input-title">Input</h3>
+            <p class="app-confirm-message" id="app-input-message"></p>
+            <textarea id="app-input-textarea" class="app-input-textarea" rows="6" spellcheck="false" autocomplete="off"></textarea>
+            <div class="app-confirm-actions">
+                <button type="button" class="btn btn-secondary" id="app-input-cancel">Cancel</button>
+                <button type="button" class="btn btn-primary" id="app-input-ok">Import</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Generic in-app confirm dialog (non-blocking replacement for native confirm()) -->
     <div class="app-confirm-dialog" id="app-confirm-dialog" style="display: none;" role="alertdialog" aria-modal="true" aria-labelledby="app-confirm-title" aria-describedby="app-confirm-message">
         <div class="app-confirm-container">

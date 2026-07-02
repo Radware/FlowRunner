@@ -137,6 +137,83 @@ export function showConfirmDialog(message, opts = {}) {
     });
 }
 
+// --- Generic Input Dialog (replacement for window.prompt) ------------------
+// Electron renderers do not support window.prompt() at all (it throws), and
+// native dialogs freeze the event loop anyway. Same non-blocking pattern as
+// showConfirmDialog: resolves the entered string, or null on cancel/Escape.
+
+let activeInputResolve = null;
+
+/**
+ * @param {object} [opts]
+ * @param {string} [opts.title='Input']
+ * @param {string} [opts.message='']      Short helper text above the field.
+ * @param {string} [opts.placeholder='']
+ * @param {string} [opts.confirmText='Import']
+ * @param {string} [opts.initialValue='']
+ * @param {boolean} [opts.mono=true]      Monospace field (code-like input).
+ * @returns {Promise<string|null>}
+ */
+export function showInputDialog(opts = {}) {
+    const overlay = document.getElementById('app-input-dialog');
+    if (!overlay) return Promise.resolve(null);
+
+    if (activeInputResolve) {
+        activeInputResolve(null);
+        activeInputResolve = null;
+    }
+
+    const titleEl = overlay.querySelector('#app-input-title');
+    const messageEl = overlay.querySelector('#app-input-message');
+    const field = overlay.querySelector('#app-input-textarea');
+    const okBtn = overlay.querySelector('#app-input-ok');
+    const cancelBtn = overlay.querySelector('#app-input-cancel');
+
+    titleEl.textContent = opts.title || 'Input';
+    messageEl.textContent = opts.message || '';
+    messageEl.style.display = opts.message ? '' : 'none';
+    field.placeholder = opts.placeholder || '';
+    field.value = opts.initialValue || '';
+    field.classList.toggle('mono', opts.mono !== false);
+    okBtn.textContent = opts.confirmText || 'Import';
+
+    const previouslyFocused = document.activeElement;
+    overlay.style.display = 'flex';
+
+    return new Promise((resolve) => {
+        activeInputResolve = resolve;
+
+        const close = (result) => {
+            overlay.style.display = 'none';
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            overlay.removeEventListener('mousedown', onBackdrop);
+            document.removeEventListener('keydown', onKey, true);
+            if (previouslyFocused && typeof previouslyFocused.focus === 'function') {
+                try { previouslyFocused.focus(); } catch { /* element may be gone */ }
+            }
+            if (activeInputResolve === resolve) activeInputResolve = null;
+            resolve(result);
+        };
+
+        const onOk = () => close(field.value);
+        const onCancel = () => close(null);
+        const onBackdrop = (e) => { if (e.target === overlay) close(null); };
+        const onKey = (e) => {
+            if (e.key === 'Escape') { e.stopPropagation(); close(null); }
+            // Cmd/Ctrl+Enter confirms (plain Enter inserts a newline in the textarea).
+            else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.stopPropagation(); close(field.value); }
+        };
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        overlay.addEventListener('mousedown', onBackdrop);
+        document.addEventListener('keydown', onKey, true);
+
+        field.focus();
+    });
+}
+
 function handleVarDropdownListClick(e) {
     const varItem = e.target.closest('.var-item');
     if (varItem && varItem.dataset.var) {

@@ -37,9 +37,16 @@ export function appendImportedSteps(steps) {
 /**
  * Prompt the user for a cURL command and import it as a request step.
  */
-export function importCurlFromPrompt() {
-    if (typeof window === 'undefined' || typeof window.prompt !== 'function') return;
-    const input = window.prompt('Paste a cURL command to import as a request step:');
+export async function importCurlFromPrompt() {
+    // window.prompt() is unsupported in Electron renderers (throws); use the
+    // in-app input dialog (also non-blocking, unlike native dialogs).
+    const { showInputDialog } = await import('./dialogs.js');
+    const input = await showInputDialog({
+        title: 'Import cURL',
+        message: 'Paste a cURL command; it becomes a request step at the end of the current flow.',
+        placeholder: "curl -X POST https://api.example.com/login -H 'Content-Type: application/json' -d '{...}'",
+        confirmText: 'Import step',
+    });
     if (input == null || !input.trim()) return;
     try {
         const step = parseCurl(input);
