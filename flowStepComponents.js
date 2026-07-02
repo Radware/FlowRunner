@@ -695,8 +695,15 @@ function createRequestEditor(container, options) {
 
     // --- MODIFICATION START: Add onFailure HTML ---
     container.innerHTML = `
-        <div class="form-group"> <label for="request-method-${localStep.id}">Method</label> <select id="request-method-${localStep.id}">${getHttpMethods().map(m => `<option value="${m}" ${localStep.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select> </div>
-        <div class="form-group"> <label for="request-url-${localStep.id}">URL</label> <div class="input-with-vars"> <input type="text" id="request-url-${localStep.id}" value="${escapeHTML(localStep.url || '')}" placeholder="e.g., https://api.example.com/users/{{userId}}"> <button class="btn-insert-var" data-target-input="request-url-${localStep.id}">{{…}}</button> <button class="btn btn-secondary btn-copy-curl" type="button" title="Copy request as cURL">Copy cURL</button> </div> </div>
+        <div class="form-group">
+            <label for="request-url-${localStep.id}">Request</label>
+            <div class="request-bar" data-method="${escapeHTML(localStep.method || 'GET')}">
+                <select id="request-method-${localStep.id}" class="request-bar-method" aria-label="HTTP method">${getHttpMethods().map(m => `<option value="${m}" ${localStep.method === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
+                <input type="text" id="request-url-${localStep.id}" class="request-bar-url" value="${escapeHTML(localStep.url || '')}" placeholder="https://api.example.com/users/{{userId}}" spellcheck="false">
+                <button class="btn-insert-var request-bar-seg" data-target-input="request-url-${localStep.id}" title="Insert a variable">{{…}}</button>
+                <button class="btn-copy-curl request-bar-seg" type="button" title="Copy request as cURL"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-terminal"/></svg><span>cURL</span></button>
+            </div>
+        </div>
 
         <div class="form-tabs power-only">
             <div class="tab-buttons">
@@ -734,6 +741,21 @@ function createRequestEditor(container, options) {
                         <option value="continue" ${localStep.onFailure === 'continue' ? 'selected' : ''}>Continue Flow Execution</option>
                     </select>
                     <p class="form-hint">Choose behavior when a request fails (network error or status >= 300). 'Stop' halts the entire flow. 'Continue' logs the result and proceeds.</p>
+                </div>
+                <div class="form-group">
+                    <label for="request-retry-count-${localStep.id}">Retries</label>
+                    <div class="retries-row">
+                        <label class="retries-field">Extra attempts
+                            <input type="number" id="request-retry-count-${localStep.id}" min="0" max="10" step="1"
+                                value="${Number.isFinite(localStep.retries?.count) ? localStep.retries.count : 0}">
+                        </label>
+                        <label class="retries-field">Delay between attempts
+                            <input type="number" id="request-retry-delay-${localStep.id}" min="0" step="100"
+                                value="${Number.isFinite(localStep.retries?.delayMs) ? localStep.retries.delayMs : 1000}">
+                            <span class="retries-unit">ms</span>
+                        </label>
+                    </div>
+                    <p class="form-hint">Retry a failed request (network error or non-2xx) this many extra times before applying On Failure. 0 = single attempt, exactly today's behavior.</p>
                 </div>
             </div>
         </div>`;
@@ -777,7 +799,24 @@ function createRequestEditor(container, options) {
     // --- MODIFICATION END ---
 
     // --- Existing listeners + NEW onFailure listener ---
-    methodSelect.addEventListener('change', () => { localStep.method = methodSelect.value; setDirtyState(true); });
+    methodSelect.addEventListener('change', () => {
+        localStep.method = methodSelect.value;
+        methodSelect.closest('.request-bar')?.setAttribute('data-method', methodSelect.value);
+        setDirtyState(true);
+    });
+
+    // Retries ({ count, delayMs } — engine contract in flowRunner; model round-trip in flowCore).
+    const retryCountInput = container.querySelector(`#request-retry-count-${localStep.id}`);
+    const retryDelayInput = container.querySelector(`#request-retry-delay-${localStep.id}`);
+    const syncRetries = () => {
+        const count = Math.max(0, Math.floor(Number(retryCountInput.value) || 0));
+        const delayMs = Math.max(0, Number(retryDelayInput.value) || 0);
+        if (count > 0) localStep.retries = { count, delayMs };
+        else delete localStep.retries;
+        setDirtyState(true);
+    };
+    retryCountInput?.addEventListener('change', syncRetries);
+    retryDelayInput?.addEventListener('change', syncRetries);
     urlInput.addEventListener('input', () => { localStep.url = urlInput.value; setDirtyState(true); });
     bodyTextarea.addEventListener('input', () => { localStep.body = bodyTextarea.value; bodyError.style.display = 'none'; refreshRawBodyMarkers(); setDirtyState(true); });
     // --- MODIFICATION START: Add listener for onFailure ---

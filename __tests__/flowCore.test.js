@@ -406,3 +406,31 @@ describe('findStepById', () => {
     expect(findStepById(steps, 'nonexistent')).toBeNull();
   });
 });
+
+// --- Wave 3.9: step.retries round-trip (the engine honored it since Wave 2,
+// but the model layer silently dropped it — editor UI now depends on this) ---
+describe('step.retries round-trip (additive)', () => {
+    it('carries retries through load and save when count > 0', () => {
+        const json = {
+            name: 'r', description: '', headers: {}, staticVars: {},
+            steps: [{ id: 's1', name: 'S', type: 'request', method: 'GET', url: 'http://a',
+                      retries: { count: 2, delayMs: 500 } }],
+        };
+        const model = jsonToFlowModel(json);
+        expect(model.steps[0].retries).toEqual({ count: 2, delayMs: 500 });
+        const out = flowModelToJson(model);
+        expect(out.steps[0].retries).toEqual({ count: 2, delayMs: 500 });
+    });
+
+    it('emits NO retries key when absent or count is 0 (golden byte-stability)', () => {
+        const json = {
+            name: 'r', description: '', headers: {}, staticVars: {},
+            steps: [{ id: 's1', name: 'S', type: 'request', method: 'GET', url: 'http://a' }],
+        };
+        const model = jsonToFlowModel(json);
+        expect(model.steps[0].retries).toBeUndefined();
+        model.steps[0].retries = { count: 0, delayMs: 999 };
+        const out = flowModelToJson(model);
+        expect(out.steps[0].retries).toBeUndefined();
+    });
+});

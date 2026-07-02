@@ -3857,3 +3857,149 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
     margin-bottom: var(--space-lg);
 }
 .runner-content .variables-panel .variables-container { flex: 1; min-height: 0; overflow-y: auto; }
+
+
+/* ============ Step editor v2: composite request bar + underline tabs + rhythm ============ */
+
+/* The canonical API-tool control: [METHOD | url ......... | {{...}} | cURL] */
+.request-bar {
+    display: flex;
+    align-items: stretch;
+    width: 100%;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+    transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
+}
+.request-bar:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.request-bar-method {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    border-right: 1px solid var(--border);
+    background: var(--surface-sunken);
+    padding: 9px 26px 9px 12px;
+    font-family: var(--font-family-code);
+    font-size: var(--fs-caption);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--rm, var(--method-neutral));
+    cursor: pointer;
+    outline: none;
+    background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position: calc(100% - 14px) 55%, calc(100% - 10px) 55%;
+    background-size: 4px 4px;
+    background-repeat: no-repeat;
+}
+.request-bar[data-method="GET"] .request-bar-method { --rm: var(--method-get); }
+.request-bar[data-method="POST"] .request-bar-method { --rm: var(--method-post); }
+.request-bar[data-method="PUT"] .request-bar-method { --rm: var(--method-put); }
+.request-bar[data-method="PATCH"] .request-bar-method { --rm: var(--method-patch); }
+.request-bar[data-method="DELETE"] .request-bar-method { --rm: var(--method-delete); }
+.request-bar-url {
+    flex: 1;
+    min-width: 0;
+    border: none !important;
+    outline: none;
+    box-shadow: none !important;
+    background: transparent;
+    padding: 9px 12px;
+    font-family: var(--font-family-code);
+    font-size: var(--fs-body);
+    color: var(--text);
+}
+.request-bar-url::placeholder { color: var(--text-faint, var(--text-muted)); }
+.request-bar-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    border-left: 1px solid var(--border);
+    background: transparent;
+    padding: 0 12px;
+    color: var(--text-muted);
+    font-size: var(--fs-body);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+    white-space: nowrap;
+}
+.request-bar-seg:hover { background: var(--surface-sunken); color: var(--text); }
+
+/* Underline tabs (replace the boxed 2005-era tab strip) */
+.form-tabs .tab-buttons {
+    border-bottom: 1px solid var(--border);
+    gap: 2px;
+    margin-bottom: var(--space-lg);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+}
+.form-tabs .tab-button {
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    margin: 0;
+    padding: 8px 12px 10px;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: var(--fs-body);
+    position: relative;
+    bottom: 0;
+    white-space: nowrap;
+}
+.form-tabs .tab-button:hover { color: var(--text); background: var(--surface-sunken); }
+.form-tabs .tab-button.active {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-weight: 600;
+}
+.form-tabs .tab-button.active::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--accent);
+}
+
+/* Editor rhythm: composed column, never a void */
+.step-editor-content { max-width: 760px; }
+.editor-header h3 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.editor-header { gap: 12px; }
+
+/* Retries controls */
+.retries-row { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: end; }
+.retries-field {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--fs-body);
+    color: var(--text-muted);
+    font-weight: 500;
+}
+.retries-field input[type="number"] { width: 84px; padding: 6px 8px; }
+.retries-unit { color: var(--text-faint, var(--text-muted)); }
+
+/* Step list rows: one quiet chip vocabulary */
+.request-info { flex-wrap: nowrap; gap: 8px; margin-bottom: 6px; min-width: 0; }
+.request-details { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: var(--fs-caption); color: var(--text-muted); }
+.request-headers-badge, .request-body-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--surface-sunken);
+    border: 1px solid var(--border);
+    font-size: var(--fs-caption);
+    color: var(--text-muted);
+}
+.request-extractions { display: inline-flex; align-items: center; gap: 5px; }
+.request-extractions > span:first-child { font-size: var(--fs-caption); color: var(--text-faint, var(--text-muted)); }

@@ -113,6 +113,16 @@ export function flowModelToJson(flowModel) {
           jsonStep.assertions = step.assertions.map(a => ({ ...a }));
         }
         // === END WAVE3 assertions ===
+
+        // Additive per-request retries ({ count, delayMs }; engine: flowRunner).
+        // Only written when count > 0 so retry-free flows stay byte-identical.
+        if (step.retries && typeof step.retries === 'object'
+            && Number.isFinite(step.retries.count) && step.retries.count > 0) {
+          jsonStep.retries = {
+            count: Math.floor(step.retries.count),
+            delayMs: Math.max(0, Number.isFinite(step.retries.delayMs) ? step.retries.delayMs : 0),
+          };
+        }
       } else if (step.type === 'condition') {
         jsonStep.condition = step.condition || '';
         // Store structured condition data if available (preferred)
@@ -267,6 +277,17 @@ export function jsonToFlowModel(json) {
             .map(a => ({ ...a }));
         }
         // === END WAVE3 assertions ===
+
+        // Additive per-request retries: carried into the model when valid so the
+        // editor can show it and the engine (flowRunner) can honor it. Absent ⇒
+        // no key on the model (pre-existing flows round-trip byte-identically).
+        if (jsonStep.retries && typeof jsonStep.retries === 'object'
+            && Number.isFinite(jsonStep.retries.count) && jsonStep.retries.count > 0) {
+          step.retries = {
+            count: Math.floor(jsonStep.retries.count),
+            delayMs: Math.max(0, Number.isFinite(jsonStep.retries.delayMs) ? jsonStep.retries.delayMs : 0),
+          };
+        }
       } else if (jsonStep.type === 'condition') {
         step.condition = jsonStep.condition || '';
         if (jsonStep.conditionData) {
