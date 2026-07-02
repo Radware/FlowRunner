@@ -1,0 +1,92 @@
+/*
+ * Spike-only styling. In the real app the Wave-1 OKLCH tokens (--surface,
+ * --text, --accent, --run-*, --border, --focus-ring) come from styles.css; here
+ * we declare fallbacks so the standalone spike renders, but every rule PREFERS
+ * the token via var(--token, fallback). This demonstrates the island can consume
+ * the app's design tokens with zero hardcoded colors on the app side.
+ */
+:root {
+    --surface: #0f172a;
+    --surface-raised: #1e293b;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #6366f1;
+    --border: #334155;
+    --run-success: #10b981;
+    --run-error: #ef4444;
+    --run-skipped: #f59e0b;
+    --run-running: #3b82f6;
+    --focus-ring: #818cf8;
+}
+
+html, body, #root {
+    height: 100%;
+    margin: 0;
+}
+body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+}
+
+.flow-node {
+    width: 260px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    overflow: hidden;
+}
+.flow-node.selected {
+    outline: 2px solid var(--focus-ring);
+}
+.flow-node .node-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    background: color-mix(in oklab, var(--surface-raised), var(--accent) 12%);
+    font-weight: 600;
+}
+.flow-node .node-name { flex: 1; }
+.flow-node .node-actions .btn-node-action {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.flow-node .node-content {
+    padding: 8px 10px;
+    color: var(--text-muted);
+}
+.flow-node code { color: var(--text); }
+.flow-node .request-method { color: var(--accent); font-weight: 700; }
+.flow-node .node-runtime-details {
+    padding: 4px 10px;
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+}
+.node-runtime-details.status-running { color: var(--run-running); }
+.node-runtime-details.status-error { color: var(--run-error); }
+
+/* Highlight classes applied by highlightNode(). */
+.react-flow__node.run-running .flow-node { border-color: var(--run-running); }
+.react-flow__node.run-error .flow-node { border-color: var(--run-error); }
+.react-flow__node.run-skipped .flow-node { border-color: var(--run-skipped); }
+
+.spike-log {
+    position: fixed;
+    bottom: 8px;
+    right: 8px;
+    width: 340px;
+    max-height: 40vh;
+    overflow: auto;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    font: 11px/1.4 ui-monospace, monospace;
+    color: var(--text-muted);
+    z-index: 10;
+}
