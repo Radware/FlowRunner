@@ -189,12 +189,22 @@ export function parseCurl(curlString) {
     const valueFlags = new Set([
         '-X', '--request',
         '-H', '--header',
-        '-d', '--data', '--data-raw', '--data-binary', '--data-ascii',
+        '-d', '--data', '--data-raw', '--data-binary', '--data-ascii', '--data-urlencode',
         '--url',
         '-u', '--user',
         '-e', '--referer',
         '-A', '--user-agent',
-        '-b', '--cookie'
+        '-b', '--cookie',
+        // Value-taking flags we ignore, listed so their VALUE is consumed and
+        // never mistaken for the URL (--connect-timeout 5 must not import
+        // a request to "5").
+        '-o', '--output', '-T', '--upload-file', '-F', '--form', '--form-string',
+        '-w', '--write-out', '-m', '--max-time', '--connect-timeout',
+        '--retry', '--retry-delay', '--retry-max-time', '--limit-rate',
+        '-c', '--cookie-jar', '-x', '--proxy', '-U', '--proxy-user',
+        '--cacert', '--capath', '--cert', '--key', '--ciphers',
+        '--resolve', '--interface', '--dns-servers', '-r', '--range',
+        '--max-redirs', '--keepalive-time', '--happy-eyeballs-timeout-ms'
     ]);
 
     for (let i = 1; i < argv.length; i++) {
@@ -240,8 +250,12 @@ export function parseCurl(curlString) {
             // Unknown boolean flag (e.g. --compressed, -k, -s, -L). Ignore it.
             continue;
         } else {
-            // First bare argument is the URL.
-            if (url === null) {
+            // First bare argument that plausibly IS a URL. Values of exotic
+            // value-taking flags we don't know about would otherwise land here.
+            const looksLikeUrl = /^https?:\/\//i.test(arg) || /^\{\{/.test(arg)
+                || /^localhost([:/?]|$)/i.test(arg)
+                || /^[a-z0-9.-]+\.[a-z]{2,}([:/?]|$)/i.test(arg);
+            if (url === null && looksLikeUrl) {
                 url = arg;
             }
         }

@@ -434,3 +434,27 @@ describe('step.retries round-trip (additive)', () => {
         expect(out.steps[0].retries).toBeUndefined();
     });
 });
+
+// --- v1.3.0 sweep: unquoted body markers must survive a load->save round-trip.
+// Regression for a silent pre-1.3 corruption: jsonToFlowModel decoded
+// ##VAR:unquoted:x## to a quoted "{{x}}" in the editor text, so the next save
+// re-classified it as ##VAR:string:x## and the request body's JSON type changed.
+describe('unquoted body variable round-trip', () => {
+    test('load -> save preserves ##VAR:unquoted:...## markers', () => {
+        const json = {
+            name: 'RT', steps: [{
+                id: 's1', name: 'Post', type: 'request', method: 'POST',
+                url: 'http://x', headers: {},
+                body: { id: '##VAR:unquoted:userId##', tag: '##VAR:string:label##', n: 1 },
+            }],
+        };
+        const model = jsonToFlowModel(json);
+        // Editor text shows the unquoted var bare and the string var quoted.
+        expect(model.steps[0].body).toContain('"id": {{userId}}');
+        expect(model.steps[0].body).toContain('"tag": "{{label}}"');
+        const out = flowModelToJson(model);
+        expect(out.steps[0].body.id).toBe('##VAR:unquoted:userId##');
+        expect(out.steps[0].body.tag).toBe('##VAR:string:label##');
+        expect(out.steps[0].body.n).toBe(1);
+    });
+});

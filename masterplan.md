@@ -23,7 +23,7 @@ FlowRunner UI is one of **three apps that share the `.flow.json` "FlowMap" filet
 - **Tester / QA** — validate and debug multi-step API behavior.
 - **Developer** — prototype multi-step API integrations.
 
-## Current state (v1.2.1)
+## Current state (v1.3.0)
 
 Shipped and solid:
 - **Authoring:** flow metadata, global headers, typed static vars (String/Number/Boolean/JSON); four step types — **Request, Condition, Loop, Transform**; response extraction (`.status`/`headers.*`/`body`/JSON paths); `{{var}}` substitution (quoted/unquoted in body); special vars `RANDOM_IP` / `RANDOM_INT` / `RANDOM_STRING`; variable-insertion helper; Copy cURL.
@@ -38,7 +38,7 @@ Shipped and solid:
 A large multi-wave sprint is **in progress on a branch, not yet merged/released**. Full status + honest gaps: **[docs/sprint-status.md](docs/sprint-status.md)**.
 
 - **Landed + verified** (476 tests, packaged builds green, backward-compat locked): design-token foundation + projector theme, elkjs auto-layout + **Tidy Up**, `electron-store` recent-files + sidecar workspace, **Basic/Power inspector**, **palettes / Cmd+K / fuzzy search / undo-redo**, request **retries** + **cURL/HAR import**, per-step **assertions** + run summary, **Demo Mode** + first-run, additive **`schemaVersion`** stamping, and a flag-gated **React Flow island** engine (off by default). Cross-app: flowrunner-cli [PR #36](https://github.com/rdwr-taly/flowrunner-cli/pull/36).
-- **NOT done — the honest gap:** the **visual overhaul itself is not applied yet** — only *proof surfaces* were restyled and the styles.css token migration was deferred, so the app still largely *looks* like the old basic UI. That (a bold modern redesign via the `impeccable` + `ui-ux-pro-max` skills, finishing the token migration) is the **#1 priority for the next session**, along with getting the React island to render nodes, then Wave 4 (subflows, environments, canonical schema).
+- **v1.3.0 (July 2026) shipped the overhaul:** Sentinel v2 shell (rail / topbar run cluster / drawer / tabbed inspector), full OKLCH token system with light+dark themes, folder-based flow manager, command palette, Present mode, onboarding, in-app dialogs, **Background Runs page** (continuous runs while authoring), console-grammar results feed, node instrument chips, per-step retries + assertions, cURL/HAR import, undo/redo. Remaining next: React island node adapter (flag-gated, off by default), then Wave 4 (subflows, environments, canonical schema).
 
 ## Roadmap
 

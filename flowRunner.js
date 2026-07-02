@@ -25,6 +25,7 @@ export class FlowRunner {
         this.onError = options.onError || (() => {}); // (resultIndex, step, error, context, executionPath) => {}
         this.onContextUpdate = options.onContextUpdate || (() => {}); // (context) => {}
         this.onIterationStart = options.onIterationStart || (() => {}); // NEW: Called at the start of each continuous run iteration
+        this.onIterationComplete = options.onIterationComplete || (() => {}); // Called when a continuous iteration finishes cleanly (before the between-iterations delay)
         this.updateRunnerUICallback = options.updateRunnerUICallback || (() => {}); // Callback to request UI update
         this.encodeUrlVars = options.encodeUrlVars ?? false; // Whether to URL-encode substituted variables in URLs
 
@@ -231,6 +232,7 @@ export class FlowRunner {
         // Handle continuous mode scheduling or completion
         if (this.isContinuousModeActive && !this.state.stopRequested && this.currentFlowModelForContinuousRun) {
             logger.info("[FlowRunner] Scheduling next continuous iteration");
+            this.onIterationComplete();
             this.onMessage("Continuous run: Iteration complete. Scheduling next run...", "info");
             this.state.isRunning = false;
             this.updateRunnerUICallback?.();

@@ -75,7 +75,8 @@ export function startBackgroundRun({ model, name, continuous = false, delayMs = 
         delayMs,
         status: 'running',            // running | passed | failed | stopped
         iterations: 0,                // completed iterations
-        currentIteration: 0,          // 1-based; continuous mode is delimited by onIterationStart
+        currentIteration: 1,          // 1-based; we are in iteration 1 from launch
+        _iterationOpen: true,         // true while an iteration is executing (unclosed)
         passes: 0,
         fails: 0,
         startedAt: Date.now(),
@@ -91,11 +92,14 @@ export function startBackgroundRun({ model, name, continuous = false, delayMs = 
         if (run.results.length > RESULT_BUFFER) run.results.shift();
     };
 
-    // The engine calls onFlowComplete only for single runs / the very end of a
-    // continuous session; continuous iterations are delimited by
-    // onIterationStart. Close the books on the previous iteration there.
+    // Iterations are closed EAGERLY on the engine's onIterationComplete (fired
+    // before the between-iterations delay) — closing lazily on the NEXT
+    // onIterationStart would lose the final completed iteration from the
+    // tallies whenever the user stops during the wait window (the common case
+    // for short flows).
     const closeIteration = () => {
-        if (run.currentIteration === 0) return;
+        if (!run._iterationOpen) return;
+        run._iterationOpen = false;
         run.iterations += 1;
         if (run._iterationHadError) run.fails += 1; else run.passes += 1;
         run._iterationHadError = false;
@@ -112,7 +116,7 @@ export function startBackgroundRun({ model, name, continuous = false, delayMs = 
             if (result.status === 'error') run._iterationHadError = true;
             pushResult({
                 at: Date.now(),
-                iteration: Math.max(1, run.currentIteration),
+                iteration: run.currentIteration,
                 stepName: step?.name || 'Step',
                 method: step?.method || null,
                 status: result.status,
@@ -128,27 +132,33 @@ export function startBackgroundRun({ model, name, continuous = false, delayMs = 
             notify();
         },
         onIterationStart: () => {
-            closeIteration();
+            // Subsequent-iteration start (the engine skips this for iteration 1).
             run.currentIteration += 1;
+            run._iterationOpen = true;
+            notify();
+        },
+        onIterationComplete: () => {
+            closeIteration();
             notify();
         },
         onFlowComplete: () => {
-            // Single runs never see onIterationStart; treat the whole run as one.
-            if (run.currentIteration === 0) run.currentIteration = 1;
+            // Single runs never see onIterationComplete; close the run here.
             closeIteration();
-            run.currentIteration = 0;
             run.status = run.fails > 0 ? 'failed' : 'passed';
             run.endedAt = Date.now();
             pruneFinished();
             notify();
         },
         onFlowStopped: () => {
-            // A USER-requested stop aborts the in-flight iteration; that abort is
-            // not a failure. Only count the partial iteration when the flow
-            // stopped itself (onFailure=stop after a real error).
-            if (run._iterationHadError && !run._stopRequested) { run.fails += 1; }
+            // A USER-requested stop aborts any in-flight (still-open) iteration;
+            // that abort is not a failure. Only count the partial iteration when
+            // the flow stopped itself (onFailure=stop after a real error).
+            if (run._iterationOpen && run._iterationHadError && !run._stopRequested) {
+                run.iterations += 1;
+                run.fails += 1;
+            }
+            run._iterationOpen = false;
             run._iterationHadError = false;
-            run.currentIteration = 0;
             // A user-requested stop is not an error: the aborted request would
             // otherwise leave a scary "…failed…" line on a healthy run's card.
             if (run._stopRequested) run.lastError = null;

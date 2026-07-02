@@ -168,10 +168,12 @@ function renderConditionStepContent(container, step, variables, options) {
 
     let conditionDisplay = 'No condition set';
     if (step.conditionData?.variable && step.conditionData.operator) {
-        conditionDisplay = generateConditionPreview(step.conditionData);
+        conditionDisplay = escapeHTML(generateConditionPreview(step.conditionData));
     } else if (step.condition) {
         const parsed = parseConditionString(step.condition);
-        conditionDisplay = parsed.preview || escapeHTML(step.condition); // Use preview or escaped original
+        // Previews carry raw user text (values may contain < / >) — escape
+        // before innerHTML, same as the visualizer does for this preview.
+        conditionDisplay = parsed.preview ? escapeHTML(parsed.preview) : escapeHTML(step.condition);
     }
 
     container.innerHTML = `

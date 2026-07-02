@@ -6,6 +6,8 @@
 
 > **2026-07-02 update (Wave 3.7 — "Sentinel v2"):** the shell skeleton was overhauled (icon rail + top app bar with hero run cluster + Flows drawer + tabbed inspector absorbing the Info/Variables overlays), all native confirm()/alert() in the edit/run path replaced with an in-app dialog/toast system (demo-safe), node cards redesigned, and the **e2e suite resurrected: 20/20 passing** (was un-runnable on macOS). Jest 476/29 green. See changelog top entry. Still on the branch, not merged.
 
+> **2026-07-02 RELEASE:** dev was released as **v1.3.0** and merged to `main` (CI publishes the GitHub Release). Waves 1-3.12 are all in; the sprint's remaining items (React island adapter, Wave 4) carry over to the next cycle.
+
 ## Where we are
 
 - **Branch:** `sprint/roadmap-ux-overhaul` — 30 commits off `main`, **not yet merged**. Live until fully done + verified.

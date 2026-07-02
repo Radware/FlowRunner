@@ -187,8 +187,36 @@ export function initializeEventListeners() {
         });
         showMessage(`Background run started${continuous ? ' (continuous)' : ''} — watch it in Runs, on the left rail.`, 'success');
     });
-    // Live re-render + delegated card actions.
-    document.addEventListener('flowrunner:bgruns-changed', () => renderBackgroundRunsUI(getBackgroundRuns()));
+    // Live re-render, COALESCED: notify() fires per step completion, which at a
+    // 0ms continuous rate means hundreds of events/sec — rebuilding the board
+    // (innerHTML) on each one janks the window and destroys the Stop/Remove
+    // buttons between mousedown and mouseup, eating the click. Render at most
+    // ~4x/sec, and never while a pointer is held down inside the list.
+    let bgRenderTimer = null;
+    let bgLastRender = 0;
+    let bgPointerHeld = false;
+    let bgRenderDeferred = false;
+    const BG_RENDER_MIN_MS = 250;
+    const flushBgRender = () => {
+        bgRenderTimer = null;
+        if (bgPointerHeld) { bgRenderDeferred = true; return; }
+        bgRenderDeferred = false;
+        bgLastRender = Date.now();
+        renderBackgroundRunsUI(getBackgroundRuns());
+    };
+    const requestBgRender = () => {
+        if (bgRenderTimer !== null) return;
+        const wait = Math.max(0, BG_RENDER_MIN_MS - (Date.now() - bgLastRender));
+        bgRenderTimer = setTimeout(flushBgRender, wait);
+    };
+    document.addEventListener('flowrunner:bgruns-changed', requestBgRender);
+    document.getElementById('bg-runs-list')?.addEventListener('pointerdown', () => { bgPointerHeld = true; });
+    document.addEventListener('pointerup', () => {
+        if (!bgPointerHeld) return;
+        bgPointerHeld = false;
+        if (bgRenderDeferred) requestBgRender();
+    });
+    document.addEventListener('pointercancel', () => { bgPointerHeld = false; });
     // Open flow changed (open/close/save) while the Runs page is up → the
     // "open now" option in the launcher would lie; re-sync it.
     document.addEventListener('flowrunner:flow-context-changed', () => {
@@ -397,7 +425,11 @@ export function initializeEventListeners() {
         // Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) = redo. Only fires when
         // focus is OUTSIDE inputs (guarded above), so native text-field undo is
         // untouched inside step editors and the search boxes.
-        if (ctrlOrCmd && e.key.toLowerCase() === 'z' && !e.shiftKey && !onRunsPage) {
+        // Layout undo (Tidy Up, below) takes precedence in graph view when
+        // available — otherwise one keypress would fire BOTH undos.
+        const layoutUndoWins = appState.currentView === 'node-graph'
+            && appState.visualizerComponent?.canUndoLayout?.();
+        if (ctrlOrCmd && e.key.toLowerCase() === 'z' && !e.shiftKey && !onRunsPage && !layoutUndoWins) {
             e.preventDefault();
             handleFlowRedoUndo('undo');
         }

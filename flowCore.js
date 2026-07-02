@@ -189,6 +189,47 @@ export function decodeMarkersRecursive(data) {
 
 
 /**
+ * Render a stored body (with ##VAR:type:name## markers) as editor text.
+ * CRITICAL round-trip contract: an UNQUOTED marker must come back as a bare
+ * {{var}} (no surrounding quotes) in the JSON text, otherwise the next save
+ * re-classifies it as a *string* marker and silently changes the JSON type
+ * the request sends ({"id":{{n}}} becoming {"id":"{{n}}"}). We decode unquoted
+ * markers through a sentinel, stringify, then strip the sentinel's quotes.
+ * @param {*} rawBodyWithMarkers
+ * @return {string} body text for the editor
+ */
+export function stringifyBodyForDisplay(rawBodyWithMarkers) {
+  const UNQ_RE = /^##VAR:unquoted:([^#]+)##$/;
+  const decode = (data) => {
+    if (typeof data === 'string') {
+      const unq = data.match(UNQ_RE);
+      if (unq) return `##UNQ##{{${unq[1]}}}##/UNQ##`;
+      return decodeMarkersRecursive(data);
+    } else if (Array.isArray(data)) {
+      return data.map(decode);
+    } else if (typeof data === 'object' && data !== null) {
+      const out = {};
+      for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) out[key] = decode(data[key]);
+      }
+      return out;
+    }
+    return data;
+  };
+
+  const decoded = decode(rawBodyWithMarkers);
+  if (typeof decoded === 'object' && decoded !== null) {
+    try {
+      return JSON.stringify(decoded, null, 2)
+        .replace(/"##UNQ##(\{\{[^}]+\}\})##\/UNQ##"/g, '$1');
+    } catch (e) {
+      return String(decoded);
+    }
+  }
+  return String(decoded).replace(/##UNQ##(\{\{[^}]+\}\})##\/UNQ##/g, '$1');
+}
+
+/**
  * Convert JSON representation (from backend) to internal flow model.
  * Restores {{variable}} syntax for UI display.
  * @param {Object} json - JSON flow definition from backend.
@@ -252,17 +293,7 @@ export function jsonToFlowModel(json) {
                 logger.warn(`Could not deep copy body for step ${step.id}, storing reference.`, e);
                 step.rawBodyWithMarkers = jsonStep.body;
             }
-            const decodedBodyForUI = decodeMarkersRecursive(step.rawBodyWithMarkers);
-            if (typeof decodedBodyForUI === 'object' && decodedBodyForUI !== null) {
-                 try {
-                    step.body = JSON.stringify(decodedBodyForUI, null, 2);
-                 }
-                 catch (e) {
-                     step.body = String(decodedBodyForUI);
-                 }
-            } else {
-                step.body = String(decodedBodyForUI);
-            }
+            step.body = stringifyBodyForDisplay(step.rawBodyWithMarkers);
         }
         // Upgrade extract paths for backward compatibility
         step.extract = upgradeExtractPaths(jsonStep.extract || {});
@@ -911,7 +942,10 @@ export function validateFlow(flowModel) {
             if (!sourceVar) {
               result.valid = false;
               result.errors.push(`${currentPath}: Loop source variable is required. Enter a variable or path to an array.`);
-            } else if (!currentAvailableVars.has(sourceVar)) {
+            } else if (!currentAvailableVars.has(sourceVar.split(/[.[]/)[0])) {
+              // Dotted/indexed paths (items.data, resp.items[0]) are valid loop
+              // sources — the runtime evaluates the path; only the base variable
+              // must be defined.
               result.valid = false;
               result.errors.push(`${currentPath}: Loop source references undefined variable \"{{${sourceVar}}}\".\n\nHint: Make sure this variable is defined earlier in the flow or as a static variable.`);
             }

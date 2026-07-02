@@ -8,6 +8,20 @@
 
 ---
 
+## v1.3.0 — release round: final bug sweep (18-agent panel, 11 distinct confirmed findings, all fixed)
+- **[HIGH] Flow-format round-trip corruption (pre-existing since v1.0):** loading a flow decoded `##VAR:unquoted:x##` body markers to a QUOTED `"{{x}}"` in the editor text, so the next save silently re-classified them as string markers — `{"id":{{n}}}` became `{"id":"{{n}}"}` and the request's JSON types changed (breaking strict APIs and the shared CLI contract). New `stringifyBodyForDisplay()` renders unquoted markers bare; regression test locks the round-trip.
+- **[HIGH] Runs board re-rendered on EVERY engine event** (hundreds/sec at 0ms delay): window-wide jank, and Stop/Remove buttons destroyed between mousedown and mouseup — clicks eaten, runs unstoppable. Renders now coalesce (≥250ms apart) and defer while a pointer is held down in the list. Validated live: a real mouse click stopped a ~500-iterations/sec run at #3032.
+- **Background-run tallies dropped the final iteration on user stop:** iterations were closed lazily on the NEXT onIterationStart, so stopping in the between-iterations window (the common case) under-counted by one. New additive engine callback `onIterationComplete` closes iterations eagerly; validated live (chip #23 → "23 iterations · 23 passed").
+- **Quit silently killed live background runs:** the quit/close guard predicate ignored them (only foreground state counted); now includes `hasLiveBackgroundRuns()`, plus `stopAllBackgroundRuns()` on beforeunload aborts in-flight fetches.
+- **Enter in a confirm dialog always confirmed** even when the danger-dialog focus sat on Cancel — Enter now activates the focused button.
+- **One Ctrl/Cmd+Z fired BOTH undos** (flow-model + Tidy-Up layout) in graph view — layout undo now takes precedence when available.
+- **Undo/redo with the node-editor modal open left a stale editor** — render() now closes it if the step vanished and refreshes it when clean (dirty edits stay).
+- **Condition preview injected unescaped user text** into the List-view card (`<`/`>` broke or injected HTML) — escaped, matching the graph view.
+- **Import cURL: unknown value-taking flags ate the URL** (`--connect-timeout 5` imported a request to "5") — known-flags list extended + bare tokens must look like a URL.
+- **The X on a flow filed in a folder did nothing** (removed from recents, re-rendered from the workspace) — it now also removes the flow from the workspace/folder.
+- **validateFlow rejected dotted loop sources** (`{{resp.items}}`) that the runtime executes fine — only the base variable must be defined now.
+- Deterministic pre-release check: renderer import graph (38 modules) vs `build.files` — complete; CI island build verified coherent.
+
 ## Unreleased — the Runs page (Wave 3.12)
 - **Background runs got their own page** (user: "a special page accessible from the left-hand menu"), replacing the Runs inspector tab from 3.11 after one day — monitoring N continuous runs is a workspace-level activity, not a property of the open flow. New rail button (with live-count badge) toggles `#runs-page`, which swaps out drawer+workspace+inspector (`.app-container.page-runs`; topbar and rail stay). The page: quiet aggregate line ("2 live · 232 iterations · 232 passed · 0 failed"), a launcher row (flow picker + Continuous/Delay + Start run), and a responsive grid of run cards. The inspector is flow-scoped again: Results | Variables | Config.
 - **Launch any flow, not just the open one:** the picker lists the current flow ("open now, unsaved edits included") plus recent files, read fresh from disk via new `readFlowModelFromPath()` (never touches the editor). In the browser (no electronAPI) file entries are disabled with a hint; the current flow still works.

@@ -15,7 +15,7 @@ import { showConfirmDialog, showInputDialog } from './dialogs.js';
 import {
     createEmptyWorkspace, parseWorkspace, serializeWorkspace,
     addFolder, renameFolder, removeFolder, listChildFolders,
-    moveFlowToFolder, listFlowsInFolder,
+    moveFlowToFolder, listFlowsInFolder, removeFlow,
 } from './workspaceManager.js';
 import { showValidationErrors } from './uiUtils.js';
 import { initializeAppComponents } from './app.js'; // <-- ADDED IMPORT
@@ -527,6 +527,11 @@ export async function handleFlowListActions(event) {
                 let currentRecent = getRecentFiles();
                 currentRecent = currentRecent.filter(p => p !== filePathToRemove);
                 localStorage.setItem(RECENT_FILES_KEY, JSON.stringify(currentRecent));
+                // Filed flows live in the workspace, not the recent list — drop
+                // them there too or the row re-renders inside its folder with a
+                // dead X (and folders keep referencing files deleted from disk).
+                removeFlow(workspaceModel, filePathToRemove);
+                persistWorkspace();
                 if (window.electronAPI && typeof window.electronAPI.removeRecentFile === 'function') {
                     Promise.resolve(window.electronAPI.removeRecentFile(filePathToRemove)).catch(err => {
                         logger.warn("Failed to remove recent file from electron-store:", err);

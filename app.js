@@ -18,6 +18,7 @@ import {
     highlightStepInList, clearListViewHighlights,
     syncPanelVisibility
 } from './uiUtils.js';
+import { hasLiveBackgroundRuns, stopAllBackgroundRuns } from './backgroundRuns.js';
 
 // --- Application Features ---
 import {
@@ -202,6 +203,9 @@ document.addEventListener('DOMContentLoaded', () => {
     updateWorkspaceTitle();
     setDirty(); // Initialize dirty state/UI
     loadPersistedUIStates();
+    // Abort in-flight background-run fetches when the window actually closes
+    // (the quit guard above has already given the user their chance to say no).
+    window.addEventListener('beforeunload', () => { try { stopAllBackgroundRuns(); } catch (_) { /* teardown */ } });
     checkElectronAPI();
     checkForUpdate(); // Startup update check (silent on failure)
 
@@ -211,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof window.electronAPI.onCheckDirtyState === 'function') {
             window.electronAPI.onCheckDirtyState(() => {
                 // Combine flow dirty state, step editor dirty state, and continuous run state
-                const needsUserAttention = appState.isDirty || appState.stepEditorIsDirty || appState.isContinuousRunActive;
+                const needsUserAttention = appState.isDirty || appState.stepEditorIsDirty || appState.isContinuousRunActive || hasLiveBackgroundRuns();
                 logger.debug('[Renderer] IPC: Received check-dirty-state, responding with (needsUserAttention):', needsUserAttention);
                 if (typeof window.electronAPI.sendDirtyStateResponse === 'function') {
                     window.electronAPI.sendDirtyStateResponse(needsUserAttention);

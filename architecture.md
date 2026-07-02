@@ -140,9 +140,9 @@ Open button → eventHandlers.handleOpenFile() → fileOperations: confirmDiscar
 - **Style:** four-space indent, semicolons, ES modules throughout.
 - **Test coverage today:** Jest unit tests for `flowCore` (id gen, model↔JSON, variable extraction, `evaluatePath`, `validateFlow`, body JSON validation, marker pre/decode, step CRUD, condition helpers) and `flowRunner` (state, sequential/condition/loop execution, extraction, substitution, onFailure stop/continue, Stop+fetch-abort, delay); component render tests; IPC/file-I/O integration tests; E2E flows (simple-request, ui-interactions drag/drop, complex flow-execution, step-through). Manual regression cases for v1.2.0 features are listed in [masterplan.md](masterplan.md).
 
-## 11. Sprint additions (branch `sprint/roadmap-ux-overhaul`, unreleased)
+## 11. Sprint additions (shipped in v1.3.0)
 
-New subsystems added by the in-progress overhaul sprint (status + gaps: [docs/sprint-status.md](docs/sprint-status.md)). These live on the sprint branch, not yet on `main`.
+New subsystems added by the 2026 UX-overhaul sprint (history: [docs/sprint-status.md](docs/sprint-status.md)). Landed on `main` with the v1.3.0 release, together with the Sentinel v2 shell (rail/topbar/drawer/inspector), the folder-based flow manager, in-app dialogs (no native confirm/prompt — gotcha 2g), and background runs (`backgroundRuns.js` + the Runs page, §6).
 
 | Module / area | Role |
 |---|---|

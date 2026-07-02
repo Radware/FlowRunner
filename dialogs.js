@@ -124,7 +124,12 @@ export function showConfirmDialog(message, opts = {}) {
         const onBackdrop = (e) => { if (e.target === overlay) close(false); };
         const onKey = (e) => {
             if (e.key === 'Escape') { e.stopPropagation(); close(false); }
-            else if (e.key === 'Enter') { e.stopPropagation(); close(true); }
+            else if (e.key === 'Enter') {
+                e.stopPropagation();
+                // Respect focus: danger dialogs deliberately focus Cancel, so
+                // Enter there must cancel, not destroy.
+                close(document.activeElement !== cancelBtn);
+            }
         };
 
         okBtn.addEventListener('click', onOk);

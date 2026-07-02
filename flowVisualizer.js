@@ -397,6 +397,26 @@ export class FlowVisualizer {
         this._setNodeEditorDirty(false);
     }
 
+    /**
+     * Keep the node-editor modal honest across re-renders (undo/redo, external
+     * edits): close it if its step no longer exists; refresh it from the new
+     * model when the user has no unsaved edits. Dirty edits are left alone —
+     * the user's in-progress typing wins until they save or cancel.
+     */
+    _syncNodeEditorWithModel() {
+        if (!this.nodeEditorModal || this.nodeEditorModal.style.display !== 'flex') return;
+        const stepId = this.activeEditorStepId;
+        const step = stepId && this.flowModel
+            ? this._findStepById(this.flowModel.steps, stepId) : null;
+        if (!step) {
+            this._closeNodeEditor(true);
+            return;
+        }
+        if (!this.nodeEditorDirty) {
+            this._openNodeEditor(stepId);
+        }
+    }
+
     _shouldStartCanvasPan(event) {
         if (!event || event.button !== 0) return false;
         if (!this.editor || !this.editor.precanvas) return false;
@@ -514,6 +534,7 @@ export class FlowVisualizer {
     render(flowModel, selectedStepId) {
         this.flowModel = flowModel;
         this.selectedNodeId = selectedStepId;
+        this._syncNodeEditorWithModel();
         this.nodes.clear();
         this.nodeIdByStepId.clear();
         this.stepIdByNodeId.clear();
