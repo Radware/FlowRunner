@@ -6,7 +6,7 @@ import {
     saveCurrentFlow, handleSaveAs, confirmDiscardChanges,
     handleCancelFlow, handleCloseFlow,
     getRecentFiles, handleSelectFlow, initializeFlowManager,
-    readFlowModelFromPath
+    readFlowModelFromPath, isFlowSelectMode, setFlowSelectMode
 } from './fileOperations.js';
 import {
     handleRunFlow,
@@ -52,6 +52,9 @@ import { applyFileSearch, applyStepsSearch } from './uiUtils.js';
 import { initDemoMode } from './demoMode.js';
 import { maybeShowOnboarding, renderEmptyState } from './firstRun.js';
 import { startBackgroundRun, stopBackgroundRun, removeBackgroundRun, getBackgroundRuns } from './backgroundRuns.js';
+import { openRunPicker } from './runPicker.js';
+import { openLaunchConfig } from './launchConfigPopover.js';
+import { launchCurrentFlow } from './launchFlows.js';
 
 // Controller for the Demo-Mode toggle, created in initializeEventListeners so
 // the keyboard shortcut and the toolbar button drive the SAME state machine.
@@ -82,38 +85,8 @@ export function setActivePage(page) {
     pageEl.hidden = !runs;
     document.getElementById('rail-runs-btn')?.setAttribute('aria-pressed', String(runs));
     if (runs) {
-        populateRunsLauncher();
         renderBackgroundRunsUI(getBackgroundRuns());
     }
-}
-
-/** Fill the Runs-page flow picker: current flow first, then recent files. */
-function populateRunsLauncher() {
-    const select = document.getElementById('runs-launch-select');
-    if (!select) return;
-    const previous = select.value;
-    const canReadFiles = !!(window.electronAPI && typeof window.electronAPI.readFile === 'function');
-    const options = [];
-    if (appState.currentFlowModel) {
-        const name = appState.currentFlowModel.name || 'Untitled flow';
-        options.push(`<option value="${RUNS_LAUNCH_CURRENT}">${escapeHTML(name)} — open now${appState.isDirty ? ', unsaved edits included' : ''}</option>`);
-    }
-    const currentPath = appState.currentFilePath;
-    getRecentFiles().filter((p) => p !== currentPath).forEach((p) => {
-        const name = p.split(/[\\/]/).pop();
-        options.push(`<option value="${escapeHTML(p)}"${canReadFiles ? '' : ' disabled'}>${escapeHTML(name)}</option>`);
-    });
-    select.innerHTML = options.length
-        ? options.join('')
-        : '<option value="" disabled selected>No flows yet — open or create one first</option>';
-    if (previous && [...select.options].some((o) => o.value === previous && !o.disabled)) {
-        select.value = previous;
-    }
-    if (!canReadFiles && options.length) {
-        select.title = 'In the browser only the currently open flow can be launched; file access requires the desktop app.';
-    }
-    const startBtn = document.getElementById('runs-launch-btn');
-    if (startBtn) startBtn.disabled = !select.value;
 }
 
 // --- Initialization of Listeners ---
@@ -171,22 +144,22 @@ export function initializeEventListeners() {
     });
 
     // --- Background runs / Runs page ---
-    // Quick launcher in the Results pane: snapshot the CURRENT flow with the
-    // current Continuous/Delay settings and stay put — the author keeps their
-    // editing context; the rail badge and topbar chip show it's alive.
-    document.getElementById('bg-run-btn')?.addEventListener('click', () => {
-        if (!appState.currentFlowModel) return;
-        const continuous = !!domRefs.continuousRunCheckbox?.checked;
-        const delayMs = parseDelayMs(domRefs.requestDelayInput?.value);
-        startBackgroundRun({
-            model: appState.currentFlowModel,
-            name: appState.currentFlowModel.name,
-            continuous,
-            delayMs,
-            encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked,
+    // Send-current: open the quick-config popover (Continuous / Delay), then
+    // launch the LIVE flow model (unsaved edits included) into the background.
+    // The topbar control is primary; the buried inspector button mirrors it.
+    const openCurrentFlowConfig = (anchorEl) => {
+        const model = appState.currentFlowModel;
+        if (!model || !(model.steps || []).length) return;
+        openLaunchConfig({
+            anchorEl,
+            count: 1,
+            onLaunch: (cfg) => launchCurrentFlow({ ...cfg, encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked }),
         });
-        showMessage(`Background run started${continuous ? ' (continuous)' : ''} — watch it in Runs, on the left rail.`, 'success');
-    });
+    };
+    document.getElementById('bg-run-current-btn')?.addEventListener('click', (e) => openCurrentFlowConfig(e.currentTarget));
+    document.getElementById('bg-run-btn')?.addEventListener('click', (e) => openCurrentFlowConfig(e.currentTarget));
+    // Runs page: the "New background run" button opens the full modal picker.
+    document.getElementById('runs-new-run-btn')?.addEventListener('click', () => openRunPicker());
     // Live re-render, COALESCED: notify() fires per step completion, which at a
     // 0ms continuous rate means hundreds of events/sec — rebuilding the board
     // (innerHTML) on each one janks the window and destroys the Stop/Remove
@@ -217,11 +190,6 @@ export function initializeEventListeners() {
         if (bgRenderDeferred) requestBgRender();
     });
     document.addEventListener('pointercancel', () => { bgPointerHeld = false; });
-    // Open flow changed (open/close/save) while the Runs page is up → the
-    // "open now" option in the launcher would lie; re-sync it.
-    document.addEventListener('flowrunner:flow-context-changed', () => {
-        if (appState.activePage === 'runs') populateRunsLauncher();
-    });
     document.getElementById('bg-runs-list')?.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-bg-action]');
         if (!btn) return;
@@ -245,36 +213,6 @@ export function initializeEventListeners() {
         e.stopImmediatePropagation();
         setActivePage('flow');
     }, { capture: true });
-    // Runs-page launcher: current flow or any recent flow file (read fresh from
-    // disk — the open editor is never touched).
-    document.getElementById('runs-launch-select')?.addEventListener('change', () => {
-        const select = document.getElementById('runs-launch-select');
-        const startBtn = document.getElementById('runs-launch-btn');
-        if (startBtn) startBtn.disabled = !select?.value;
-    });
-    document.getElementById('runs-launcher')?.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const value = document.getElementById('runs-launch-select')?.value;
-        if (!value) return;
-        const continuous = !!document.getElementById('runs-launch-continuous')?.checked;
-        const delayMs = parseDelayMs(document.getElementById('runs-launch-delay')?.value);
-        try {
-            const model = value === RUNS_LAUNCH_CURRENT
-                ? appState.currentFlowModel
-                : await readFlowModelFromPath(value);
-            if (!model) throw new Error('No flow is open.');
-            if (!(model.steps || []).length) throw new Error('That flow has no steps.');
-            startBackgroundRun({
-                model,
-                name: model.name || value.split(/[\\/]/).pop(),
-                continuous,
-                delayMs,
-                encodeUrlVars: !!domRefs.encodeUrlVarsCheckbox?.checked,
-            });
-        } catch (err) {
-            showMessage(`Could not start the background run: ${err.message}`, 'error');
-        }
-    });
 
     // Zoom Controls
     domRefs.zoomInBtn?.addEventListener('click', () => appState.visualizerComponent?.zoomIn());
@@ -455,6 +393,9 @@ export function initializeEventListeners() {
             }
         }
         if (e.key === 'Escape') {
+            // Leave flow-list Select mode first (a common escape from a big
+            // accidental selection) before falling through to Stop.
+            if (isFlowSelectMode()) { e.preventDefault(); setFlowSelectMode(false); return; }
             e.preventDefault();
             // Trigger stop only if enabled
              if (!domRefs.stopFlowBtn?.disabled) {
@@ -1240,6 +1181,10 @@ function buildCommandItems() {
     push(appState.activePage === 'runs' ? 'Back to Editor' : 'Background Runs',
         () => setActivePage(appState.activePage === 'runs' ? 'flow' : 'runs'),
         appState.activePage === 'runs' ? 'Return to the flow editor' : 'Launch + monitor flows in the background');
+    push('Run flows in background…', () => openRunPicker(), 'Pick one or many flows to run');
+    if (hasFlow && (appState.currentFlowModel.steps || []).length) {
+        push('Run current flow in background', () => launchCurrentFlow({}), 'Snapshot the open flow, keep editing');
+    }
 
     // --- Runner ---
     if (hasFlow && domRefs.runFlowBtn && !domRefs.runFlowBtn.disabled) {

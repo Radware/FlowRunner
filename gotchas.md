@@ -62,6 +62,9 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Root cause:** `beforeEach` captured `originalGlobalSetTimeout = global.setTimeout` AFTER `jest.useFakeTimers()` had already swapped it, so `afterEach` ran `useRealTimers()` then re-installed the captured FAKE function on the global.
 - **Fix/lesson:** capture originals BEFORE `useFakeTimers()`. If a test only fails in the full run, suspect leaked globals from an earlier describe, not the test itself.
 
+### 2n. The launcher modules form intentional ES-module cycles (safe)
+- `fileOperations.js` <-> `launchFlows.js` <-> `flowIndex.js` import each other. This is fine ONLY because every cross-module reference is used inside a FUNCTION body, never at module-evaluation time (all top-level code is imports + literals + hoisted function declarations). If you add top-level code that calls across the cycle, it will read an undefined binding. Keep launcher cross-calls inside functions.
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*

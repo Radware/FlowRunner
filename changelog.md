@@ -2,11 +2,20 @@
 
 > What we shipped and **why** (decisions + rationale). This is our decision record, not just a list of features. **Add an entry at the top whenever you land a meaningful change** — record the decision and the reasoning, not only the diff. Newest first.
 
-**Current version: 1.2.1.** A version bump touches 8 files — see [architecture.md](architecture.md) §9.
+**Current version: 1.4.0.** A version bump touches 8 files — see [architecture.md](architecture.md) §9.
 
 > Dating note: README labels (e.g. v1.2.0 "Aug 2025") and git commit dates diverge (the v1.2.0 bump actually landed 2026-01-13, v1.2.1 on 2026-03-23). Git dates are authoritative for when code landed.
 
 ---
+
+## v1.4.0 — the background-run launcher: scalable, multi-entry
+The Runs page's single flow dropdown did not scale ("what if I have 50000 flows") and was the only way in. Replaced with one launch verb reachable four ways, funneling through one shared routine. Design chosen via a 22-agent research + debate workflow, then reconciled to the user's three explicit UX picks (Select-mode toggle, config-popover-first, full modal).
+- **Sidebar Select mode.** A toggle in the drawer header reveals row checkboxes; click toggles selection (a plain click at rest still opens the flow), shift-click ranges, Cmd/Ctrl-click adds, right-click opens a context menu. A contextual action bar slides up with a count badge and a "Run in background" split to a quick-config popover. `listSelection.js` (new, DOM-free, unit-tested) holds the Set; selection auto-retains across folder-collapse re-renders and drops files that vanish.
+- **Send current flow.** A quiet "Background" button in the topbar run cluster (left of Run, which keeps the accent) opens the quick-config popover (Continuous / Delay) then launches the LIVE model, unsaved edits included. The buried inspector button mirrors it.
+- **Runs-page picker.** The dropdown is gone; "New background run" opens a full modal (`runPicker.js`): fuzzy search, a checklist whose selection survives re-filtering (with a "+N selected not shown" note), batch config, and a top-N render cap so 10k+ matches never jank.
+- **Scale spine.** New `fs:scanFlows` IPC (main/preload) recursively enumerates `.flow.json` under a chosen folder (skips node_modules/.git/dotdirs, capped 50k). `flowIndex.js` blends frecency-ordered recents (empty query) with fuzzy over the scanned corpus. Degrades to recents-only with no desktop APIs.
+- **Shared spine.** `launchFlows.js` is the ONE launch routine (live model for the open flow, `readFlowModelFromPath` for the rest, skip step-less, stagger 30ms to respect the render coalescer, one summary toast, frecency bump). `formatRunLabel(n)` is the ONE count string across all surfaces. `contextMenu.js` is a new reusable role=menu component (flip/shift positioning, full ARIA keyboard) for rows now and graph nodes later. `launchConfigPopover.js` is the shared quick-config popover.
+- **Scope:** 6 new renderer modules (all in build.files), fs:scanFlows IPC, edits to fileOperations/eventHandlers/uiUtils/index.html/styles.css, listSelection unit tests. Jest 492/492, e2e 20/20. Validated live in Chrome (all four entry points, both themes, selection-survives-filter, graceful no-desktop degradation).
 
 ## v1.3.0 — release round: final bug sweep (18-agent panel, 11 distinct confirmed findings, all fixed)
 - **[HIGH] Flow-format round-trip corruption (pre-existing since v1.0):** loading a flow decoded `##VAR:unquoted:x##` body markers to a QUOTED `"{{x}}"` in the editor text, so the next save silently re-classified them as string markers — `{"id":{{n}}}` became `{"id":"{{n}}"}` and the request's JSON types changed (breaking strict APIs and the shared CLI contract). New `stringifyBodyForDisplay()` renders unquoted markers bare; regression test locks the round-trip.
