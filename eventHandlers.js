@@ -251,6 +251,20 @@ export function initializeEventListeners() {
     // --- Pane Collapse Toggle Buttons ---
     domRefs.sidebarToggleBtn?.addEventListener('click', handleToggleSidebarCollapse);
     domRefs.runnerToggleBtn?.addEventListener('click', handleToggleRunnerCollapse);
+    // Inspector work-mode: expand the pane for roomier variables/config editing.
+    document.getElementById('inspector-expand-btn')?.addEventListener('click', () => {
+        const app = document.querySelector('.app-container');
+        const panel = document.getElementById('runner-panel');
+        const btn = document.getElementById('inspector-expand-btn');
+        if (!app) return;
+        if (panel?.classList.contains('collapsed')) handleToggleRunnerCollapse(); // un-collapse first
+        const expanded = app.classList.toggle('inspector-expanded');
+        btn?.setAttribute('aria-pressed', String(expanded));
+        btn?.querySelector('use')?.setAttribute('href', expanded ? '#i-collapse-h' : '#i-expand-h');
+        btn?.setAttribute('title', expanded
+            ? 'Shrink the inspector back to its normal width'
+            : 'Expand the inspector for a roomier view of variables and config');
+    });
 
     // --- Dialog Initializers (Listeners for dialogs themselves) ---
     initializeStepTypeDialogListeners(); // Step type selection modal

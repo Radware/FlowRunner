@@ -1,411 +1,203 @@
-# FlowRunner 
+# FlowRunner
 
 ![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)
-<!-- Optional: Add build status/license badges here if desired -->
-<!-- [![Build Status](YOUR_BUILD_BADGE_URL)](YOUR_BUILD_URL) -->
 
 <div align="center" style="margin-bottom: 25px; margin-top: 10px;">
   <div style="display: inline-block; background: #fff; border-radius: 18px; padding: 18px 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);">
     <img src="assets/RadwareASETeam.svg" alt="ASE Team Logo" height="100" style="display: block; margin: 0 auto;" />
   </div>
-  <p style="font-size: 2.85em; color: #555; margin-top: 0px; margin-bottom: 0; font-weight: 500; letter-spacing: 0.5px;">
-    
-  </p>
 </div>
 
----
+**Build, run, and *show* sequences of API calls, visually.** FlowRunner is a desktop app for authoring multi-step "API Flows," watching them execute in real time, and presenting them cleanly to a room. It runs on Windows, macOS, and Linux, works fully offline, and keeps everything in plain local files. No account, no backend, no cloud.
 
-## Release Notes / Changelog
-
-### v1.4.0 (July 2026)
-- **Background-run launcher, rebuilt to scale.** Launch flows into the background from four places, all one verb: select many in the sidebar (Select mode + checkboxes + right-click), send the flow you are editing from the top bar, or open the Runs-page picker (a searchable modal that scales to tens of thousands of flows via an optional folder scan). One shared launch routine, one count label, a reusable context menu, and a quick Continuous/Delay config popover.
-
-### v1.3.0 (July 2026)
-- **Complete UI overhaul ("Sentinel" shell):** icon rail, top app bar with run cluster and live verdict, Flows drawer, tabbed inspector (Results | Variables | Config), OKLCH light/dark themes, command palette (Ctrl/Cmd+K), Present mode, first-run onboarding.
-- **Background Runs page:** run one or more flows continuously in the background — snapshots, live board with tallies and streaming feeds, topbar chips — while you keep editing and running flows normally.
-- **Flow manager:** folders/subfolders for your flows in the drawer (sidecar workspace; flow files untouched).
-- **Editor & engine:** per-step retries and assertions, Import cURL / Import HAR, undo/redo, fuzzy search, View-as-JSON, Tidy Up auto-layout, console-style results feed, node runtime chips; continuous-run stop fix.
-- **Packaged-build fixes:** Import cURL (window.prompt unsupported), renderer-freezing native dialogs, Tidy Up module resolution.
-
-### v1.2.1 (March 2026)
-- **Hotfix: Application startup in packaged builds.** Fixed a packaging bug where `transformOps.js` and `harExporter.js` were missing from the build files list, causing the renderer process to fail on startup. All buttons (Open, Save, Run, etc.) were non-functional in packaged builds. Also adds HAR export support and Linux AppImage variant.
-
-### v1.2.0 (August 2025)
-- **Step execution control:** Stop now halts step-by-step runs and clears queued steps.
-- **Visual navigation:** Auto Arrange in Node-Graph view and step search with jump to list or graph.
-- **Results export:** Export execution results to JSON or CSV.
-- **New step type:** Transform steps run ordered operations (base64/JWT/JSON set, math, conversions) to compute or update variables without scripting.
-- **Copy cURL improvements:** Resolves static variables, runtime values (when available), and special random variables; unknown placeholders remain readable.
-- **New special variables:** Added `RANDOM_INT` and `RANDOM_STRING`.
-- **UI fixes:** Corrected the previous/next label in the step editor and widened the insert-variable button to prevent overflow.
-
-### v1.1.3 (July 2025)
-- **Request body reliability:** Fixed a runner bug where POST requests could be sent without their body when `rawBodyWithMarkers` was null. Bodies now send correctly without needing a reload.
-
-### v1.1.2 (July 2025)
-- **Bug Fixes:** Resolved variable insertion issues in loops, improved full response body extraction, and fixed unsaved changes warning when deleting steps.
-- **Execution Delay:** Default delay between steps is now 1000ms.
-
-### v1.1.1 (June 2025)
-- **Visual Editor Enhancements:**
-  - Added minimap for better navigation of large flows.
-  - Added zoom in and zoom out functionality for improved visibility.
-- **Info Section Improvements:**
-  - Fixed issue where global headers were not being applied to requests.
-  - Added variable type selection for global variables (string, number, boolean, JSON).
-- **Variable Handling:**
-  - Improved URL encoding handling for variables in request URLs.
-- **Response Processing:**
-  - Fixed handling of 204 No Content responses.
-- **Execution Results:**
-  - Added extracted variable display with copy-to-clipboard functionality.
-  - Added search functionality for filtering execution results.
-- **Recent Flows Management:**
-  - Fixed issue where selected flow would jump to top of recent flows list.
-  - Added drag-and-drop functionality to reorder flows in recent list.
-
-### v1.1.0 (May 2025)
-- **Continuous Flow Runner:**
-  - Added a simple "continuous run" mode that allows you to run flows repeatedly in sequence. This is not a true background runner: the main UI is not usable during continuous execution, and there is no configurable delay between full flow runs.
-  - Removed references to background/parallel execution and per-run delay configuration from documentation and UI.
-- **Recent Files Management:**
-  - Added UI to remove recent files from the sidebar list.
-  - Improved localStorage handling for recent files.
-- **Validation & Error Handling:**
-  - Improved error messages for file operations and network errors.
-  - Enhanced feedback for invalid loop variable names and extraction errors.
-- **UI/UX Improvements:**
-  - Better spacing, tooltips, and keyboard shortcuts.
-  - Improved overlays and handling of deeply nested steps.
-  - Results panel now retains all outputs after flow finishes.
-- **Testing:**
-  - Expanded E2E and unit test coverage for flows, file operations, and UI.
-- **Update Notification:**
-  - App checks for new releases on GitHub and notifies the user if available.
-  - You can also manually check for updates via **Help > Check for Updates…**, which triggers the menu item defined in [`main.js`](https://github.com/Radware/FlowRunner/blob/main/main.js#L274).
-
-### v1.0.0 (Initial Release)
-- First public release with visual flow authoring, dual views, variable management, and local file operations.
+Built by the **Radware ASE Team**.
 
 ---
 
-## Introduction
+## Why FlowRunner
 
-FlowRunner is a standalone desktop application, developed by the **Radware ASE Team**, designed to help you visually create, manage, run, and visualize sequences of API calls (known as "API Flows"). It runs on Windows (x64), macOS (Apple Silicon / arm64), and Linux (x64).
+An API story is rarely one call. It is *log in, take the token, place the order, check the balance* — a sequence where each step feeds the next. FlowRunner lets you compose that sequence visually, run it step by step or end to end, and see exactly what happened at each hop.
 
-Whether you need to demonstrate complex API interactions, test multi-step API processes locally, or debug intricate data flows, FlowRunner provides an intuitive interface with both list-based and node-graph views. Its real-time execution visualization helps you understand exactly what's happening step-by-step.
+It was born to **demonstrate Business Logic Attack protection**: an engineer authors both a legitimate and a malicious multi-step sequence, then runs them live in front of a customer to show how the attack unfolds and how the defense responds. That heritage shapes everything, so the run reads as unmistakable **pass / fail / running** from across a lit room, and the interface stays calm enough to project.
 
-This tool is particularly useful for:
+**It fits three kinds of work:**
 
-*   Sales Engineers and Solutions Architects demonstrating API behaviors.
-*   API Testers and QA Engineers validating sequences and debugging issues.
-*   Developers prototyping or understanding multi-step API integrations.
+- **Sales Engineers and Architects** demonstrating API behavior and attack/defense scenarios, live.
+- **Testers and QA** validating and debugging multi-step API processes.
+- **Developers** prototyping or understanding an integration before writing code.
 
-## Key Features
+## Highlights
 
-*   **Visual Flow Authoring:** Create flows using intuitive steps:
-    *   **API Request:** Configure HTTP calls (Method, URL, Headers, JSON Body).
-    *   **Condition:** Branch your flow based on data (If/Then/Else logic).
-    *   **Loop:** Repeat steps for each item in an array.
-    *   **Transform:** Modify or compute variables between requests (base64, JWT, math, JSON updates).
-*   **Dual Views:** Work the way you prefer:
-    *   **List/Editor View:** A detailed list of steps with a dedicated panel for configuration, drag-and-drop reordering, and step search with quick jump.
-    *   **Node-Graph View:** An interactive visual graph showing the flow structure and connections. Drag nodes to arrange the layout. Use zoom controls and an optional minimap for easier navigation of large flows, or Auto Arrange to tidy the layout.
-*   **Variable Management:** Handle dynamic data effectively:
-    *   Define **Global Headers** and **Static Variables** for the entire flow. Variables can be typed as String, Number, Boolean, or JSON to better control how values are parsed and substituted.
-    *   **Extract** data from API responses (like status code, headers, or values from the body using JSON paths) into variables.
-    *   **Substitute** variables (`{{variableName}}`) into URLs, headers, request bodies, condition values, etc.
-    *   Use the **`{{…}}`** helper button to easily insert defined variable names.
-*   **Execution & Debugging:** Run and analyze your flows:
-    *   Execute the entire flow from start to finish.
-    *   Step through the flow one action at a time.
-    *   Stop execution whenever needed.
-    *   Configure a delay between steps during full runs for better observation.
-    *   View **real-time highlighting** of the currently executing or completed step in both views.
-    *   Monitor progress in the detailed **Results Panel**, showing each step's status, output, errors, and extraction warnings.
-    *   Export execution results to JSON or CSV for sharing.
-    *   Use the search box and status filter to narrow displayed results, and copy any step's output to the clipboard.
-*   **Local Flow Management:** Work entirely offline:
-    *   Create new flows from a template.
-    *   **Save** flows to your local computer as `.flow.json` files.
-    *   **Load** flows from your local files.
-    *   Access **Recent Files** quickly from the sidebar and reorder them via drag-and-drop.
-    *   **Clone** existing flows to create variations easily.
-*   **User Interface:**
-    *   Collapsible Sidebar and Runner panels to maximize workspace.
-    *   Clear indication of unsaved changes, with the Save button highlighted when edits are pending.
-    *   Configurable visual layout for the Node-Graph view.
+- **Visual authoring** with four step types: **Request**, **Condition** (if/then/else), **Loop** (for-each), and **Transform** (compute variables: base64, JWT, math, JSON edits).
+- **Two views, one flow:** a dense **List** editor and an interactive **Visual** node graph, switch anytime.
+- **Variables that flow through:** define static variables and global headers, extract values from responses by JSON path, and substitute `{{them}}` anywhere.
+- **Run it your way:** whole flow, one step at a time, or continuously, with a live results feed and real-time highlighting in both views.
+- **Background runs:** launch one flow or fifty into the background and keep working; monitor them all on a dedicated **Runs** page.
+- **Organize at scale:** a folder-based flow manager and a searchable launcher that handles thousands of flows.
+- **Interop:** import a request from **cURL** or a whole **HAR** file; copy any step back out as cURL; export results to **JSON / CSV**.
+- **Present mode:** a full-screen, projector-tuned view for live demos.
+- **Made to feel right:** light and dark themes, a Ctrl/Cmd+K command palette, undo/redo, and keyboard flow throughout.
 
-## Prerequisites
+## Install
 
-*   Windows (x64), macOS (Apple Silicon / arm64), or Linux (x64).
-*   The appropriate FlowRunner installer package downloaded from the [v1.3.0 Release Page](https://github.com/Radware/FlowRunner/releases/tag/v1.4.0) (or latest release).
-*   Network access is required *only* when executing flows that contain 'API Request' steps which need to reach external endpoints. Flow authoring, saving, loading, and visualization can be done offline.
+Grab the build for your platform from the [Releases page](https://github.com/Radware/FlowRunner/releases/latest):
 
-## Installation
+| Platform | Download | Then |
+|---|---|---|
+| **Windows** (x64) | `FlowRunnerSetup-x64-win-1.4.0.zip` | Unzip, run `Setup.exe`. If SmartScreen warns (the app is unsigned), choose *More info → Run anyway*. |
+| **macOS** (Apple Silicon) | `FlowRunnerSetup-arm64-mac-1.4.0.dmg` | Open the DMG, drag **FlowRunner** to Applications. See macOS note below if it won't open. |
+| **Linux** (x64) | `FlowRunnerSetup-x64-linux-1.4.0.AppImage` | `chmod +x` it, then run it. |
 
-1.  **Download the Correct Installer:**
-    *   Go to the [FlowRunner Releases Page](https://github.com/Radware/FlowRunner/releases) on GitHub.
-    *   Find the latest release (e.g., v1.4.0).
-    *   Under **Assets**:
-        *   For **Windows (x64)**, download `FlowRunnerSetup-x64-win-1.4.0.zip`. Unzip the file to find the `Setup.exe`.
-        *   For **macOS (Apple Silicon / arm64)**, download `FlowRunnerSetup-arm64-mac-1.4.0.dmg`.
-        *   For **Linux (x64)**, download `FlowRunnerSetup-x64-linux-1.4.0.AppImage`.
-2.  **Install on Windows:**
-    *   Double-click the extracted `Setup.exe` file.
-    *   The installation will proceed silently in the background (using Squirrel.Windows). It typically installs to your `AppData\Local\FlowRunner` folder.
-    *   Once installed, the application should launch automatically.
-    *   You can find FlowRunner in your Start Menu afterwards.
-    *   *(Note: As the application is unsigned, you might see a Windows SmartScreen prompt. You may need to click "More info" and then "Run anyway".)*
-3.  **Install on macOS (arm64):**
-    *   Double-click the downloaded `.dmg` file to open it.
-    *   Drag the `FlowRunner` application icon into your `Applications` folder.
-    *   Launch FlowRunner from your Applications folder.
-    *   *(Note: See macOS Troubleshooting below if you encounter issues opening the app).*
+Network access is only needed while running flows that call external endpoints. Authoring, saving, loading, and visualizing all work offline.
 
-## Getting Started: Creating and Running a Simple Flow
+> **macOS won't open it ("damaged / unidentified developer")?** The app isn't notarized, so macOS quarantines it. Clear the flag once:
+> ```bash
+> xattr -c /Applications/FlowRunner.app
+> ```
+> Then right-click the app → **Open** → confirm.
 
-1.  **Launch FlowRunner.**
-2.  **Create a New Flow:**
-    *   In the left sidebar, click the **"+ New Flow"** button.
-    *   The workspace will load an empty flow titled "New Flow".
-3.  **Add a Request Step:**
-    *   In the "Flow Steps" panel (middle left), click the **"+ Add Step"** button at the bottom.
-    *   A dialog box "Select Step Type" appears. Click on **"API Request"**.
-    *   A "New Request" step appears in the list and its editor opens on the right.
-4.  **Configure the Request:**
-    *   In the editor panel on the right:
-        *   Change the **Step Name** to something descriptive, like "Get HTTPBin IP".
-        *   Ensure the **Method** is `GET`.
-        *   In the **URL** field, enter: `https://httpbin.org/get`
-        *   Click **"Save Step"** at the bottom of the editor panel.
-5.  **Run the Flow:**
-    *   In the **Runner Panel** on the far right:
-    *   Click the **"▶ Run"** button.
-6.  **View Results:**
-    *   Observe the "Get HTTPBin IP" step briefly highlight (likely yellow/running then green/success) in the Steps list.
-    *   In the **Execution Results** list (bottom right), you will see an entry for the step. It should show `SUCCESS` and contain the JSON response from `httpbin.org`.
+## Quick start: your first flow in two minutes
 
-Congratulations! You've created and run your first API flow.
+1. **New Flow.** In the Flows drawer on the left, click **+ New Flow**.
+2. **Add a step.** Press **Tab** (or click **+ Add Step**) and choose **API Request**.
+3. **Point it somewhere.** In the request bar, keep the method on `GET` and set the URL to `https://httpbin.org/get`. Give the step a name if you like.
+4. **Run it.** Click the green **Run** in the top bar (or press **F5**).
+5. **Read the result.** The step flashes running, then green. The **Results** tab on the right shows one line: `GET · 200 · … ms · SUCCESS`. Expand it for the full response.
 
-## Detailed Usage
+That's a flow. Save it with **Ctrl/Cmd+S** and it becomes a portable `.flow.json` file you can share, version, or run headless with the FlowRunner CLI.
 
-### Views
+## A tour of the interface
 
-*   **List/Editor View (Default):** Shows steps sequentially. Ideal for detailed configuration via the editor panel and reordering steps using drag-and-drop (☰ handle). Use the step search box to filter and jump to matching steps.
-*   **Node-Graph View:** Shows steps as connected nodes. Provides a better overview of the flow's structure, especially with conditions and loops. You can pan the view by dragging the background and rearrange nodes by dragging them (this updates the visual layout saved with the flow). Use Auto Arrange to tidy the layout.
-*   **Toggle Views:** Use the **"Visual View" / "Editor View"** button in the workspace header to switch between modes.
+FlowRunner is one window with a few fixed zones:
 
-### Managing Flows (Local Files)
+- **The rail** (far left): switch the Flows drawer, open the command palette, jump to **Runs**, toggle theme, and enter **Present** mode.
+- **The top bar:** the flow's name and unsaved marker, save / undo / export controls, the **List / Visual** switch, an ambient engine-status dot, and the **run cluster** on the right, Step, Stop, **Background**, and the one green **Run**.
+- **The Flows drawer:** your flow library. Recent files, plus folders and subfolders you arrange yourself (drag a flow onto a folder). Turn on **Select mode** here to pick several flows at once.
+- **The workspace** (center): the flow itself, as either the **List** editor or the **Visual** node graph.
+- **The inspector** (right): three tabs, **Results** (the run feed), **Variables** (everything defined and extracted, live), and **Config** (flow name, description, global headers, static variables). Need room? Use the expand control in its header to widen it into a work surface.
+- **The Runs page:** off the rail, a full board of every background run.
 
-*   **New:** Click **"+ New Flow"** in the sidebar. Remember to save it!
-*   **Open:** Click **"Open Flow"** in the sidebar to browse and load a `.flow.json` file from your computer. If you have unsaved changes, you'll be prompted to confirm.
-*   **Save:** Click **"Save"** in the workspace header to save changes to the currently open file. This button is enabled only when there are unsaved changes (indicated by `*` in the title).
-*   **Save As:** Click **"Save As..."** in the workspace header to save the current flow to a new `.flow.json` file.
-*   **Recent Files:** The sidebar lists recently opened/saved files. Click an item to load it. Use the **✕** icon next to a file to remove it from the list.
-*   **Clone:** To duplicate a flow, load the flow you want to clone, then use **"Save As..."** to save it under a new name. FlowRunner ensures the internal steps get new unique IDs automatically when saved as a new file.
-*   **Delete:** To delete a flow, simply delete the corresponding `.flow.json` file from your computer using Finder (macOS) or File Explorer (Windows). The file will eventually disappear from the "Recent Files" list.
+## Building a flow
 
-### Flow Configuration (Info Overlay)
+**Steps** are the building blocks. Add them with **Tab**, reorder by dragging the ☰ handle (List view) or the nodes themselves (Visual view), and edit a step by selecting it.
 
-Click the **"Info ▼"** button in the workspace header to open the Flow Info overlay. Here you can configure:
+- **API Request** — method, URL, headers, and a JSON body, each accepting `{{variables}}`. The **Extract** tab pulls values out of the response; the **Options** tab holds per-step **retries** and **on-failure** behavior; **Assertions** let a step pass or fail on its own checks. A **Copy cURL** button on the request bar hands you the equivalent command (to bring one *in*, use **Import cURL** in the Flows drawer).
+- **Condition** — branch the flow with if/then/else, comparing a variable against a value.
+- **Loop** — repeat a set of steps for each item in an array, exposing the current item as a variable.
+- **Transform** — compute or reshape variables between requests: base64 encode/decode, JWT decode, math, JSON set, and more, no scripting.
 
-*   **Flow Name:** A descriptive name for your flow.
-*   **Description:** Optional details about the flow's purpose.
-*   **Global Headers:** Define HTTP headers (Key-Value pairs) that will be automatically added to *all* 'API Request' steps in this flow. Headers defined within individual steps will override global headers with the same key. Header values support variable substitution using `{{variableName}}` syntax, including the special `{{RANDOM_IP}}` variable for generating random public IP addresses.
-*   **Flow Variables:** Define static variables (Key-Value pairs) that are available throughout the flow's execution. Each variable can be typed as String, Number, Boolean, or JSON. Variable names should be valid identifiers (letters, numbers, `_`, starting with a letter or `_`). Values may contain JSON arrays or objects for loops or complex data.
+**Variables** are how steps talk to each other:
 
-Changes here mark the flow as unsaved. Close the overlay by clicking the **"Info ▲"** button again.
+- Define **static variables** (typed String / Number / Boolean / JSON) and **global headers** in the **Config** tab.
+- **Extract** from any response by path: `.status`, `headers.Content-Type`, `body.user.id`, `body.items[0].name`.
+- **Substitute** with `{{name}}` in URLs, headers, bodies, and condition values. In a JSON body, `"{{v}}"` inserts a string while `{{v}}` (no quotes) inserts a number, boolean, or object. The `{{…}}` button inserts any defined name for you.
+- Special values are always available: `{{RANDOM_IP}}`, `{{RANDOM_INT}}` (or bound it: `{{RANDOM_INT(1,1000)}}`), and `{{RANDOM_STRING}}` (or size it: `{{RANDOM_STRING(16)}}`).
 
-### Configuring Steps
+**Import instead of typing:** paste a **cURL** command to turn it into a request step, or import a **HAR** file to bring in a whole captured session as steps.
 
-1.  **Select Step:** In the List/Editor view, click on a step header in the "Flow Steps" panel.
-2.  **Edit Panel:** The editor panel on the right updates to show the configuration options for the selected step type.
-3.  **Configure:** Modify the fields as needed.
-4.  **Save Step:** Click the **"Save Step"** button at the bottom of the editor panel to commit your changes for that specific step. This also marks the overall flow as unsaved.
-5.  **Cancel:** Click **"Cancel"** to discard any changes made in the editor panel since the last save for that step.
+## Running a flow
 
-### Unsaved Changes Tracking
+The run cluster in the top bar drives execution:
 
-FlowRunner tracks edits using two flags within `appState`:
+- **Run** (F5) executes the whole flow, pausing the configured **Delay** between steps so a room can follow along.
+- **Step** (F10) advances exactly one step, so you can inspect variables between hops.
+- **Stop** (Esc) halts immediately and aborts any in-flight request.
+- **Continuous** (in the Results tab) restarts the flow after each finish until you stop it.
 
-* `isDirty` &ndash; Set when the flow structure or metadata changes and a file save is required.
-* `stepEditorIsDirty` &ndash; Indicates unsaved edits in the currently open step editor.
+As it runs, the current step highlights in both views and the **Results** feed fills with one scannable line per request, name, method, HTTP code in its status color, duration, verdict, expanding on demand to the full output, extracted values, and any assertion or extraction warnings. Export the run to **JSON** or **CSV**.
 
-The **Save**, **Cancel**, and **Close** buttons evaluate both flags. Save and Cancel are enabled whenever either flag is true, while Close is enabled only when both are false. Attempting to close the window also checks these flags to warn about unsaved work.
+### Background runs
 
-#### Step Types
+Some flows should just keep going, a continuous demo, a soak, a background check, while you work on something else. Launch one from wherever you are:
 
-*   **API Request:**
-    *   **Method:** HTTP method (GET, POST, PUT, PATCH, DELETE, etc.).
-    *   **URL:** The target API endpoint URL. You can use `{{variableName}}` for substitutions.
-    *   **Copy cURL:** Generates a cURL command for the request. Static variables are resolved, runtime values are used when available, and unresolved placeholders remain readable.
-    *   **Headers Tab:** Define request-specific headers. These override Global Headers. Supports variable substitution in values.
-    *   **Body Tab:** Enter the request body, typically in JSON format. Supports `{{variableName}}` substitution. Use `"{{var}}"` for string substitution, and `{{var}}` (without quotes) for number/boolean/object substitution. Use the "Format" button to prettify JSON. Validation errors appear below the textarea.
-    *   **Extract Tab:** Define rules to extract data from the response into variables for later steps.
-        *   **Variable Name:** The name of the variable to create/update (e.g., `authToken`, `userId`).
-        *   **JSON Path:** The path to the data within the response. Examples:
-            *   `.status` -> The HTTP status code (e.g., `200`).
-            *   `headers.Content-Type` -> The value of the Content-Type header (case-insensitive lookup).
-            *   `body.user.id` -> Value of `id` within the `user` object in the JSON body.
-            *   `body.items[0].name` -> Value of `name` in the first element of the `items` array in the JSON body.
-            *   `body` -> The entire response body.
-              Use this to capture the full JSON object (or text) returned by that request step.
-    *   **Options Tab:**
-        *   **On Failure:** Choose whether the flow should `Stop` (default) or `Continue` if the request fails (network error or status code >= 300). If set to `Continue`, the step result is still logged (often as 'error' status in runner if network issue, or 'success' but with non-2xx output status), but the flow proceeds to the next step.
-*   **Transform:**
-    *   **Purpose:** Run ordered operations to compute or update variables without custom scripts.
-    *   **Operations:** Base64 encode/decode, JWT decode/encode (optional signing), JSON Set path updates, math (add/subtract/multiply/divide), type conversions (to number/string/boolean), and boolean not.
-    *   **Inputs:** Accept literals, JSON values, or variable references like `{{varName}}`. Each operation writes to an output variable, and later operations can reference earlier outputs.
-*   **Condition (If/Else):**
-    *   **Variable:** Select the variable from the context whose value you want to check (e.g., `extractedStatusCode`, `previousStepOutput.body.isValid`).
-    *   **Operator:** Choose the comparison operator (e.g., `equals`, `contains`, `greater_than`, `exists`).
-    *   **Value:** Enter the value to compare against (if the operator requires it). Supports `{{variableName}}` substitution.
-    *   **Preview:** Shows a human-readable version of the condition.
-    *   **Then/Else Branches:** Add steps within the "Then" branch (executes if condition is true) or "Else" branch (executes if condition is false) using the `+ Add Step` buttons within the step's content area in the List view.
-*   **Loop (For Each):**
-    *   **Source (Array Variable):** Enter the variable name (e.g., `{{userList}}`) that holds the array you want to iterate over. This variable must exist in the context and contain an array.
-    *   **Item Variable Name:** Enter the name that will hold the current item during each iteration (e.g., `item`, `user`). You can access the item's properties within the loop body using `{{item.id}}`, `{{user.name}}`, etc.
-*   **Loop Body:** Add steps within the loop body using the `+ Add Step` button within the step's content area in the List view. These steps will execute once for each item in the source array.
-    *   **Example:** Define a JSON variable `userList` in the Flow Info overlay:
+- **The flow you're editing:** the **Background** button in the top run cluster. A quick popover confirms Continuous and Delay, then it runs from a snapshot (your unsaved edits included), and you stay in the editor.
+- **Several at once:** turn on **Select mode** in the Flows drawer, tick the flows (Shift-click for a range, right-click for a menu), and run the set.
+- **From a big library:** open **Runs** on the rail and click **New background run**, a searchable window that filters your recent flows instantly and, once pointed at a folder, every `.flow.json` beneath it. Tick as many as you like and launch together.
+- **By keyboard:** Ctrl/Cmd+K → *Run flows in background*.
 
-        ```json
-        [
-            { "id": 1, "name": "Alice", "active": true },
-            { "id": 2, "name": "Bob",   "active": false }
-        ]
-        ```
+Live runs show as chips in the top bar and a badge on the rail. The **Runs** page is the full board: each run's verdict, iteration and pass/fail tallies, a streaming feed, and Stop / Remove. Runs are independent snapshots, so editing a flow never disturbs one already running.
 
-        Add a Loop step with **Source** `{{userList}}` and **Item Variable Name** `user`.
-        Inside the loop body you can reference `{{user.name}}` or add a Condition step checking `{{user.active}}`.
+## Present mode
 
-### Variables
+Press the presentation icon on the rail (or **Ctrl/Cmd+Shift+D**) for a full-screen, projector-tuned view: bigger type, bolder run state, less chrome. Built for showing a live flow to a customer without the authoring furniture getting in the way.
 
-*   **Definition:** Variables are defined statically in the Flow Info overlay or dynamically via the 'Extract' tab in Request steps. Loop steps also introduce an item variable.
-*   **Substitution:** Use `{{variableName}}` syntax in fields that support it (URL, Header values, Request Body, Condition Value, Loop Source). The runner replaces this with the variable's current value during execution.
-*   **Special Variables:** `{{RANDOM_IP}}` generates a random public IPv4 address once per flow run. `{{RANDOM_INT(1,1000)}}` generates a random integer (default range is 0-1,000,000). `{{RANDOM_STRING(16)}}` generates a random alphanumeric string (default length is 12). Each value is generated once per run and reused across steps.
-*   **URL Encoding:** When using the `FlowRunner` class programmatically, pass `{ encodeUrlVars: true }` to automatically URL-encode variable values inserted into URLs. Values that already contain percent-encoded sequences, or values that start with `http://` or `https://`, are left unchanged so they are not encoded twice and base URLs remain intact. The Runner panel exposes an **Encode URL Vars** checkbox to toggle this at runtime.
-*   **Extraction Paths:** Use dot notation (`object.property`) and array indexing (`array[index]`) to access values within JSON response bodies. Special paths include `.status`, `headers.Header-Name`, and `body`.
-*   **Insertion Helper:** Click the **`{{…}}`** button next to an input field to open a searchable dropdown of currently defined variables. Clicking a variable name inserts `{{variableName}}` into the input field.
-*   **Variables Panel:** View all variables defined by the flow structure (Static, Extract, Loop). Click **"Show/Hide Variables"** in the workspace header to toggle this panel. *Note: This panel shows where variables are defined, not their live values during execution.*
+## Keyboard shortcuts
 
-### Running Flows
+| Action | Shortcut |
+|---|---|
+| Command palette | **Ctrl/Cmd + K** |
+| Add a step | **Tab** (or double-click empty canvas) |
+| Save / Open flow | **Ctrl/Cmd + S** / **Ctrl/Cmd + O** |
+| Undo / Redo | **Ctrl/Cmd + Z** / **Ctrl/Cmd + Shift + Z** |
+| Run / Step / Stop | **F5** / **F10** / **Esc** |
+| Switch List / Visual | **Ctrl/Cmd + 3** |
+| Config / Variables tab | **Ctrl/Cmd + 1** / **Ctrl/Cmd + 2** |
+| Present mode | **Ctrl/Cmd + Shift + D** |
+| Graph zoom / minimap | **Ctrl/Cmd + + / − / 0** · **M** |
+| Help | **F1** |
 
-*   **Run:** Executes the entire flow from the first step. Uses the configured **Delay** between steps. Highlights steps as they execute.
-*   **Continuous Run:** When checked, FlowRunner restarts the flow automatically after it finishes. It waits for the configured **Delay** between runs and continues until you uncheck the box or click **"Stop"**.
-*   **Step:** Executes only the *next* logical step in the flow. Allows you to inspect results and context between steps. Click "Step" repeatedly to advance through the flow.
-*   **Stop:** Immediately requests the flow execution to halt. If a network request is in progress, it will attempt to abort it. The step where execution stopped will be highlighted (often orange/warning).
-*   **Delay (ms):** Sets the pause duration (in milliseconds) between steps when using **Run** and between full runs when **Continuous Run** is enabled. Does not affect **"Step"** mode.
-*   **Encode URL Vars:** When checked, variable values inserted into URLs are percent-encoded as needed, but full URLs (starting with `http://` or `https://`) are left untouched.
-*   **Results Panel:** Shows a log of each step executed:
-    *   **Step Name & Type:** Identifies the step.
-    *   **Status:** `RUNNING`, `SUCCESS`, `ERROR`, `SKIPPED`, `STOPPED`.
-    *   **Output:** For successful requests, shows status, headers, and body. For conditions/loops, shows relevant info (branch taken, item count).
-    *   **Error:** Displays error messages if a step failed.
-    *   **Extraction Warnings:** If an 'Extract' rule failed (e.g., path not found), a warning appears here for the relevant Request step.
-    *   **Export:** Use the Export JSON/CSV buttons to save results.
+## The flow file
 
-## Configuration
-
-FlowRunner configuration happens primarily through the user interface:
-
-*   **Flow Settings:**
-    *   **Location:** Flow Info Overlay (click "Info ▼" button).
-    *   **Settings:** Flow Name, Description, Global Headers, Static Variables.
-    *   **Persistence:** Saved within the `.flow.json` file for each flow.
-*   **Step Settings:**
-    *   **Location:** Step Editor Panel (select a step in the List/Editor view).
-    *   **Settings:** Varies by step type (URL, Method, Body, Condition Logic, Loop Source, etc.).
-    *   **Persistence:** Saved within the `.flow.json` file for each flow.
-*   **Runner Settings:**
-    *   **Location:** Runner Panel (right sidebar).
-    *   **Settings:** Execution Delay (ms).
-    *   **Persistence:** Delay value is not saved per-flow; it resets to the default (1000ms) when the application starts.
-*   **UI State:**
-    *   **Location:** Internal (`localStorage`).
-    *   **Settings:** Collapsed state of the Sidebar and Runner Panel.
-    *   **Persistence:** Saved automatically in your browser's local storage and restored on next launch.
-*   **Visual Layout (Node-Graph):**
-    *   **Location:** Node-Graph View (drag nodes to position them).
-    *   **Settings:** X/Y coordinates for each node.
-    *   **Persistence:** Saved within the `.flow.json` file under the `visualLayout` key when the flow is saved.
-
-### Keyboard Shortcuts
-
-FlowRunner supports several keyboard shortcuts to speed up common actions. A few highlights:
-
-*   **F1** – open the Help window.
-*   **Ctrl/Cmd + + / - / 0** – zoom in, zoom out, or reset the zoom level.
-*   **M** – toggle the Node-Graph minimap.
-
-See `help.html` for the full table of shortcuts.
+A flow is a single human-readable **`.flow.json`** file: its steps, variables, headers, per-step options, and (for the graph) node positions. That makes flows easy to share, drop into version control, and run headless, the format is a shared contract with the FlowRunner CLI and the ShowRunner orchestrator. Folder organization lives in a separate workspace file, so moving or renaming a flow file never breaks it. Flows from every earlier version open unchanged.
 
 ## Troubleshooting
 
-*   **Windows: Installer Warning:** When running `Setup.exe`, Windows SmartScreen might show a warning because the application is not code-signed. Click "More info" and then "Run anyway" to proceed with the silent installation.
-*   **macOS: "FlowRunner is damaged and can't be opened. You should move it to the Trash." Error:** This error often occurs on macOS for downloaded applications that are not notarized by Apple. It's usually related to extended attributes (quarantine flags) set by the OS. To fix this:
-    1.  Open the **Terminal** application (you can find it in Applications > Utilities).
-    2.  Run the following command, replacing `<path/to/FlowRunner.app>` with the actual path to the FlowRunner application (usually `/Applications/FlowRunner.app` if you dragged it to the Applications folder):
-        ```bash
-        xattr -c /Applications/FlowRunner.app
-        ```
-    3.  Try opening FlowRunner again. If prompted about it being from an unidentified developer, you might need to right-click (or Control-click) the app icon and choose "Open", then confirm in the dialog box.
-*   **Flow Doesn't Save / Load:**
-    *   Ensure you have write/read permissions for the directory where you are saving/loading `.flow.json` files.
-    *   Check if the `.flow.json` file might be corrupted (e.g., manually edited incorrectly). Try creating a new flow.
-    *   Look for specific error messages shown in the UI (e.g., below the workspace content).
-*   **API Request Step Fails:**
-    *   Verify the **URL** is correct and accessible from your machine.
-    *   Check if the correct **Method** is selected.
-    *   Ensure **Headers** (Global and Step-specific) are correct (e.g., `Content-Type`, `Authorization`).
-    *   Validate the **Request Body** format (use the "Format" button for JSON). Check for correct variable substitution.
-    *   Examine the **Results Panel** entry for the failed step - it often contains the response status code, body, or a network error message.
-    *   Check the **On Failure** setting in the step's 'Options' tab. If set to 'Stop', the flow will halt on failure.
-*   **Variable Substitution (`{{var}}`) Not Working:**
-    *   Double-check the variable name spelling inside the `{{ }}`.
-    *   Ensure the variable is actually defined *before* the step attempting to use it (check Static Vars, or previous step Extractions/Loops). Use the **Variables Panel** ("Show/Hide Variables") to see defined variables.
-    *   Remember that extraction happens *after* a Request step completes.
-*   **Variable Extraction Not Working:**
-    *   Verify the **JSON Path** in the 'Extract' tab is correct for the API response structure. Use online JSON path testers if needed.
-    *   Check the **Results Panel** output for the request step to confirm the actual response structure.
-    *   Look for **Extraction Warnings** within the successful step's results entry in the Runner Panel.
-*   **Condition Step Goes Wrong Way:**
-    *   Check the **Variable**, **Operator**, and **Value** in the Condition step's editor.
-    *   Verify the actual value of the variable being checked by examining the output of previous steps in the **Results Panel**.
-*   **Loop Step Doesn't Run / Runs Incorrectly:**
-    *   Ensure the **Source** variable points to a valid array in the execution context. Check previous step outputs.
-    *   Verify the **Item Variable Name** is correctly used (`{{itemName}}`) within the loop body steps.
-*   **General Issues / UI Glitches:**
-    *   Try restarting the packaged application.
-    *   For more advanced debugging, you can open the **Developer Tools** from the **View** menu (`View > Toggle Developer Tools`). Check the **Console** tab within the Developer Tools for any error messages logged by the application.
+- **A request fails.** Open its entry in **Results**, it carries the status code, response body, or network error. Check the URL, method, headers, and body (variable substitution included), and the step's **On Failure** setting in Options.
+- **`{{variable}}` isn't substituting.** Confirm the name (open the **Variables** tab to see what's actually defined) and that it's set *before* the step uses it. Extraction happens *after* a request completes.
+- **Extraction returns nothing.** Verify the JSON path against the real response shown in Results; failed extractions surface as a warning on the step.
+- **A Condition or Loop misbehaves.** Check the compared variable's actual value in Results; a Loop's **Source** must resolve to an array.
+- **Something looks stuck.** Restart the app. For deeper digging, **View → Toggle Developer Tools** opens the console.
 
-## Development Setup
+## Development
 
-FlowRunner requires **Node.js 18 or newer**. Use the setup script (which runs `npm ci`) or run `npm ci` yourself to install dependencies:
+FlowRunner needs **Node.js 18+**.
 
 ```bash
-./setup_env.sh
-# or
-npm ci
+npm ci          # install (or ./setup_env.sh, which also fetches Playwright browsers)
+npm start       # run locally
+npm test        # unit tests (Jest + jsdom)
+npm run e2e     # end-to-end tests (Playwright + Electron)
+npm run dist    # package for the current platform
 ```
 
-The script also downloads the Playwright browsers needed for e2e tests.
+Architecture, subsystem notes, and design decisions live in [architecture.md](architecture.md), [gotchas.md](gotchas.md), [changelog.md](changelog.md), and [masterplan.md](masterplan.md).
 
-Launch the app locally with:
+---
 
-```bash
-npm start
-```
+## Release history
 
-Run the unit and end-to-end tests:
+### v1.4.0 (July 2026)
+- **Background-run launcher, rebuilt to scale.** Launch flows into the background from four places, all one action: the flow you're editing (top-bar **Background** button + quick config popover), several at once via sidebar **Select mode**, a searchable **Runs-page picker** that scales to tens of thousands of flows via an optional folder scan, and the command palette. One shared launch routine and one count label across every surface.
+- **Calmer chrome.** Save turns brand-blue (not pulsing amber) when dirty; Run is the single accent in the run cluster; the run verdict reads once; the inspector gained an expand/work-mode for Variables and Config.
 
-```bash
-npm test     # runs with NODE_ENV=test
-npm run e2e  # runs with E2E=true
-```
+### v1.3.0 (July 2026)
+- **Complete UI overhaul ("Sentinel"):** icon rail, top run cluster with live verdict, Flows drawer, tabbed inspector (Results | Variables | Config), OKLCH light/dark themes, command palette, Present mode, first-run onboarding.
+- **Background Runs page:** run flows continuously in the background with a live board of tallies and streaming feeds while you keep working.
+- **Flow manager:** folders/subfolders in the drawer (sidecar workspace; flow files untouched).
+- **Editor & engine:** per-step retries and assertions, Import cURL / HAR, undo/redo, fuzzy search, View-as-JSON, Tidy Up auto-layout, console-style results feed; continuous-run stop fix.
 
-These npm scripts automatically set the required environment variables.
+### v1.2.1 (March 2026)
+- **Hotfix:** packaged builds crashed on startup because two modules were missing from the build file list. Also added HAR export and the Linux AppImage.
 
+### v1.2.0 (August 2025)
+- Stop halts step-by-step runs; Auto Arrange and step search in the graph; export results to JSON/CSV; the **Transform** step type; Copy cURL variable resolution; `RANDOM_INT` / `RANDOM_STRING`.
+
+### v1.1.3 (July 2025)
+- Fixed POST requests that could send without their body.
+
+### v1.1.2 (July 2025)
+- Loop variable-insertion fixes, better response-body extraction, unsaved-changes fix on delete; default step delay 1000ms.
+
+### v1.1.1 (June 2025)
+- Minimap and zoom for large graphs; global-header and variable-type fixes; 204 handling; extracted-variable display with copy; results search; recent-list drag-to-reorder.
+
+### v1.1.0 (May 2025)
+- Continuous-run mode, recent-files management, better validation and error messages, update notifications, expanded tests.
+
+### v1.0.0
+- First public release: visual authoring, dual views, variables, and local file operations.
+
+---
 
 <div align="center" style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
   <img src="assets/Radware_logo.svg" alt="Radware Logo" height="40">

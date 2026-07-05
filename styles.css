@@ -347,6 +347,7 @@ code {
 .btn-danger { background-color: var(--run-error); color: var(--accent-contrast); border-color: var(--run-error); }
 .btn-danger:hover { background-color: var(--danger-hover-color); border-color: var(--danger-hover-color); }
 
+/* LOCKED: amber (--warning-color) is for genuine validation/condition affordances only, never a topbar file/run control. Save uses --accent when dirty (see .needs-save). Keeps amber meaning 'attention/running', not decoration. */
 .btn-warning { background-color: var(--warning-color); color: var(--accent-contrast); border-color: var(--warning-color); }
 .btn-warning:hover { background-color: var(--warning-hover-color); border-color: var(--warning-hover-color); }
 
@@ -371,11 +372,9 @@ button:disabled {
 
 /* Highlight save button when changes need persisting */
 .needs-save:not(:disabled) {
-    background-color: var(--warning-color);
-    border-color: var(--warning-color);
+    background-color: var(--accent);
+    border-color: var(--accent);
     color: var(--accent-contrast);
-    animation: pulse-border-amber 1.8s infinite ease-in-out;
-
 }
 /* --- Main Application Layout --- */
 .app-container {
@@ -976,22 +975,23 @@ button:disabled {
     border: none;
     padding: 4px;
     cursor: pointer;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
+    border-radius: var(--radius-sm);
+    width: 30px;
+    height: 30px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background-color 0.3s, transform 0.3s;
+    color: var(--text-muted);
+    transition: background-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
 }
 
 .btn-toggle-collapse:hover {
-    background-color: color-mix(in oklab, var(--text) 10%, transparent);
+    background-color: var(--surface-sunken);
+    color: var(--text);
 }
 
 .btn-toggle-collapse svg {
-    fill: currentColor;
-    transition: transform 0.3s;
+    transition: transform var(--dur-2) var(--ease-out);
 }
 
 .btn-toggle-collapse:active {
@@ -3386,9 +3386,11 @@ html.demo-mode .flow-node-inner {
        work — these carry the app's semantic vocabulary (run-state = meaning). ---- */
 .btn-run-go { background: var(--run-success); border-color: var(--run-success); color: var(--accent-contrast); box-shadow: var(--shadow-xs); }
 .btn-run-go:hover:not(:disabled) { background: color-mix(in oklab, var(--run-success) 88%, black); border-color: color-mix(in oklab, var(--run-success) 88%, black); }
-.btn-run-step { background: var(--run-running-bg); border-color: color-mix(in oklab, var(--run-running) 55%, var(--border)); color: color-mix(in oklab, var(--run-running) 62%, var(--text)); }
-.btn-run-step:hover:not(:disabled) { background: color-mix(in oklab, var(--run-running) 24%, var(--surface)); }
-.btn-run-stop { background: transparent; border-color: color-mix(in oklab, var(--run-error) 38%, var(--border)); color: color-mix(in oklab, var(--run-error) 62%, var(--text)); }
+/* Quiet run-control family: neutral at rest, intent color only on hover, so
+   Run (the solid green primary) is the single loud element in the cluster. */
+.btn-run-step, .btn-run-bg { background: transparent; border-color: var(--border); color: var(--text-muted); }
+.btn-run-step:hover:not(:disabled), .btn-run-bg:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.btn-run-stop { background: transparent; border-color: var(--border); color: var(--text-muted); }
 .btn-run-stop:hover:not(:disabled) { background: var(--run-error-bg); border-color: var(--run-error); color: var(--run-error); }
 
 /* ---- Segmented control (List | Visual) — replaces the legacy single toggle ---- */
@@ -4015,24 +4017,24 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
     padding: 6px 14px;
     border-radius: var(--radius-pill);
     font-size: var(--fs-label);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    margin-right: 4px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin-right: var(--space-md);
     border: 1px solid transparent;
 }
 .run-verdict .status-dot { width: 10px; height: 10px; }
 .run-verdict[data-state="running"] {
-    color: color-mix(in oklab, var(--run-running) 70%, var(--text));
+    color: color-mix(in oklab, var(--run-running) 85%, var(--text));
     background: color-mix(in oklab, var(--run-running) 14%, transparent);
     border-color: color-mix(in oklab, var(--run-running) 30%, transparent);
 }
 .run-verdict[data-state="success"] {
-    color: color-mix(in oklab, var(--run-success) 60%, var(--text));
+    color: color-mix(in oklab, var(--run-success) 82%, var(--text));
     background: color-mix(in oklab, var(--run-success) 15%, transparent);
     border-color: color-mix(in oklab, var(--run-success) 32%, transparent);
 }
 .run-verdict[data-state="error"] {
-    color: color-mix(in oklab, var(--run-error) 62%, var(--text));
+    color: color-mix(in oklab, var(--run-error) 82%, var(--text));
     background: color-mix(in oklab, var(--run-error) 14%, transparent);
     border-color: color-mix(in oklab, var(--run-error) 32%, transparent);
 }
@@ -4360,12 +4362,12 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
 /* --- Topbar send-current button: quiet secondary, Run keeps the accent --- */
 .btn-run-bg {
     display: inline-flex; align-items: center; gap: 6px;
-    background: var(--surface-raised); color: var(--text);
+    background: transparent; color: var(--text-muted);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     font-weight: 500;
 }
-.btn-run-bg:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-run-bg:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .btn-run-bg:disabled { opacity: 0.5; cursor: default; }
 
 /* --- Reusable context menu --- */
@@ -4502,3 +4504,23 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
 @media (prefers-reduced-motion: reduce) {
     .flowlist-actionbar, .context-menu, .launch-config-pop, .flow-select-box { transition: none; }
 }
+
+/* --- Inspector header actions + work-mode expand (v1.4.0 refinements) --- */
+.runner-header-actions { display: inline-flex; align-items: center; gap: 2px; }
+.btn-inspector-expand {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; padding: 0;
+    background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+    color: var(--text-muted); cursor: pointer;
+    transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.btn-inspector-expand:hover { background: var(--surface-sunken); color: var(--text); }
+.btn-inspector-expand[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.btn-inspector-expand .icon { width: 16px; height: 16px; }
+#runner-panel.collapsed .btn-inspector-expand { display: none; }
+
+/* Deliberate, user-triggered pane resize (not decorative motion). */
+#runner-panel { transition: width var(--dur-2) var(--ease-out); }
+.app-container.inspector-expanded #runner-panel { width: min(900px, 60vw); }
+.app-container.inspector-expanded #runner-panel.collapsed { width: 46px; }
+@media (prefers-reduced-motion: reduce) { #runner-panel { transition: none; } }

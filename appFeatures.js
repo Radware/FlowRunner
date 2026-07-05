@@ -31,6 +31,17 @@ export function handleToggleRunnerCollapse() {
     appState.isRunnerCollapsed = !appState.isRunnerCollapsed;
     domRefs.runnerPanel.classList.toggle('collapsed', appState.isRunnerCollapsed);
 
+    // Collapsing always exits the expanded work-mode (a collapsed strip can't
+    // be wide); keep the expand toggle in sync.
+    if (appState.isRunnerCollapsed) {
+        document.querySelector('.app-container')?.classList.remove('inspector-expanded');
+        const expandBtn = document.getElementById('inspector-expand-btn');
+        if (expandBtn) {
+            expandBtn.setAttribute('aria-pressed', 'false');
+            expandBtn.querySelector('use')?.setAttribute('href', '#i-expand-h');
+        }
+    }
+
     try { localStorage.setItem('runnerCollapsed', appState.isRunnerCollapsed); } catch (e) { logger.warn("Could not persist runner state:", e); }
 
     logger.info(`Runner collapsed state: ${appState.isRunnerCollapsed}`);
