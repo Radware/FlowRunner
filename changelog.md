@@ -8,6 +8,14 @@
 
 ---
 
+## v1.4.0 — chrome refinements (folded into 1.4.0, no version bump)
+Design feedback: the topbar buttons/indicators read "overly colorful / AI-slop." Fixed via a 4-agent chrome critique + direct work, keeping run-state color as MEANING while removing arbitrary color:
+- **Save no longer pulses amber.** `.needs-save` was `--warning-color` fill + an infinite `pulse-border-amber` animation (perpetual motion + arbitrary warning hue on a file control). Now a calm `--accent` (brand blue) when there are changes; the UNSAVED flag carries the urgency. Amber is locked (comment) to genuine validation/running affordances only.
+- **One primary per cluster.** Step was amber-filled, competing with Run. Step / Stop / Background are now one quiet family (neutral at rest, intent color on hover); Run is the single filled green primary.
+- **No duplicated verdict.** "PASSED" rendered twice (brand pip + big verdict pill). The brand pip now drops to a dot-only while the verdict pill owns the word (a11y-safe: the pip keeps its word at idle so state is never color-only). The verdict word is committed to the full run hue for projector legibility, separated from the control group.
+- **Inspector chrome onto the system.** The collapse toggle's bespoke filled-triangle glyph + 0.3s round-blob hover became a sprite chevron + token durations / ghost hover.
+- **Inspector work-mode (new).** An expand toggle in the inspector header widens the pane (~350px to min(900px, 60vw)) for roomier variables/config editing; collapsing exits it. Validated live in both themes; Jest 492/492, e2e green.
+
 ## v1.4.0 — the background-run launcher: scalable, multi-entry
 The Runs page's single flow dropdown did not scale ("what if I have 50000 flows") and was the only way in. Replaced with one launch verb reachable four ways, funneling through one shared routine. Design chosen via a 22-agent research + debate workflow, then reconciled to the user's three explicit UX picks (Select-mode toggle, config-popover-first, full modal).
 - **Sidebar Select mode.** A toggle in the drawer header reveals row checkboxes; click toggles selection (a plain click at rest still opens the flow), shift-click ranges, Cmd/Ctrl-click adds, right-click opens a context menu. A contextual action bar slides up with a count badge and a "Run in background" split to a quick-config popover. `listSelection.js` (new, DOM-free, unit-tested) holds the Set; selection auto-retains across folder-collapse re-renders and drops files that vanish.

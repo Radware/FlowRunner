@@ -172,13 +172,18 @@ export function setSystemStatus(state) {
     // The verdict pill: projector-scale PASSED/FAILED/RUNNING beside the run
     // cluster. The 11px brand pip stays as ambient state; THIS is the verdict.
     const verdict = document.getElementById('run-verdict');
+    const show = state === 'running' || state === 'success' || state === 'error';
     if (verdict) {
-        const show = state === 'running' || state === 'success' || state === 'error';
         verdict.hidden = !show;
         verdict.dataset.state = state;
         const word = verdict.querySelector('.run-verdict-word');
         if (word) word.textContent = WORDS[state] || '';
     }
+    // Avoid showing the same status word twice: while the big verdict pill owns
+    // the word (running/pass/fail), the brand pip drops to a dot only; at idle
+    // the pip keeps its word so status is never conveyed by color alone (a11y).
+    const brandWord = document.querySelector('#system-status-pip .status-word');
+    if (brandWord) brandWord.style.display = show ? 'none' : '';
 }
 
 /** Sync the List|Visual segmented control to appState.currentView (selection + sliding thumb). */

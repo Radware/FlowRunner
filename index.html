@@ -23,6 +23,8 @@
         <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
         <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
         <symbol id="i-check-square" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
+        <symbol id="i-expand-h" viewBox="0 0 24 24"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></symbol>
+        <symbol id="i-collapse-h" viewBox="0 0 24 24"><path d="M4 6l5 6-5 6M20 6l-5 6 5 6"/></symbol>
         <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
         <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
         <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
@@ -286,11 +288,15 @@
                     <button class="inspector-tab" data-tab="variables" role="tab" aria-selected="false">Variables</button>
                     <button class="inspector-tab" data-tab="info" role="tab" aria-selected="false">Config</button>
                 </div>
-                <button class="btn-toggle-collapse runner-toggle" id="runner-toggle-btn" title="Toggle Inspector">
-                    <svg viewBox="0 0 24 24" width="24" height="24">
-                        <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z" />
-                    </svg>
-                </button>
+                <div class="runner-header-actions">
+                    <button class="btn-inspector-expand" id="inspector-expand-btn" aria-pressed="false"
+                        title="Expand the inspector for a roomier view of variables and config">
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-expand-h"/></svg>
+                    </button>
+                    <button class="btn-toggle-collapse runner-toggle" id="runner-toggle-btn" title="Toggle Inspector" aria-label="Collapse inspector">
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-chevron-right"/></svg>
+                    </button>
+                </div>
             </div>
             <div class="runner-content">
                 <section class="inspector-pane inspector-pane-results" id="inspector-pane-results">
