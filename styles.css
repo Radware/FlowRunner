@@ -4299,3 +4299,206 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
     font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
     box-shadow: 0 0 0 2px var(--surface);
 }
+
+/* ==========================================================================
+   BACKGROUND-RUN LAUNCHER (v1.4.0) — flow-list Select mode + action bar,
+   reusable context menu, quick-config popover, and the full-modal run picker.
+   All color via semantic tokens; all motion transform/opacity.
+   ========================================================================== */
+
+/* --- Flow list: Select mode + checkboxes + multi-selected fill --- */
+.drawer-section-actions { display: inline-flex; gap: 2px; }
+#flow-select-toggle.active { color: var(--accent); background: var(--accent-soft); }
+.sidebar-content { position: relative; }
+
+.flow-select-box {
+    flex: 0 0 auto;
+    width: 16px; height: 16px;
+    display: none;
+    align-items: center; justify-content: center;
+    border: 1.5px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--accent-contrast);
+    background: var(--surface);
+    transition: background var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
+}
+.flow-select-box .icon { width: 12px; height: 12px; }
+#flow-list.select-mode .flow-select-box { display: inline-flex; }
+#flow-list.select-mode .recent-file-item { cursor: pointer; }
+.recent-file-item.selected-multi .flow-select-box { background: var(--accent); border-color: var(--accent); }
+.recent-file-item.selected-multi { background: var(--accent-soft); }
+#flow-list.has-selection { padding-bottom: 52px; }
+
+/* --- Contextual bulk-launch bar (slides up over the list bottom) --- */
+.flowlist-actionbar {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--surface-overlay);
+    border-top: 1px solid var(--border);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    box-shadow: var(--shadow-md);
+    transform: translateY(120%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform var(--dur-2) var(--ease-out-soft), opacity var(--dur-2) var(--ease-out);
+    z-index: 5;
+}
+.flowlist-actionbar.visible { transform: translateY(0); opacity: 1; pointer-events: auto; }
+.flowlist-selcount {
+    flex: 0 0 auto;
+    min-width: 20px; height: 20px; padding: 0 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: var(--fs-caption); font-weight: 700;
+    border-radius: var(--radius-full);
+    background: var(--accent-soft); color: var(--accent);
+    font-variant-numeric: tabular-nums;
+}
+.flowlist-actionbar #flowlist-clear-btn { margin-left: auto; }
+.flowlist-actionbar #flowlist-run-btn { flex: 0 0 auto; white-space: nowrap; }
+
+/* --- Topbar send-current button: quiet secondary, Run keeps the accent --- */
+.btn-run-bg {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--surface-raised); color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+}
+.btn-run-bg:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-run-bg:disabled { opacity: 0.5; cursor: default; }
+
+/* --- Reusable context menu --- */
+.context-menu {
+    position: fixed;
+    min-width: 200px; max-width: 320px;
+    padding: 6px;
+    background: var(--surface-overlay);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
+    z-index: 13000;
+    opacity: 0; transform: scale(0.98);
+    transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.context-menu.open { opacity: 1; transform: scale(1); }
+.context-menu-item {
+    display: flex; align-items: center; gap: var(--space-sm);
+    width: 100%; padding: 8px 10px;
+    border: 0; background: transparent; color: var(--text);
+    font-size: var(--fs-base); font-weight: 500; text-align: left;
+    border-radius: var(--radius-sm); cursor: pointer;
+}
+.context-menu-item:hover, .context-menu-item:focus-visible {
+    background: var(--accent-soft); color: var(--accent); outline: none;
+}
+.context-menu-item.danger:hover, .context-menu-item.danger:focus-visible {
+    background: color-mix(in oklab, var(--run-error) 16%, var(--surface)); color: var(--run-error);
+}
+.context-menu-item[disabled] { opacity: 0.5; cursor: default; }
+.context-menu-icon { width: 16px; height: 16px; flex: 0 0 auto; color: var(--text-muted); }
+.context-menu-item:hover .context-menu-icon, .context-menu-item:focus-visible .context-menu-icon { color: inherit; }
+.context-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+
+/* --- Quick launch-config popover (shared: topbar + action bar) --- */
+.launch-config-pop {
+    position: fixed;
+    min-width: 208px;
+    display: flex; flex-direction: column; gap: var(--space-sm);
+    padding: var(--space-md);
+    background: var(--surface-overlay);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
+    z-index: 13000;
+    opacity: 0; transform: scale(0.98);
+    transition: opacity var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out);
+}
+.launch-config-pop.open { opacity: 1; transform: scale(1); }
+.lcp-row { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--fs-body); color: var(--text); }
+.lcp-check { cursor: pointer; user-select: none; }
+.lcp-delay input {
+    width: 84px; padding: 4px 6px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface-raised); color: var(--text);
+    font-variant-numeric: tabular-nums;
+}
+.lcp-unit { color: var(--text-muted); font-size: var(--fs-caption); }
+.lcp-run { margin-top: 2px; justify-content: center; }
+
+/* --- Full-modal run picker --- */
+.run-picker-overlay {
+    position: fixed; inset: 0;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 10vh;
+    background: color-mix(in oklab, var(--text) 45%, transparent);
+    z-index: 12500;
+}
+.run-picker {
+    width: min(680px, 94vw);
+    max-height: 78vh;
+    display: flex; flex-direction: column;
+    background: var(--surface-raised); color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay);
+    overflow: hidden;
+}
+.run-picker-head { padding: var(--space-lg) var(--space-lg) var(--space-md); border-bottom: 1px solid var(--border); }
+.run-picker-title-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-md); }
+.run-picker-title { margin: 0; font-size: var(--fs-h3); letter-spacing: -0.01em; }
+.run-picker-folder {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; max-width: 220px;
+    font-size: var(--fs-caption); font-weight: 500; color: var(--text-muted);
+    background: var(--surface-sunken); border: 1px solid var(--border);
+    border-radius: var(--radius-full); cursor: pointer;
+}
+.run-picker-folder span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-picker-folder:hover { color: var(--accent); border-color: var(--accent); }
+.run-picker-search {
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: 0 12px;
+    background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--radius-sm);
+}
+.run-picker-search .icon { color: var(--text-muted); flex: 0 0 auto; }
+.run-picker-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+.run-picker-input { flex: 1; padding: 10px 0; border: 0; background: transparent; color: var(--text); font-size: var(--fs-label); outline: none; }
+.run-picker-list { flex: 1; overflow-y: auto; list-style: none; margin: 0; padding: 6px; min-height: 140px; }
+.run-picker-row {
+    display: flex; align-items: center; gap: var(--space-sm);
+    padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer;
+}
+.run-picker-row.active { background: var(--surface-sunken); }
+.run-picker-row.checked { background: var(--accent-soft); }
+.run-picker-box {
+    flex: 0 0 auto; width: 16px; height: 16px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1.5px solid var(--border-strong); border-radius: var(--radius-sm);
+    color: var(--accent-contrast);
+}
+.run-picker-row.checked .run-picker-box { background: var(--accent); border-color: var(--accent); }
+.run-picker-box .icon { width: 12px; height: 12px; }
+.run-picker-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.run-picker-openflag { font-size: var(--fs-caption); color: var(--accent); background: var(--accent-soft); padding: 0 6px; border-radius: var(--radius-full); }
+.run-picker-hint {
+    margin-left: auto; max-width: 48%;
+    color: var(--text-faint); font-size: var(--fs-caption);
+    font-family: var(--font-family-code, ui-monospace, monospace);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.run-picker-empty { padding: var(--space-xl); text-align: center; color: var(--text-muted); }
+.run-picker-note { padding: 6px 16px; color: var(--text-muted); font-size: var(--fs-caption); border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.run-picker-note[hidden] { display: none; }
+.run-picker-foot { display: flex; align-items: center; gap: var(--space-md); padding: var(--space-md) var(--space-lg); border-top: 1px solid var(--border); }
+.run-picker-config { display: flex; align-items: center; gap: var(--space-md); }
+.run-picker-check, .run-picker-delay { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-body); color: var(--text); }
+.run-picker-delay input { width: 80px; padding: 4px 6px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-sunken); color: var(--text); font-variant-numeric: tabular-nums; }
+.run-picker-unit { color: var(--text-muted); font-size: var(--fs-caption); }
+.run-picker-actions { margin-left: auto; display: flex; align-items: center; gap: var(--space-sm); }
+.run-picker-count { font-size: var(--fs-caption); font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: var(--radius-full); font-variant-numeric: tabular-nums; }
+.run-picker-count[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+    .flowlist-actionbar, .context-menu, .launch-config-pop, .flow-select-box { transition: none; }
+}

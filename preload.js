@@ -45,6 +45,16 @@ const electronAPI = {
         logger.debug("[Preload] Invoking 'fs:writeFile' for:", filePath);
         return ipcRenderer.invoke('fs:writeFile', filePath, content);
     },
+    // Recursively enumerate *.flow.json under a root (background-run picker scale).
+    scanFlows: (rootDir) => {
+        logger.debug("[Preload] Invoking 'fs:scanFlows' for:", rootDir);
+        return ipcRenderer.invoke('fs:scanFlows', rootDir);
+    },
+    // Choose a folder (the flows root the picker scans).
+    chooseDirectory: () => {
+        logger.debug("[Preload] Invoking 'dialog:openDirectory'");
+        return ipcRenderer.invoke('dialog:openDirectory');
+    },
 
     // --- Recent Files (persisted via electron-store in main) ---
     // Each returns a Promise resolving to { success, recentFiles }.

@@ -22,6 +22,100 @@ import { initializeAppComponents } from './app.js'; // <-- ADDED IMPORT
 import { logger } from './logger.js'; // <-- ADDED IMPORT
 // WAVE2 file-features: rebase the undo/redo "clean" baseline on save.
 import { markFlowHistorySaved } from './flowHistory.js';
+// Background-run launching from the flow list (Select mode + right-click).
+import { createListSelection, formatRunLabel } from './listSelection.js';
+import { openContextMenu } from './contextMenu.js';
+import { launchBackgroundRuns } from './launchFlows.js';
+import { openLaunchConfig } from './launchConfigPopover.js';
+
+// --- Flow-list multi-selection (Select mode) --------------------------------
+const flowSelection = createListSelection();
+let flowSelectMode = false;
+
+export function isFlowSelectMode() { return flowSelectMode; }
+export function getFlowSelectionPaths() { return flowSelection.list(); }
+export function flowSelectionSize() { return flowSelection.size(); }
+
+function flowListEl() { return domRefs.flowList || document.getElementById('flow-list'); }
+function orderedVisibleRowEls() {
+    const list = flowListEl();
+    return list ? [...list.querySelectorAll('.recent-file-item')] : [];
+}
+function orderedVisiblePaths() {
+    return orderedVisibleRowEls().map((el) => el.dataset.filePath).filter(Boolean);
+}
+function knownFlowPaths() {
+    const filed = (workspaceModel.flows || []).map((f) => f.path);
+    return new Set([...getRecentFiles(), ...filed]);
+}
+
+export function setFlowSelectMode(on) {
+    flowSelectMode = !!on;
+    if (!flowSelectMode) flowSelection.clear();
+    rerenderFlowManager();
+}
+export function toggleFlowSelectMode() { setFlowSelectMode(!flowSelectMode); }
+export function clearFlowSelection() { flowSelection.clear(); rerenderFlowManager(); }
+
+/** Reflect selection count + mode onto the drawer chrome (toggle, action bar). */
+function updateFlowSelectionChrome() {
+    const list = flowListEl();
+    const n = flowSelection.size();
+    if (list) {
+        list.classList.toggle('select-mode', flowSelectMode);
+        list.classList.toggle('has-selection', n > 0);
+    }
+    const toggle = document.getElementById('flow-select-toggle');
+    if (toggle) {
+        toggle.setAttribute('aria-pressed', String(flowSelectMode));
+        toggle.classList.toggle('active', flowSelectMode);
+    }
+    const bar = document.getElementById('flowlist-actionbar');
+    if (bar) {
+        bar.classList.toggle('visible', flowSelectMode && n > 0);
+        const count = bar.querySelector('#flowlist-selcount');
+        if (count) { count.textContent = String(n); count.setAttribute('aria-label', `${n} selected`); }
+        // The number badge carries the count; the button label stays short so
+        // it never truncates in the narrow drawer.
+        const runBtn = bar.querySelector('#flowlist-run-btn');
+        if (runBtn) runBtn.disabled = n === 0;
+    }
+}
+
+function launchFlowSelection(anchorEl) {
+    const paths = flowSelection.list();
+    if (!paths.length) return;
+    openLaunchConfig({
+        anchorEl: anchorEl || document.getElementById('flowlist-run-btn') || flowListEl(),
+        count: paths.length,
+        onLaunch: (cfg) => { launchBackgroundRuns(paths, cfg); setFlowSelectMode(false); },
+    });
+}
+
+function openRowContextMenu(event, filePath) {
+    event.preventDefault();
+    // Never act on an invisible selection (Finder/VS Code): if the right-clicked
+    // row is not selected, select just it (and enter select mode) first.
+    if (!flowSelection.has(filePath)) {
+        flowSelection.set([filePath]);
+        flowSelectMode = true;
+        rerenderFlowManager();
+    }
+    const paths = flowSelection.list();
+    const n = paths.length;
+    const row = event.currentTarget;
+    const items = [
+        { id: 'run', label: formatRunLabel(n), icon: 'i-repeat',
+            action: () => launchFlowSelection(row) },
+    ];
+    if (n === 1) {
+        items.push({ id: 'open', label: 'Open in editor', icon: 'i-file',
+            action: () => { const li = orderedVisibleRowEls().find((el) => el.dataset.filePath === filePath); setFlowSelectMode(false); if (li) handleFlowListActions({ target: li }); } });
+    }
+    items.push({ separator: true });
+    items.push({ id: 'clear', label: 'Clear selection', action: () => setFlowSelectMode(false) });
+    openContextMenu({ x: event.clientX, y: event.clientY, items, anchorEl: row });
+}
 
 
 // Simple path shim for display purposes
@@ -304,9 +398,14 @@ async function promptNewFolder(parentId = null) {
     rerenderFlowManager();
 }
 
-/** One-time wiring for the drawer's flow-manager chrome (New Folder button). */
+/** One-time wiring for the drawer's flow-manager chrome (New Folder + Select). */
 export function initializeFlowManager() {
     document.getElementById('new-folder-btn')?.addEventListener('click', () => promptNewFolder(null));
+    // Select-mode toggle (reveals checkboxes for multi-select bulk launch).
+    document.getElementById('flow-select-toggle')?.addEventListener('click', () => toggleFlowSelectMode());
+    // Contextual action bar buttons.
+    document.getElementById('flowlist-run-btn')?.addEventListener('click', (e) => launchFlowSelection(e.currentTarget));
+    document.getElementById('flowlist-clear-btn')?.addEventListener('click', () => setFlowSelectMode(false));
 }
 
 export function renderFlowList(recentFiles) {
@@ -329,8 +428,12 @@ export function renderFlowList(recentFiles) {
         li.title = filePath;
         if (filePath === appState.currentFilePath) li.classList.add('selected');
 
+        const isChecked = flowSelection.has(filePath);
+        if (isChecked) li.classList.add('selected-multi');
+
         li.innerHTML = `
             <div class="flow-item-content">
+                <span class="flow-select-box" aria-hidden="true">${isChecked ? '<svg class="icon icon-sm" aria-hidden="true"><use href="#i-check"/></svg>' : ''}</span>
                 <svg class="icon flow-item-icon" aria-hidden="true"><use href="#i-file"/></svg>
                 <span class="flow-item-name">${escapeHTML(getFileName(filePath))}</span>
                 <button class="btn-remove-recent-file"
@@ -343,14 +446,27 @@ export function renderFlowList(recentFiles) {
         `;
 
         li.addEventListener('click', (e) => {
-            if (!e.target.closest('.btn-remove-recent-file')) {
-                handleFlowListActions({ target: li });
+            if (e.target.closest('.btn-remove-recent-file')) return;
+            const hitBox = e.target.closest('.flow-select-box');
+            // Select mode (or a modifier, or the checkbox) toggles selection
+            // instead of opening; a plain click at rest still opens the flow.
+            if (flowSelectMode || hitBox || e.metaKey || e.ctrlKey || e.shiftKey) {
+                e.preventDefault();
+                if (!flowSelectMode) flowSelectMode = true;
+                if (e.shiftKey) flowSelection.range(filePath, orderedVisiblePaths());
+                else flowSelection.toggle(filePath);
+                rerenderFlowManager();
+                return;
             }
+            handleFlowListActions({ target: li });
         });
+        li.addEventListener('contextmenu', (e) => openRowContextMenu(e, filePath));
 
         // Drag: reorder within Recent (existing behavior) + drop onto a folder.
         li.draggable = true;
         li.addEventListener('dragstart', (e) => {
+            // Selecting must never start a drag (drag-to-folder is load-bearing).
+            if (flowSelectMode || e.metaKey || e.ctrlKey || e.shiftKey) { e.preventDefault(); return; }
             li.classList.add('dragging');
             try { e.dataTransfer.setData('text/flow-path', filePath); } catch { /* jsdom */ }
             if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
@@ -511,6 +627,11 @@ export function renderFlowList(recentFiles) {
             list.insertBefore(dragging, afterEl);
         }
     };
+
+    // Drop any selected paths whose file no longer exists (folder-collapse keeps
+    // filed flows selected; a real removal drops them), then reflect the chrome.
+    flowSelection.retain([...knownFlowPaths()]);
+    updateFlowSelectionChrome();
 }
 
 // --- MODIFIED FUNCTION ---

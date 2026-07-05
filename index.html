@@ -22,6 +22,7 @@
         <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
         <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
         <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-check-square" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
         <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
         <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
         <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
@@ -158,6 +159,8 @@
                     title="Step into nested steps (Not Implemented)">Step Into</button>
                 <button id="stop-flow-btn" class="btn btn-run-stop" disabled
                     title="Stop the current execution (Esc)"><svg class="icon icon--fill icon-sm" aria-hidden="true"><use href="#i-stop"/></svg><span>Stop</span></button>
+                <button id="bg-run-current-btn" class="btn btn-run-bg" disabled
+                    title="Run this flow in the background (keep editing while it runs)"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-repeat"/></svg><span>Background</span></button>
                 <button id="run-flow-btn" class="btn btn-run-go" disabled
                     title="Run the entire flow (F5)"><svg class="icon icon--fill icon-sm" aria-hidden="true"><use href="#i-play"/></svg><span>Run</span></button>
             </div>
@@ -188,14 +191,30 @@
                 </div>
                 <div class="drawer-section-head">
                     <span class="drawer-section-label">Flows</span>
-                    <button id="new-folder-btn" class="btn btn-sm btn-ghost btn-icon" title="New folder">
-                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder-plus"/></svg>
-                    </button>
+                    <div class="drawer-section-actions">
+                        <button id="flow-select-toggle" class="btn btn-sm btn-ghost btn-icon" aria-pressed="false"
+                            title="Select flows to run in the background">
+                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-check-square"/></svg>
+                        </button>
+                        <button id="new-folder-btn" class="btn btn-sm btn-ghost btn-icon" title="New folder">
+                            <svg class="icon icon-sm" aria-hidden="true"><use href="#i-folder-plus"/></svg>
+                        </button>
+                    </div>
                 </div>
                 <div class="flow-list-container">
                     <ul id="flow-list" class="flow-list">
                         <li class="loading-flows">Loading recent files...</li>
                     </ul>
+                </div>
+                <!-- Contextual bulk-launch bar: slides up only while flows are selected. -->
+                <div class="flowlist-actionbar" id="flowlist-actionbar" role="toolbar" aria-label="Selected flows">
+                    <span class="flowlist-selcount" id="flowlist-selcount" title="Selected flows">0</span>
+                    <button class="btn btn-sm btn-ghost btn-icon" id="flowlist-clear-btn" title="Clear selection" aria-label="Clear selection">
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg>
+                    </button>
+                    <button class="btn btn-sm btn-run-go" id="flowlist-run-btn" disabled>
+                        <svg class="icon icon-sm" aria-hidden="true"><use href="#i-repeat"/></svg><span id="flowlist-run-label">Run in background</span>
+                    </button>
                 </div>
             </div>
         </aside>
@@ -252,25 +271,9 @@
                     <h2>Background Runs</h2>
                     <p class="runs-page-sub" id="runs-page-summary">Each run executes a snapshot of a flow, so you can keep editing while it works.</p>
                 </div>
-                <form class="runs-launcher" id="runs-launcher">
-                    <label class="runs-launcher-field runs-launcher-flow" for="runs-launch-select">
-                        <span class="runs-launcher-label">Flow</span>
-                        <select id="runs-launch-select" aria-label="Flow to run in the background"></select>
-                    </label>
-                    <label class="runs-launcher-check" title="Repeat the flow until you stop it">
-                        <input type="checkbox" id="runs-launch-continuous" checked>
-                        <span>Continuous</span>
-                    </label>
-                    <label class="runs-launcher-field runs-launcher-delay" for="runs-launch-delay"
-                        title="Delay between steps, and between iterations in Continuous mode">
-                        <span class="runs-launcher-label">Delay</span>
-                        <input type="number" id="runs-launch-delay" value="1000" min="0" step="100">
-                        <span class="runs-launcher-unit">ms</span>
-                    </label>
-                    <button type="submit" id="runs-launch-btn" class="btn btn-primary">
-                        <svg class="icon icon--fill icon-sm" aria-hidden="true"><use href="#i-play"/></svg><span>Start run</span>
-                    </button>
-                </form>
+                <button type="button" id="runs-new-run-btn" class="btn btn-primary">
+                    <svg class="icon icon-sm" aria-hidden="true"><use href="#i-plus"/></svg><span>New background run</span>
+                </button>
             </header>
             <ul class="bg-runs-list" id="bg-runs-list"></ul>
         </section>

@@ -110,8 +110,11 @@ export function setDirty() {
     // setDirty fires after every model mutation, which is exactly when "does
     // this flow have steps to run" can change (updateRunnerUI only fires on
     // runner lifecycle events, so it alone leaves the button stale).
+    const bgRunEnabled = flowIsLoaded && hasSteps && !appIsLoading;
     const bgRunBtn = document.getElementById('bg-run-btn');
-    if (bgRunBtn) bgRunBtn.disabled = !flowIsLoaded || !hasSteps || appIsLoading;
+    if (bgRunBtn) bgRunBtn.disabled = !bgRunEnabled;
+    const bgRunCurrentBtn = document.getElementById('bg-run-current-btn');
+    if (bgRunCurrentBtn) bgRunCurrentBtn.disabled = !bgRunEnabled;
 
     // Notify main process if dirty state changes (optional, if needed elsewhere)
     // if (window.electronAPI && typeof window.electronAPI.notifyDirtyStateChanged === 'function') {

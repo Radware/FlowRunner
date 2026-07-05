@@ -146,7 +146,7 @@ async function checkUnsavedChanges() {
 // --- Application Information ---
 const appName = 'FlowRunner';
 // Try reading version from package.json
-let appVersion = '1.3.0'; // Default version (Ensure this matches your actual package.json)
+let appVersion = '1.4.0'; // Default version (Ensure this matches your actual package.json)
 try {
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJsonContent = await fs.readFile(packageJsonPath, 'utf-8');
@@ -532,6 +532,65 @@ app.whenReady().then(async () => {
           else if (error.code === 'EMFILE' || error.code === 'ENFILE') userMessage = `Too many files open.`;
           logger.error(`[IPC Main] Error reading file ${filePath}:`, error);
           return { success: false, error: userMessage, code: error.code, path: filePath };
+      }
+  });
+
+  // Recursively enumerate *.flow.json under a chosen root so the background-run
+  // picker can scale past the capped recent-files list. Skips heavy/vcs dirs,
+  // tolerates unreadable folders, and caps the count so a huge tree can't hang.
+  ipcMain.handle('fs:scanFlows', async (event, rootDir) => {
+      if (!rootDir || typeof rootDir !== 'string') {
+          return { success: false, error: 'No folder provided.' };
+      }
+      const SCAN_CAP = 50000;
+      const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', '.cache', 'dist', 'out']);
+      const files = [];
+      let truncated = false;
+      const stack = [rootDir];
+      try {
+          while (stack.length) {
+              const dir = stack.pop();
+              let entries;
+              try {
+                  entries = await fs.readdir(dir, { withFileTypes: true });
+              } catch (e) {
+                  continue; // unreadable directory: skip, don't abort the walk
+              }
+              for (const ent of entries) {
+                  const full = path.join(dir, ent.name);
+                  if (ent.isDirectory()) {
+                      if (SKIP_DIRS.has(ent.name) || ent.name.startsWith('.')) continue;
+                      stack.push(full);
+                  } else if (ent.isFile() && ent.name.toLowerCase().endsWith('.flow.json')) {
+                      files.push({ path: full, name: ent.name, mtimeMs: 0 });
+                      if (files.length >= SCAN_CAP) { truncated = true; break; }
+                  }
+              }
+              if (truncated) break;
+          }
+          logger.info(`[IPC Main] fs:scanFlows found ${files.length} flow(s) under ${rootDir}${truncated ? ' (capped)' : ''}`);
+          return { success: true, files, truncated };
+      } catch (error) {
+          logger.error('[IPC Main] fs:scanFlows error:', error);
+          return { success: false, error: error.message || 'Scan failed.' };
+      }
+  });
+
+  // Pick a folder (used to choose the flows root the picker scans).
+  ipcMain.handle('dialog:openDirectory', async () => {
+      if (!mainWindow) return { success: false, error: 'Main window not available' };
+      try {
+          const result = await dialog.showOpenDialog(mainWindow, {
+              title: 'Choose a flows folder',
+              properties: ['openDirectory'],
+          });
+          if (!result || result.canceled || !result.filePaths || result.filePaths.length === 0) {
+              return { success: true, cancelled: true, path: null };
+          }
+          return { success: true, cancelled: false, path: result.filePaths[0] };
+      } catch (error) {
+          logger.error('[IPC Main] dialog:openDirectory error:', error);
+          return { success: false, error: error.message || 'Unknown dialog error' };
       }
   });
 
