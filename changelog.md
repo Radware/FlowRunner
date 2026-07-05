@@ -2,13 +2,13 @@
 
 > What we shipped and **why** (decisions + rationale). This is our decision record, not just a list of features. **Add an entry at the top whenever you land a meaningful change** — record the decision and the reasoning, not only the diff. Newest first.
 
-**Current version: 1.4.0.** A version bump touches 8 files — see [architecture.md](architecture.md) §9.
+**Current version: 1.4.1.** A version bump touches 8 files — see [architecture.md](architecture.md) §9.
 
 > Dating note: README labels (e.g. v1.2.0 "Aug 2025") and git commit dates diverge (the v1.2.0 bump actually landed 2026-01-13, v1.2.1 on 2026-03-23). Git dates are authoritative for when code landed.
 
 ---
 
-## v1.4.0 — chrome refinements (folded into 1.4.0, no version bump)
+## v1.4.1 — chrome refinements + user-oriented docs
 Design feedback: the topbar buttons/indicators read "overly colorful / AI-slop." Fixed via a 4-agent chrome critique + direct work, keeping run-state color as MEANING while removing arbitrary color:
 - **Save no longer pulses amber.** `.needs-save` was `--warning-color` fill + an infinite `pulse-border-amber` animation (perpetual motion + arbitrary warning hue on a file control). Now a calm `--accent` (brand blue) when there are changes; the UNSAVED flag carries the urgency. Amber is locked (comment) to genuine validation/running affordances only.
 - **One primary per cluster.** Step was amber-filled, competing with Run. Step / Stop / Background are now one quiet family (neutral at rest, intent color on hover); Run is the single filled green primary.

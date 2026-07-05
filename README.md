@@ -1,6 +1,6 @@
 # FlowRunner
 
-![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.4.1-blue.svg)
 
 <div align="center" style="margin-bottom: 25px; margin-top: 10px;">
   <div style="display: inline-block; background: #fff; border-radius: 18px; padding: 18px 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);">
@@ -44,9 +44,9 @@ Grab the build for your platform from the [Releases page](https://github.com/Rad
 
 | Platform | Download | Then |
 |---|---|---|
-| **Windows** (x64) | `FlowRunnerSetup-x64-win-1.4.0.zip` | Unzip, run `Setup.exe`. If SmartScreen warns (the app is unsigned), choose *More info → Run anyway*. |
-| **macOS** (Apple Silicon) | `FlowRunnerSetup-arm64-mac-1.4.0.dmg` | Open the DMG, drag **FlowRunner** to Applications. See macOS note below if it won't open. |
-| **Linux** (x64) | `FlowRunnerSetup-x64-linux-1.4.0.AppImage` | `chmod +x` it, then run it. |
+| **Windows** (x64) | `FlowRunnerSetup-x64-win-1.4.1.zip` | Unzip, run `Setup.exe`. If SmartScreen warns (the app is unsigned), choose *More info → Run anyway*. |
+| **macOS** (Apple Silicon) | `FlowRunnerSetup-arm64-mac-1.4.1.dmg` | Open the DMG, drag **FlowRunner** to Applications. See macOS note below if it won't open. |
+| **Linux** (x64) | `FlowRunnerSetup-x64-linux-1.4.1.AppImage` | `chmod +x` it, then run it. |
 
 Network access is only needed while running flows that call external endpoints. Authoring, saving, loading, and visualizing all work offline.
 
@@ -165,6 +165,11 @@ Architecture, subsystem notes, and design decisions live in [architecture.md](ar
 ---
 
 ## Release history
+
+### v1.4.1 (July 2026)
+- **Calmer chrome.** Save turns brand blue (not pulsing amber) when you have changes; Run is the single accent in the run cluster; the run verdict reads once. Color now means status, action, or run, nothing decorative.
+- **Roomier inspector.** An expand control in the inspector header widens it into a work surface for Variables and Config.
+- **Docs rewritten** around today's interface (README + in-app Help), audited against the code.
 
 ### v1.4.0 (July 2026)
 - **Background-run launcher, rebuilt to scale.** Launch flows into the background from four places, all one action: the flow you're editing (top-bar **Background** button + quick config popover), several at once via sidebar **Select mode**, a searchable **Runs-page picker** that scales to tens of thousands of flows via an optional folder scan, and the command palette. One shared launch routine and one count label across every surface.
