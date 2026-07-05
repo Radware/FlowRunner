@@ -27,66 +27,58 @@
                 <h2>Getting Started</h2>
                 <p>Here's a quick way to run your first flow:</p>
                 <ol>
-                    <li>Click the <strong>"+ New Flow"</strong> button in the sidebar.</li>
-                    <li>A new flow appears. Click the <strong>"+ Add Step"</strong> button at the bottom of the middle-left "Flow Steps" panel.</li>
-                    <li>Select the <strong>"API Request"</strong> step type.</li>
-                    <li>In the editor panel on the right, set the <strong>URL</strong> to <code>https://httpbin.org/get</code> (leave Method as GET).</li>
-                    <li>Click <strong>"Save Step"</strong> at the bottom of the editor.</li>
-                    <li>In the "Runner Panel" on the far right, click the <strong>"▶ Run"</strong> button.</li>
-                    <li>Observe the step highlighting and check the "Execution Results" list for the response from httpbin.</li>
+                    <li>Click <strong>"+ New Flow"</strong> in the Flows drawer on the left.</li>
+                    <li>Press <strong>Tab</strong> (or click <strong>"+ Add Step"</strong>) and choose <strong>"API Request"</strong>.</li>
+                    <li>In the request bar, set the <strong>URL</strong> to <code>https://httpbin.org/get</code> (leave the method on GET), then click <strong>"Save Step"</strong>.</li>
+                    <li>Click the green <strong>"▶ Run"</strong> in the top bar (or press <strong>F5</strong>).</li>
+                    <li>Watch the step highlight, then open the <strong>Results</strong> tab on the right for the response from httpbin.</li>
+                    <li>Save the flow with <strong>Ctrl/Cmd+S</strong>. It becomes a portable <code>.flow.json</code> file.</li>
                 </ol>
             </section>
 
             <section id="interface">
                 <h2>Interface Overview</h2>
+                <p>FlowRunner is one window with a few fixed zones.</p>
                 <div class="subsection">
-                    <h3>Sidebar (Left)</h3>
+                    <h3>The rail (far left)</h3>
                     <ul>
-                        <li><strong>Branding:</strong> Application logo and name.</li>
-                        <li><strong>Recent Flows:</strong> Lists recently opened/saved <code>.flow.json</code> files. Drag to reorder the list. Use the '✕' button to remove an entry.</li>
-                        <li><strong>Actions:</strong>
-                            <ul>
-                                <li><strong>+ New Flow:</strong> Creates a blank flow.</li>
-                                <li><strong>Open Flow:</strong> Opens a system dialog to load a <code>.flow.json</code> file.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Toggle Button (Top Right):</strong> Collapses/expands the sidebar.</li>
+                        <li>Toggle the <strong>Flows drawer</strong>, open the <strong>command palette</strong> (Ctrl/Cmd+K), jump to the <strong>Runs</strong> page, switch <strong>theme</strong>, and enter <strong>Present</strong> mode. A badge on the Runs button counts live background runs.</li>
                     </ul>
                 </div>
                 <div class="subsection">
-                    <h3>Workspace (Center)</h3>
+                    <h3>The top bar</h3>
                     <ul>
-                        <li><strong>Header:</strong>
-                            <ul>
-                                <li><strong>Title:</strong> Shows the current flow name (with '*' if unsaved).</li>
-                                <li><strong>File Controls:</strong> Save, Save As, Cancel (revert changes), Close. The Save button highlights when unsaved changes exist.</li>
-                                <li><strong>View Controls:</strong>
-                                    <ul>
-                                        <li><strong>Toggle View:</strong> Switches between List/Editor and Node-Graph views.</li>
-                                        <li><strong>Info:</strong> Toggles the Flow Information overlay (Name, Description, Global Headers, Static Variables).</li>
-                                        <li><strong>Show/Hide Variables:</strong> Toggles the Variables Panel (shows defined variable origins).</li>
-                                        <li><strong>Auto Arrange (Graph):</strong> Automatically lays out nodes in the Node-Graph view.</li>
-                                    </ul>
-                                </li>
-                            </ul>
-                        </li>
-                        <li><strong>Content Area:</strong> Displays either the List/Editor View or the Node-Graph View based on the toggle. Shows a placeholder message if no flow is loaded.</li>
-                        <li><strong>Messages:</strong> Important status messages and validation errors appear here (usually top-right).</li>
+                        <li><strong>Flow name</strong> and an <strong>UNSAVED</strong> marker; <strong>Save</strong> (brand-blue when you have changes), plus copy, undo/redo, and export controls.</li>
+                        <li><strong>List / Visual</strong> switch for the workspace, and an ambient engine-status dot.</li>
+                        <li><strong>Run cluster</strong> (right): <strong>Step</strong>, <strong>Stop</strong>, <strong>Background</strong>, and the single accent <strong>Run</strong>. The run verdict (Passed / Failed / Running) reads here at projector scale.</li>
                     </ul>
                 </div>
                 <div class="subsection">
-                    <h3>Runner Panel (Right)</h3>
+                    <h3>The Flows drawer (left)</h3>
                     <ul>
-                        <li><strong>Header:</strong> Panel title, Clear Results button, Toggle button to collapse/expand.</li>
-                        <li><strong>Controls:</strong>
-                            <ul>
-                                <li><strong>Run/Step/Stop:</strong> Control flow execution.</li>
-                                <li><strong>Continuous Run:</strong> Checkbox to run the flow repeatedly (uses 'Delay' between runs).</li>
-                                <li><strong>Delay (ms):</strong> Sets pause between steps in 'Run' mode, and between full runs in 'Continuous' mode.</li>
-                            </ul>
-                        </li>
-                        <li><strong>Status Messages:</strong> Shows brief messages about runner state (starting, stopped, errors).</li>
-                        <li><strong>Execution Results:</strong> A detailed log of each step execution, including status, output/error details, and extraction warnings. Use the search box and status filter to narrow the list, click the copy icon to copy step output, or export to JSON/CSV.</li>
+                        <li>Your flow library: <strong>Recent</strong> files plus <strong>folders and subfolders</strong> you arrange yourself (drag a flow onto a folder). New Flow, Open, Import cURL, and Import HAR live here.</li>
+                        <li><strong>Select mode</strong> (the checkbox toggle) reveals checkboxes so you can pick several flows at once and run them in the background together. Shift-click for a range; right-click a flow for its menu.</li>
+                    </ul>
+                </div>
+                <div class="subsection">
+                    <h3>The workspace (center)</h3>
+                    <ul>
+                        <li>The flow itself as either the <strong>List</strong> editor (dense, configuration-first, drag the ☰ handle to reorder) or the <strong>Visual</strong> node graph (structure at a glance; drag nodes, zoom, minimap, Tidy Up).</li>
+                    </ul>
+                </div>
+                <div class="subsection">
+                    <h3>The inspector (right)</h3>
+                    <ul>
+                        <li><strong>Results:</strong> the run feed, one scannable line per request (name, method, HTTP code, duration, verdict), expandable to full output, extracted values, and warnings. Search, filter, copy, or export to JSON/CSV. Run controls (Continuous, Delay, Clear) live at the top.</li>
+                        <li><strong>Variables:</strong> everything defined and extracted, with where each came from.</li>
+                        <li><strong>Config:</strong> flow name, description, global headers, and static variables.</li>
+                        <li>Use the <strong>expand</strong> control in the inspector header to widen it into a roomy work surface for Variables and Config.</li>
+                    </ul>
+                </div>
+                <div class="subsection">
+                    <h3>The Runs page</h3>
+                    <ul>
+                        <li>Open <strong>Runs</strong> from the rail for the full background-run board: each run's verdict, iteration and pass/fail tallies, a streaming feed, and Stop / Remove. Click <strong>New background run</strong> to launch one or many flows from a searchable picker.</li>
                     </ul>
                 </div>
             </section>
@@ -95,7 +87,7 @@
                 <h2>Core Concepts</h2>
                 <div class="subsection">
                     <h3>Flows</h3>
-                    <p>A Flow is a sequence of steps saved as a single <code>.flow.json</code> file. You can configure overall flow settings in the <strong>Flow Information</strong> overlay (toggled by the "Info" button):</p>
+                    <p>A Flow is a sequence of steps saved as a single <code>.flow.json</code> file. You can configure overall flow settings in the <strong>Config</strong> tab of the inspector (right):</p>
                     <ul>
                         <li><strong>Name & Description:</strong> Basic identification.</li>
                         <li><strong>Global Headers:</strong> Headers automatically added to all API Request steps (can be overridden by step-specific headers).</li>
@@ -123,7 +115,7 @@
                     <ul>
                         <li><strong>Definition:</strong> Variables hold data during flow execution. They can be:
                             <ul>
-                                <li><strong>Static:</strong> Defined in the Flow Information overlay.</li>
+                                <li><strong>Static:</strong> Defined in the Config tab.</li>
                                 <li><strong>Extracted:</strong> Created/updated by 'Extract' rules in API Request steps from the response (status, headers, body path).</li>
                                 <li><strong>Loop Item:</strong> Automatically created within a Loop step to hold the current item.</li>
                                 <li><strong>Runtime:</strong> (Not directly definable by user) Variables modified during execution, including Transform outputs.</li>
@@ -132,7 +124,7 @@
                         <li><strong>Substitution:</strong> Use <code>{{variableName}}</code> syntax to insert variable values into URLs, Header values, Request bodies, Condition values, and Loop sources. The runner replaces this at execution time.</li>
                         <li><strong>Special Variables:</strong> <code>{{RANDOM_IP}}</code> generates a random public IP once per flow run. <code>{{RANDOM_INT(1,1000)}}</code> generates a random integer. <code>{{RANDOM_STRING(16)}}</code> generates a random alphanumeric string.</li>
                         <li><strong>Insertion Helper (<code>{{…}}</code>):</strong> Click this button next to input fields to get a searchable list of currently defined variables and insert them easily.</li>
-                        <li><strong>Variables Panel:</strong> Toggle this panel (using the "Show/Hide Variables" button) to see a list of variables defined by the flow's structure (Static, Extract, Loop) and where they originate. This does *not* show live runtime values.</li>
+                        <li><strong>Variables tab:</strong> Open the <strong>Variables</strong> tab in the inspector to see every variable the flow's structure defines (Static, Extract, Loop) and where each originates. This shows what is defined, not live runtime values.</li>
                         <li><strong>Full Body Extraction:</strong> Use <code>body</code> as the JSON Path in an API Request step's Extract tab to store the entire response body for that step.</li>
                     </ul>
                 </div>
@@ -140,8 +132,22 @@
                     <h3>Views</h3>
                      <ul>
                         <li><strong>List/Editor View:</strong> Default view showing steps hierarchically. Best for detailed configuration using the step editor panel. Supports step reordering via drag-and-drop using the ☰ handle and step search for quick jumps.</li>
-                        <li><strong>Node-Graph View:</strong> Visual representation of the flow structure with connecting lines. Useful for understanding branching and looping. Pan by dragging the background. Drag nodes to rearrange the visual layout (positions are saved with the flow). Select nodes by clicking them. Use zoom controls and the minimap to navigate large graphs, or Auto Arrange to tidy the layout.</li>
+                        <li><strong>Node-Graph View:</strong> Visual representation of the flow structure with connecting lines. Useful for understanding branching and looping. Pan by dragging the background. Drag nodes to rearrange the visual layout (positions are saved with the flow). Select nodes by clicking them. Use zoom controls and the minimap to navigate large graphs, or Tidy Up to auto-arrange.</li>
                     </ul>
+                </div>
+                <div class="subsection">
+                    <h3>Background Runs</h3>
+                    <p>A background run executes a <em>snapshot</em> of a flow independently, so it keeps going while you keep authoring, and later edits never disturb a run already in progress. Launch one from wherever you are:</p>
+                    <ul>
+                        <li><strong>The flow you're editing:</strong> the <strong>Background</strong> button in the top run cluster. A quick popover confirms Continuous and Delay, then it runs from your current (even unsaved) state.</li>
+                        <li><strong>Several at once:</strong> turn on <strong>Select mode</strong> in the Flows drawer, tick the flows, and run the set together.</li>
+                        <li><strong>From a large library:</strong> open <strong>Runs</strong> on the rail and click <strong>New background run</strong> for a searchable picker that scales to thousands of flows (point it at a folder to search them all).</li>
+                    </ul>
+                    <p>Live runs appear as chips in the top bar and a badge on the rail; the <strong>Runs</strong> page shows the full board (verdicts, tallies, streaming feeds, Stop / Remove).</p>
+                </div>
+                <div class="subsection">
+                    <h3>Present mode</h3>
+                    <p>Press the presentation icon on the rail (or <strong>Ctrl/Cmd+Shift+D</strong>) for a full-screen, projector-tuned view: bigger type, bolder run state, and less chrome, for showing a live flow to a room.</p>
                 </div>
             </section>
 
@@ -189,22 +195,46 @@
                             <td>Stops any currently running or stepping execution. Works even if focus is in an input field.</td>
                         </tr>
                          <tr>
-                            <td>Toggle Flow Info Panel</td>
+                            <td>Config tab</td>
                             <td><code>Ctrl</code> + <code>1</code></td>
                             <td><code>Cmd</code> + <code>1</code></td>
-                            <td>Shows or hides the Flow Information overlay.</td>
+                            <td>Opens the Config tab (flow name, description, headers, static variables).</td>
                         </tr>
                          <tr>
-                            <td>Toggle Variables Panel</td>
+                            <td>Variables tab</td>
                             <td><code>Ctrl</code> + <code>2</code></td>
                             <td><code>Cmd</code> + <code>2</code></td>
-                            <td>Shows or hides the defined Variables panel.</td>
+                            <td>Opens the Variables tab (everything the flow defines).</td>
                         </tr>
                         <tr>
-                            <td>Toggle View (List/Graph)</td>
+                            <td>Switch List / Visual</td>
                             <td><code>Ctrl</code> + <code>3</code></td>
                             <td><code>Cmd</code> + <code>3</code></td>
-                            <td>Switches between the List/Editor view and the Node-Graph view.</td>
+                            <td>Switches between the List editor and the Visual node graph.</td>
+                        </tr>
+                        <tr>
+                            <td>Command palette</td>
+                            <td><code>Ctrl</code> + <code>K</code></td>
+                            <td><code>Cmd</code> + <code>K</code></td>
+                            <td>Search commands and recent flows, including "Run flows in background".</td>
+                        </tr>
+                        <tr>
+                            <td>Add a step</td>
+                            <td><code>Tab</code></td>
+                            <td><code>Tab</code></td>
+                            <td>Opens the step-type picker (when focus is not in a text field).</td>
+                        </tr>
+                        <tr>
+                            <td>Undo / Redo</td>
+                            <td><code>Ctrl</code> + <code>Z</code> / <code>Ctrl</code> + <code>Shift</code> + <code>Z</code></td>
+                            <td><code>Cmd</code> + <code>Z</code> / <code>Cmd</code> + <code>Shift</code> + <code>Z</code></td>
+                            <td>Steps backward and forward through flow edits.</td>
+                        </tr>
+                        <tr>
+                            <td>Present mode</td>
+                            <td><code>Ctrl</code> + <code>Shift</code> + <code>D</code></td>
+                            <td><code>Cmd</code> + <code>Shift</code> + <code>D</code></td>
+                            <td>Enters/exits the full-screen projector view.</td>
                         </tr>
                         <tr>
                             <td>Open Help</td>
