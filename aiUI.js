@@ -318,6 +318,9 @@ async function actionExplainResult(btn) {
     const step = (stepId && appState.currentFlowModel)
         ? findStepById(appState.currentFlowModel.steps, stepId) || { type: 'request', name: result.stepName }
         : { type: 'request', name: result.stepName };
+    // Clean 2xx rows are collapsed by default; the answer must be visible.
+    item.classList.remove('collapsed');
+    item.dataset.userExpanded = 'true';
     const host = item.querySelector('.result-detail') || item;
     await streamProse(host, 'What happened', (requestId) => explainResult(step, result, requestId));
 }

@@ -8,6 +8,9 @@
 
 ---
 
+## v1.5.0-beta.1 — the composed live-loop proof (real buttons, real model, real editors)
+`eval/live-loop-proof.mjs` drives the INSTALLED packaged app through the actual user journey: build a flow → run it against a real API → click the real ✨ buttons → verify the model's output lands in the real editors. All green: suggest-extractions filled a row with a REAL response field (`websiteUrl → body.website`), suggest-assertions produced `body.company.name is_not_empty`, explain streamed an accurate visible answer, and the palette Draft command turned "get the list of todos for user 1" into an inserted `GET …/todos/1` step (correct path inferred from the flow's API). The proof CAUGHT a real UX bug — explain streamed into a collapsed result row, invisible — fixed: explaining expands the row. Two automation notes for posterity: the packaged app's CSP blocks Playwright waitForFunction (use locator waits), and the editor's tab strip lives behind the Basic→Power disclosure.
+
 ## v1.5.0-beta.1 — consistency proof + the creative round (maximum use of the copilot)
 **Consistency, measured with real weights (eval/consistency-harness.mjs, 48 generations, 4 repeats per case):** structured suggestions are **9/9 byte-identical across all repeats** — grammar + greedy decoding is deterministic end-to-end, so the same response always yields the same suggestion (a demo-grade guarantee). Prose stayed non-empty and inside its word budget on every repeat (variance expected and acceptable at temp 0.6). Report in eval/consistency-report.json.
 New uses shipped this round (all opt-in, all reviewable, model never saves):
