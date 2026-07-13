@@ -1288,7 +1288,7 @@ export function renderBackgroundRunsUI(runsList) {
     const list = document.getElementById('bg-runs-list');
     if (!list) return;
     if (runsList.length === 0) {
-        list.innerHTML = '<li class="bg-runs-empty">No background runs yet. Pick a flow above and press Start run — it executes a snapshot, so you can keep editing while it works.</li>';
+        list.innerHTML = '<li class="bg-runs-empty">No background runs yet. Click New background run to launch one.</li>';
         return;
     }
     list.innerHTML = runsList.map((r) => {

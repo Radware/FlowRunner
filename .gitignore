@@ -99,3 +99,7 @@ e2e-renderer-logs.txt
 .beta-models/
 eval/results.json
 eval/variant-key.json
+# Polish-audit capture output (regenerate with eval/polish-capture.mjs) — large PNGs
+eval/audit/
+eval/audit-before/
+eval/audit-after/

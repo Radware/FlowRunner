@@ -376,7 +376,7 @@
                             <div class="global-headers-list" data-ref="globalHeadersList">
                                  <!-- Headers added dynamically -->
                             </div>
-                            <button class="btn-add-global-header" data-ref="addGlobalHeaderBtn" style="margin-top: 10px;">+ Add Header</button>
+                            <button class="btn-add-global-header" data-ref="addGlobalHeaderBtn">+ Add Header</button>
                             <p class="form-hint">Header values support variables (e.g., <code>{{varName}}</code>) and special variables like <code>{{RANDOM_IP}}</code>, <code>{{RANDOM_INT(1,1000)}}</code>, or <code>{{RANDOM_STRING(16)}}</code>.</p>
                         </div>
                     </div>
@@ -398,7 +398,7 @@
                             <div class="flow-vars-list" data-ref="flowVarsList">
                                  <!-- Variables added dynamically -->
                             </div>
-                            <button class="btn-add-flow-var" data-ref="addFlowVarBtn" style="margin-top: 10px;">+ Add Variable</button>
+                            <button class="btn-add-flow-var" data-ref="addFlowVarBtn">+ Add Variable</button>
                         </div>
                     </div>
                     <div class="variables-container" data-ref="variablesContainer">
@@ -440,7 +440,7 @@
         <div class="step-type-container">
             <div class="step-type-header">
                 <h3>Select Step Type</h3>
-                <button class="step-type-close" title="Close">✕</button>
+                <button class="step-type-close btn btn-sm btn-ghost btn-icon" title="Close" aria-label="Close"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-x"/></svg></button>
             </div>
             <div class="step-type-options">
                 <div class="step-type-option" data-type="request" title="Make an HTTP request">

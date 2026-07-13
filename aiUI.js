@@ -52,8 +52,6 @@ function isReady() {
 
 function applyReadiness() {
     document.documentElement.classList.toggle('ai-ready', isReady());
-    const railBtn = document.getElementById('rail-ai-btn');
-    if (railBtn) railBtn.classList.toggle('active', isReady());
 }
 
 // --- init ----------------------------------------------------------------------
