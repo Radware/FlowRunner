@@ -19,7 +19,8 @@ import { showMessage } from './uiUtils.js';
 import { logger } from './logger.js';
 import {
     explainResult, suggestExtractions, suggestAssertions, nlToCondition,
-    suggestStepName, suggestFlowDescription, runDigest,
+    suggestStepName, suggestFlowDescription, runDigest, explainFlow,
+    rememberApplied, getQualityCounters,
 } from './aiFeatures.js';
 
 let aiState = null;          // last known state from main
@@ -72,6 +73,14 @@ export function initAiUI() {
 
     // Delegated sparkle actions (affordances render with data-ai-action).
     document.addEventListener('click', onAiAction);
+
+    // Prewarm: when a run starts and the copilot is ready, load the model in
+    // the background so the first suggestion after the run is instant.
+    ['run-flow-btn', 'bg-run-current-btn'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('click', () => {
+            if (isReady() && hasBridge()) window.electronAPI.ai.prewarm().catch(() => {});
+        });
+    });
 }
 
 // --- settings modal --------------------------------------------------------------
@@ -153,6 +162,11 @@ function renderAiModalContent() {
                 </div>`;
             }).join('')}
         </div>
+        <div class="ai-modal-quality">${(() => {
+            const q = getQualityCounters();
+            const parts = Object.entries(q).map(([task, c]) => `${task}: ${c.calls} calls · ${c.repairs} retries · ${c.failures} failed`);
+            return parts.length ? 'Suggestion quality — ' + parts.join('  |  ') : '';
+        })()}</div>
         <div class="ai-modal-status">
             ${loading ? 'Loading model…'
                 : modelLoaded ? `Model loaded (${escapeHTML(String(gpu || 'cpu'))})`
@@ -308,6 +322,17 @@ async function actionExplainResult(btn) {
     await streamProse(host, 'What happened', (requestId) => explainResult(step, result, requestId));
 }
 
+/** Palette command: narrated flow walkthrough streamed over the results pane. */
+export async function streamFlowExplanation(host) {
+    if (!appState.currentFlowModel) { showMessage('Open a flow first.', 'warning'); return; }
+    if (aiBusy) { showMessage('The copilot is already working on something.', 'info'); return; }
+    aiBusy = true;
+    try {
+        await streamProse(host, 'Flow walkthrough', (requestId) => explainFlow(appState.currentFlowModel, requestId));
+        host.prepend(host.querySelector(':scope > .ai-answer'));
+    } finally { aiBusy = false; }
+}
+
 async function actionRunDigest(btn) {
     const host = document.querySelector('.runner-results-container');
     if (!host) return;
@@ -342,6 +367,7 @@ async function actionSuggest(btn, kind) {
             valEl.value = path; valEl.dispatchEvent(new Event('input', { bubbles: true }));
             row.classList.add('ai-suggested');
         });
+        rememberApplied('extractions', step.url, suggestions);
         showMessage(`Suggested ${suggestions.length} extraction${suggestions.length === 1 ? '' : 's'} — review and Save Step.`, 'success');
     } else {
         const suggestions = await suggestAssertions(step, result);
@@ -359,6 +385,7 @@ async function actionSuggest(btn, kind) {
             if (v) { v.value = value; v.dispatchEvent(new Event('input', { bubbles: true })); }
             row.classList.add('ai-suggested');
         });
+        rememberApplied('assertions', step.url, suggestions.map(({ target, operator, value }) => ({ path: target, operator, value })));
         showMessage(`Suggested ${suggestions.length} assertion${suggestions.length === 1 ? '' : 's'} — review and Save Step.`, 'success');
     }
 }
@@ -371,7 +398,7 @@ async function actionNlCondition(btn) {
     const nameInput = editor.querySelector('[id^="step-editor-name-"]');
     const stepId = nameInput ? nameInput.id.replace('step-editor-name-', '') : null;
     const known = Object.keys(appState.definedVariables || {});
-    const { variable, operator, value } = await nlToCondition(text, known);
+    const { variable, operator, value } = await nlToCondition(text, known, appState.lastRuntimeContext || null);
 
     const base = variable.split(/[.[]/)[0];
     const rest = variable.slice(base.length).replace(/^\./, '');

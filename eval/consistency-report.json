@@ -1,0 +1,134 @@
+{
+ "repeats": 4,
+ "report": [
+  {
+   "task": "extractions",
+   "fixtureId": "login",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "extractions",
+   "fixtureId": "orders",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "extractions",
+   "fixtureId": "failure",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "assertions",
+   "fixtureId": "login",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "assertions",
+   "fixtureId": "orders",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "assertions",
+   "fixtureId": "failure",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "condition",
+   "fixtureId": "login",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "condition",
+   "fixtureId": "orders",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "condition",
+   "fixtureId": "failure",
+   "metric": "structured-determinism",
+   "rawIdentical": true,
+   "validatedIdentical": true,
+   "allValid": true,
+   "uniqueRaw": 1,
+   "uniqueValidated": 1
+  },
+  {
+   "task": "explain",
+   "fixtureId": "failure",
+   "metric": "prose-stability",
+   "allNonEmpty": true,
+   "wordCounts": [
+    69,
+    68,
+    65,
+    75
+   ],
+   "spreadPct": 13
+  },
+  {
+   "task": "explain",
+   "fixtureId": "timeout-500",
+   "metric": "prose-stability",
+   "allNonEmpty": true,
+   "wordCounts": [
+    77,
+    71,
+    74,
+    60
+   ],
+   "spreadPct": 22
+  },
+  {
+   "task": "explain",
+   "fixtureId": "token-expired-401",
+   "metric": "prose-stability",
+   "allNonEmpty": true,
+   "wordCounts": [
+    65,
+    58,
+    66,
+    62
+   ],
+   "spreadPct": 12
+  }
+ ]
+}

@@ -54,6 +54,8 @@ import { maybeShowOnboarding, renderEmptyState } from './firstRun.js';
 import { startBackgroundRun, stopBackgroundRun, removeBackgroundRun, getBackgroundRuns } from './backgroundRuns.js';
 import { openRunPicker } from './runPicker.js';
 import { initAiUI, openAiModal } from './aiUI.js';
+import { draftRequestStep, explainFlow } from './aiFeatures.js';
+import { showInputDialog } from './dialogs.js';
 import { openLaunchConfig } from './launchConfigPopover.js';
 import { launchCurrentFlow } from './launchFlows.js';
 
@@ -1200,6 +1202,37 @@ function buildCommandItems() {
         appState.activePage === 'runs' ? 'Return to the flow editor' : 'Launch + monitor flows in the background');
     push('Run flows in background…', () => openRunPicker(), 'Pick one or many flows to run');
     push('AI Copilot…', () => openAiModal(), 'Local AI settings and models (beta)');
+    if (document.documentElement.classList.contains('ai-ready') && hasFlow) {
+        push('Draft a request step with AI…', async () => {
+            const text = await showInputDialog({
+                title: 'Draft a request step', message: 'Describe the request in plain language; the draft is inserted for review, never auto-saved.',
+                placeholder: 'e.g. post a new order for the current user with quantity 2',
+                confirmText: 'Draft', mono: false, multiline: false,
+            });
+            if (!text || !text.trim()) return;
+            try {
+                const draft = await draftRequestStep(text.trim(), {
+                    knownVariables: Object.keys(appState.definedVariables || {}),
+                    baseUrls: [...new Set((appState.currentFlowModel.steps || [])
+                        .filter((s) => s.type === 'request' && /^https?:\/\//i.test(s.url || ''))
+                        .map((s) => { try { return new URL(s.url.replace(/\{\{[^}]+\}\}/g, 'x')).origin; } catch { return null; } })
+                        .filter(Boolean))].slice(0, 3),
+                });
+                const newStep = createNewStep('request');
+                Object.assign(newStep, draft);
+                handleBuilderStepUpdate({ type: 'add', step: newStep, parentId: null, branch: null });
+                showMessage(`Drafted "${draft.name}" — review the step and save.`, 'success');
+            } catch (err) {
+                showMessage(`Couldn't draft the step: ${err.message}`, 'warning');
+            }
+        }, 'Describe it; the copilot drafts a reviewable step');
+        push('Explain this flow (AI)', async () => {
+            const host = document.querySelector('.runner-results-container');
+            if (!host) return;
+            const { streamFlowExplanation } = await import('./aiUI.js');
+            streamFlowExplanation(host);
+        }, 'A narrated walkthrough of the open flow');
+    }
     if (hasFlow && (appState.currentFlowModel.steps || []).length) {
         push('Run current flow in background', () => launchCurrentFlow({}), 'Snapshot the open flow, keep editing');
     }

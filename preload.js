@@ -101,6 +101,7 @@ const electronAPI = {
         generateStructured: (req) => ipcRenderer.invoke('ai:generateStructured', req),
         generateProse: (req) => ipcRenderer.invoke('ai:generateProse', req),
         cancelGeneration: (requestId) => ipcRenderer.invoke('ai:cancelGeneration', requestId),
+        prewarm: () => ipcRenderer.invoke('ai:prewarm'),
         onDownloadProgress: (callback) => {
             ipcRenderer.removeAllListeners('ai:download-progress');
             ipcRenderer.on('ai:download-progress', (event, payload) => callback(payload));

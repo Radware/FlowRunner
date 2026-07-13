@@ -1,7 +1,7 @@
 import { describe, test, expect } from '@jest/globals';
 import {
     truncateBody, bodySkeleton, pathResolves,
-    validateExtractions, validateAssertions, validateCondition,
+    validateExtractions, validateAssertions, validateCondition, validateRequestDraft,
     OPERATORS, ASSERTION_OPERATOR_SUBSET, CONDITION_OPERATOR_SUBSET,
 } from '../aiFeatures.js';
 
@@ -109,6 +109,34 @@ describe('validateCondition', () => {
     test('rejects unknown variables and operators', () => {
         expect(() => validateCondition({ variable: 'ghost', operator: 'equals', value: '1' }, ['real'])).toThrow(/not a defined variable/);
         expect(() => validateCondition({ variable: 'real', operator: 'not_matches_regex', value: 'x' }, ['real'])).toThrow(/not allowed/);
+    });
+});
+
+describe('validateRequestDraft', () => {
+    test('accepts a clean draft and normalizes fields', () => {
+        const out = validateRequestDraft({
+            name: 'Create order', method: 'post', url: 'https://api.example.com/orders',
+            headers: [{ key: 'Content-Type', value: 'application/json' }],
+            body: '{"qty": 2, "user": "{{userId}}"}',
+        });
+        expect(out.method).toBe('POST');
+        expect(out.headers['Content-Type']).toBe('application/json');
+        expect(out.url).toContain('https://');
+    });
+    test('accepts a {{variable}} base URL and empty body', () => {
+        const out = validateRequestDraft({ name: 'x', method: 'GET', url: '{{baseUrl}}/users', headers: [], body: '' });
+        expect(out.url).toBe('{{baseUrl}}/users');
+        expect(out.body).toBe('');
+    });
+    test('rejects bad methods, spaced URLs, and non-JSON bodies', () => {
+        expect(() => validateRequestDraft({ method: 'FETCH', url: 'https://x.co' })).toThrow(/Method/);
+        expect(() => validateRequestDraft({ method: 'GET', url: 'https://x.co/a b' })).toThrow(/single token/);
+        expect(() => validateRequestDraft({ method: 'GET', url: 'ftp://x.co' })).toThrow(/http/);
+        expect(() => validateRequestDraft({ method: 'POST', url: 'https://x.co', body: 'not json' })).toThrow(/JSON/);
+    });
+    test('body with {{variables}} validates as JSON after substitution', () => {
+        const out = validateRequestDraft({ method: 'POST', url: 'https://x.co', body: '{"n": {{count}}}' });
+        expect(out.body).toContain('{{count}}');
     });
 });
 

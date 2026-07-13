@@ -53,6 +53,43 @@ export const CONDITION_OPERATOR_SUBSET = [
 const VAR_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const BODY_BUDGET = 3500; // chars of response body we ground prompts with
 
+// --- Quality counters (per task: calls / repair retries / failures) --------
+const QUALITY_KEY = 'flowrunnerAiQuality';
+function bumpQuality(task, field) {
+    try {
+        const q = JSON.parse(localStorage.getItem(QUALITY_KEY) || '{}');
+        q[task] = q[task] || { calls: 0, repairs: 0, failures: 0 };
+        q[task][field] += 1;
+        localStorage.setItem(QUALITY_KEY, JSON.stringify(q));
+    } catch { /* non-DOM or storage-full: counters are best-effort */ }
+}
+export function getQualityCounters() {
+    try { return JSON.parse(localStorage.getItem(QUALITY_KEY) || '{}'); } catch { return {}; }
+}
+
+// --- Applied-suggestion memory: the user's own accepted examples become the
+// few-shot for the SAME API host (eval: example-anchoring is causal). --------
+const EXAMPLES_KEY = 'flowrunnerAiExamples';
+function hostOf(url) { try { return new URL(String(url).replace(/\{\{[^}]+\}\}/g, 'x')).host; } catch { return null; } }
+export function rememberApplied(kind, url, items) {
+    const host = hostOf(url);
+    if (!host || !items?.length) return;
+    try {
+        const all = JSON.parse(localStorage.getItem(EXAMPLES_KEY) || '{}');
+        all[kind] = all[kind] || {};
+        all[kind][host] = items.slice(0, 2); // the freshest accepted pair wins
+        localStorage.setItem(EXAMPLES_KEY, JSON.stringify(all));
+    } catch { /* best-effort */ }
+}
+function exampleFor(kind, url, fallback) {
+    try {
+        const host = hostOf(url);
+        const stored = host && JSON.parse(localStorage.getItem(EXAMPLES_KEY) || '{}')[kind]?.[host];
+        if (stored?.length) return `Example (previously accepted for this API): ${JSON.stringify(stored[0])}.`;
+    } catch { /* fall through */ }
+    return fallback;
+}
+
 const SYSTEM_BASE = 'You are the AI copilot inside FlowRunner, a desktop tool for building and running multi-step API flows. Be precise and grounded: use ONLY the data provided in the prompt. Never invent fields, paths, or values that are not present.';
 
 // --- shared helpers (exported for tests) --------------------------------------
@@ -123,15 +160,22 @@ async function callStructured({ system, prompt, schema, maxTokens }) {
  * validator throws with a human-readable reason, which we feed back so the
  * model can correct itself. Grammar guarantees shape; this guards meaning.
  */
-async function structuredWithRepair(task, validate) {
+async function structuredWithRepair(task, validate, taskName = 'structured') {
+    bumpQuality(taskName, 'calls');
     let raw = await callStructured(task);
     try {
         return validate(raw);
     } catch (firstError) {
         logger.warn('[ai] first pass failed validation, retrying:', firstError.message);
+        bumpQuality(taskName, 'repairs');
         const repairPrompt = `${task.prompt}\n\nYour previous answer was rejected: ${firstError.message}\nReturn a corrected answer that fixes exactly this problem.`;
         raw = await callStructured({ ...task, prompt: repairPrompt });
-        return validate(raw); // second failure propagates to the caller
+        try {
+            return validate(raw); // second failure propagates to the caller
+        } catch (secondError) {
+            bumpQuality(taskName, 'failures');
+            throw secondError;
+        }
     }
 }
 
@@ -254,7 +298,7 @@ export function suggestExtractions(step, result, knownVariables = []) {
         `Paths must start with "body." (JSON path into the body, e.g. body.user.id or body.items[0].name), or be ".status" for the HTTP status.`,
         knownVariables.length ? `Names already in use (do NOT reuse): ${knownVariables.join(', ')}` : '',
         'Variable names: short camelCase identifiers.',
-        'Example: {"variable":"authToken","path":"body.token"}. Skip request-echo fields like page numbers.',
+        exampleFor('extractions', step.url, 'Example: {"variable":"authToken","path":"body.token"}.') + ' Skip request-echo fields like page numbers.',
     ].filter(Boolean).join('\n\n');
     return structuredWithRepair(
         { system: SYSTEM_BASE, prompt, schema },
@@ -265,6 +309,7 @@ export function suggestExtractions(step, result, knownVariables = []) {
             if (!resolving.length) throw new Error('None of the suggested paths exist in the actual response body. Suggest paths that appear in the body shape.');
             return resolving;
         },
+        'extractions',
     );
 }
 
@@ -295,7 +340,7 @@ export function suggestAssertions(step, result) {
         `RESPONSE BODY SHAPE (keys and value types from the real response):\n${truncateBody(bodySkeleton(result.output?.body))}`,
         `Target paths: "status" for the HTTP status code, "duration" for elapsed ms, "body.…" for body fields, "headers.…" for headers.`,
         `Allowed operators: ${ASSERTION_OPERATOR_SUBSET.join(', ')}. Operators exists/not_exists/is_empty/is_not_empty take an empty value "".`,
-        'Example of good assertions: {"path":"status","operator":"equals","value":"200"}, {"path":"body.token","operator":"is_not_empty","value":""}. Body fields ALWAYS use the "body." prefix; prefer is_not_empty over exists for values that must be present and non-blank.',
+        exampleFor('assertions', step.url, 'Example of good assertions: {"path":"status","operator":"equals","value":"200"}, {"path":"body.token","operator":"is_not_empty","value":""}.') + ' Body fields ALWAYS use the "body." prefix; prefer is_not_empty over exists for values that must be present and non-blank.',
     ].join('\n\n');
     return structuredWithRepair(
         { system: SYSTEM_BASE, prompt, schema },
@@ -316,11 +361,12 @@ export function suggestAssertions(step, result) {
             if (!resolving.length) throw new Error('None of the suggested targets exist in the actual response. Target fields that appear in the body shape, or "status".');
             return resolving;
         },
+        'assertions',
     );
 }
 
 /** Structured: natural language -> conditionData. */
-export function nlToCondition(text, knownVariables = []) {
+export function nlToCondition(text, knownVariables = [], runtimeContext = null) {
     // When the variable list is short, make it a grammar-level enum — an
     // undefined variable becomes IMPOSSIBLE to emit, not just repairable.
     // (Dotted paths are then entered by editing after accept; the base name
@@ -343,10 +389,14 @@ export function nlToCondition(text, knownVariables = []) {
         'Variable is the bare name or dotted path WITHOUT {{ }} braces.',
         'Value is the bare literal only — write "50", never ">50" or "=50"; the operator field already carries the comparison.',
         'When the description refers to an HTTP outcome (forbidden, unauthorized, not found), prefer a status-code variable with the numeric code (e.g. httpStatus equals 403) over a word literal.',
+        runtimeContext && Object.keys(runtimeContext).length
+            ? `CURRENT VARIABLE VALUES from the last run (ground your choice in these): ${truncateBody(Object.fromEntries(Object.entries(runtimeContext).slice(0, 15).map(([k, v]) => [k, typeof v === 'object' ? '[object]' : String(v).slice(0, 40)])), 500)}`
+            : '',
     ].filter(Boolean).join('\n\n');
     return structuredWithRepair(
         { system: SYSTEM_BASE, prompt, schema },
         (raw) => validateCondition(raw, knownVariables),
+        'condition',
     );
 }
 
@@ -383,6 +433,71 @@ export async function suggestFlowDescription(flowModel) {
     const description = String(raw?.description || '').trim();
     if (!description) throw new Error('No description produced.');
     return description.slice(0, 300);
+}
+
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+
+export function validateRequestDraft(data) {
+    const name = String(data?.name || '').trim().slice(0, 60) || 'Drafted request';
+    const method = String(data?.method || '').toUpperCase();
+    const url = String(data?.url || '').trim();
+    if (!HTTP_METHODS.includes(method)) throw new Error(`Method must be one of ${HTTP_METHODS.join(', ')}.`);
+    if (!url || /\s/.test(url)) throw new Error('URL must be a single token (no spaces); {{variables}} are allowed.');
+    if (!(/^https?:\/\//i.test(url) || url.startsWith('{{'))) throw new Error('URL must start with http(s):// or a {{variable}}.');
+    const headers = {};
+    (Array.isArray(data?.headers) ? data.headers : []).slice(0, 8).forEach((h) => {
+        const k = String(h?.key || '').trim(); const v = String(h?.value ?? '').trim();
+        if (k) headers[k] = v;
+    });
+    let body = String(data?.body || '').trim();
+    if (body) { try { JSON.parse(body.replace(/\{\{[^}]+\}\}/g, '0')); } catch { throw new Error('Body must be valid JSON (with optional {{variables}}) or empty.'); } }
+    return { name, method, url, headers, body };
+}
+
+/**
+ * Structured: draft a whole request step from a plain-language description.
+ * The draft is INSERTED UNSAVED for the user to review — never auto-saved.
+ */
+export function draftRequestStep(text, { knownVariables = [], baseUrls = [] } = {}) {
+    const schema = {
+        type: 'object',
+        properties: {
+            name: { type: 'string', maxLength: 60 },
+            method: { enum: HTTP_METHODS },
+            url: { type: 'string', maxLength: 300 },
+            headers: { type: 'array', maxItems: 6, items: {
+                type: 'object', properties: {
+                    key: { type: 'string', maxLength: 60 },
+                    value: { type: 'string', maxLength: 200 },
+                } } },
+            body: { type: 'string', maxLength: 1500 },
+        },
+    };
+    const prompt = [
+        `Draft a single HTTP request step for this description: "${text}"`,
+        baseUrls.length ? `Base URLs already used in this flow (prefer them): ${baseUrls.join(', ')}` : '',
+        knownVariables.length ? `Defined variables you may reference as {{name}}: ${knownVariables.join(', ')}` : '',
+        'Rules: url is one token (no spaces), starting with http(s):// or a {{variable}}. body is a JSON string or "" (empty) for GET-like requests. Include an Authorization header ONLY if the description mentions auth AND a token variable exists.',
+        'Example: {"name":"Fetch user profile","method":"GET","url":"https://api.example.com/users/{{userId}}","headers":[],"body":""}',
+    ].filter(Boolean).join('\n\n');
+    return structuredWithRepair(
+        { system: SYSTEM_BASE, prompt, schema },
+        validateRequestDraft,
+        'draft',
+    );
+}
+
+/** Prose: explain what a whole flow does (palette command). */
+export function explainFlow(flowModel, requestId) {
+    const stepsBrief = (flowModel.steps || []).map((s, i) =>
+        `${i + 1}. [${s.type}] ${s.name}${s.type === 'request' ? ` (${s.method} ${s.url})` : ''}${s.type === 'condition' && s.conditionData ? ` (if ${s.conditionData.variable} ${s.conditionData.operator} ${s.conditionData.value})` : ''}`).join('\n');
+    const prompt = [
+        'Explain what this API flow does, for someone about to present it. Walk the sequence, name what each stage accomplishes, and note anything conditional or repeated.',
+        `FLOW: ${flowModel.name}`,
+        `STEPS:\n${truncateBody(stepsBrief, 2200)}`,
+        'Max 140 words, plain language, no markdown, no step-by-step numbering — narrate it.',
+    ].join('\n\n');
+    return ai().generateProse({ system: SYSTEM_BASE, prompt, maxTokens: 800, requestId });
 }
 
 /** Prose: digest of the latest run. Streams via requestId. */

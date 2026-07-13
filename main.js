@@ -21,7 +21,7 @@ import {
 import { parseWorkspace, serializeWorkspace } from './workspaceManager.js';
 // Beta 1.5: opt-in local AI copilot engine (lazy — imports node-llama-cpp on first use).
 import {
-    initLlmService, getState as llmGetState, setEnabled as llmSetEnabled,
+    initLlmService, prewarm as llmPrewarm, getState as llmGetState, setEnabled as llmSetEnabled,
     selectModel as llmSelectModel, downloadModel as llmDownloadModel,
     cancelDownload as llmCancelDownload, deleteModel as llmDeleteModel,
     generateStructured as llmGenerateStructured, generateProse as llmGenerateProse,
@@ -732,6 +732,7 @@ app.whenReady().then(async () => {
   aiHandle('ai:generateStructured', (req) => llmGenerateStructured(req));
   aiHandle('ai:generateProse', (req) => llmGenerateProse(req));
   aiHandle('ai:cancelGeneration', (requestId) => llmCancelGeneration(requestId));
+  aiHandle('ai:prewarm', () => llmPrewarm());
 
   // +++ IPC LISTENER FOR OPENING EXTERNAL LINKS +++
   ipcMain.on('app:open-external-link', (event, urlToOpen) => {

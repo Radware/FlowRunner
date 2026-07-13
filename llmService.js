@@ -365,6 +365,19 @@ export async function generateProse({ system, prompt, maxTokens, requestId }) {
     });
 }
 
+/** Fire-and-forget: load the selected model so the first suggestion is instant. */
+export async function prewarm() {
+    const { enabled, selectedModelId } = settings();
+    if (!enabled || !selectedModelId) return { warmed: false };
+    try {
+        await ensureModelLoaded();
+        return { warmed: true };
+    } catch (err) {
+        logger.warn('[llm] prewarm skipped:', err?.message);
+        return { warmed: false, reason: err?.message };
+    }
+}
+
 export function cancelGeneration(requestId) {
     generationControllers.get(requestId)?.abort();
     return true;

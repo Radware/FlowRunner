@@ -8,6 +8,17 @@
 
 ---
 
+## v1.5.0-beta.1 — consistency proof + the creative round (maximum use of the copilot)
+**Consistency, measured with real weights (eval/consistency-harness.mjs, 48 generations, 4 repeats per case):** structured suggestions are **9/9 byte-identical across all repeats** — grammar + greedy decoding is deterministic end-to-end, so the same response always yields the same suggestion (a demo-grade guarantee). Prose stayed non-empty and inside its word budget on every repeat (variance expected and acceptable at temp 0.6). Report in eval/consistency-report.json.
+New uses shipped this round (all opt-in, all reviewable, model never saves):
+- **Draft a request step with AI** (palette): describe it in a sentence → a schema-constrained draft step (method enum, single-token URL http(s)/{{var}}, JSON-validated body honoring {{vars}}, headers) is inserted UNSAVED for review. Grounded with the flow's existing base URLs + variables. `validateRequestDraft` + 4 unit tests.
+- **Explain this flow** (palette): narrated walkthrough of the open flow streamed into the results pane — Present-mode prep.
+- **Prewarm on Run:** clicking Run/Background fire-and-forgets `ai:prewarm` (new IPC) so the model loads DURING the run — first suggestion after a demo run is instant instead of ~5s.
+- **Accepted-example memory:** applied suggestions are remembered per API host (localStorage) and become the few-shot example for that host next time — the eval proved example-anchoring is causal, so the user's own accepted patterns now steer the model.
+- **Run-context grounding for NL→condition:** the last run's variable VALUES ride along in the prompt, so "the transfer was forbidden" can bind to the actual 403.
+- **Quality counters:** per-task calls/retries/failures tracked locally and shown in the AI modal — the live signal the eval used (repair rate) is now visible in-app.
+Jest 513/513 (+4), e2e 26/26, browser-mode degradation validated in Chrome.
+
 ## v1.5.0-beta.1 — prompt-effectiveness eval (60 real on-device generations, blind-judged)
 Ran a controlled system-prompt matrix on the ACTUAL Gemma 4 E2B: 5 variants (current baseline verbatim + role-expert + rules-first + few-shot + quality-checklist) x 12 fixtures across all 4 task families, auto-graded by the app's own validators, quality-scored by 3 blind judges (eval/ harness kept in-repo).
 - **Finding: the minimal baseline SYSTEM prompt WON.** Longer/cleverer system prompts made the 2-5B grammar-constrained model worse (bare `body.`-less targets, empty-array refusals). SYSTEM_BASE stays verbatim.
