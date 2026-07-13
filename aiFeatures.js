@@ -182,6 +182,10 @@ export function validateAssertions(data) {
             throw new Error(`Target "${target}" must be "status", "duration", "headers.…" or "body.…".`);
         }
         if (!ASSERTION_OPERATOR_SUBSET.includes(operator)) throw new Error(`Operator "${operator}" is not one of the allowed assertion operators.`);
+        if (target === 'status' && /^(equals|not_equals)$/.test(operator)) {
+            const digits = String(value ?? '').match(/\d{3}/); // eval: models sometimes wrap the code ("?:403")
+            if (digits) value = digits[0];
+        }
         if (ASSERTION_VALUELESS.has(operator)) value = '';
         else if (value == null || String(value).length === 0) throw new Error(`Operator "${operator}" needs a value.`);
         return { target, operator, value: String(value ?? '') };
@@ -231,6 +235,7 @@ export function suggestExtractions(step, result, knownVariables = []) {
         properties: {
             extractions: {
                 type: 'array',
+                minItems: 1,
                 maxItems: 5,
                 items: {
                     type: 'object',
@@ -249,6 +254,7 @@ export function suggestExtractions(step, result, knownVariables = []) {
         `Paths must start with "body." (JSON path into the body, e.g. body.user.id or body.items[0].name), or be ".status" for the HTTP status.`,
         knownVariables.length ? `Names already in use (do NOT reuse): ${knownVariables.join(', ')}` : '',
         'Variable names: short camelCase identifiers.',
+        'Example: {"variable":"authToken","path":"body.token"}. Skip request-echo fields like page numbers.',
     ].filter(Boolean).join('\n\n');
     return structuredWithRepair(
         { system: SYSTEM_BASE, prompt, schema },
@@ -269,6 +275,7 @@ export function suggestAssertions(step, result) {
         properties: {
             assertions: {
                 type: 'array',
+                minItems: 1,
                 maxItems: 5,
                 items: {
                     type: 'object',
@@ -288,10 +295,22 @@ export function suggestAssertions(step, result) {
         `RESPONSE BODY SHAPE (keys and value types from the real response):\n${truncateBody(bodySkeleton(result.output?.body))}`,
         `Target paths: "status" for the HTTP status code, "duration" for elapsed ms, "body.…" for body fields, "headers.…" for headers.`,
         `Allowed operators: ${ASSERTION_OPERATOR_SUBSET.join(', ')}. Operators exists/not_exists/is_empty/is_not_empty take an empty value "".`,
+        'Example of good assertions: {"path":"status","operator":"equals","value":"200"}, {"path":"body.token","operator":"is_not_empty","value":""}. Body fields ALWAYS use the "body." prefix; prefer is_not_empty over exists for values that must be present and non-blank.',
     ].join('\n\n');
     return structuredWithRepair(
         { system: SYSTEM_BASE, prompt, schema },
         (raw) => {
+            // Eval-identified dominant failure: bare targets missing the "body."
+            // prefix. Repair deterministically when the prefixed path resolves
+            // on the real response instead of burning the retry.
+            const list = Array.isArray(raw) ? raw : raw?.assertions;
+            if (Array.isArray(list)) {
+                for (const a of list) {
+                    const p = String(a?.path || '').trim();
+                    if (p && !/^(status|duration|body\b|headers\.)/.test(p)
+                        && pathResolves(`body.${p}`, result)) a.path = `body.${p}`;
+                }
+            }
             const cleaned = validateAssertions(raw);
             const resolving = cleaned.filter((a) => pathResolves(a.target, result));
             if (!resolving.length) throw new Error('None of the suggested targets exist in the actual response. Target fields that appear in the body shape, or "status".');
@@ -302,10 +321,17 @@ export function suggestAssertions(step, result) {
 
 /** Structured: natural language -> conditionData. */
 export function nlToCondition(text, knownVariables = []) {
+    // When the variable list is short, make it a grammar-level enum — an
+    // undefined variable becomes IMPOSSIBLE to emit, not just repairable.
+    // (Dotted paths are then entered by editing after accept; the base name
+    // is what matters for validity.)
+    const variableSchema = (knownVariables.length && knownVariables.length <= 20)
+        ? { enum: knownVariables }
+        : { type: 'string', maxLength: 80 };
     const schema = {
         type: 'object',
         properties: {
-            variable: { type: 'string', maxLength: 80 },
+            variable: variableSchema,
             operator: { enum: CONDITION_OPERATOR_SUBSET },
             value: { type: 'string', maxLength: 120 },
         },
@@ -315,6 +341,8 @@ export function nlToCondition(text, knownVariables = []) {
         knownVariables.length ? `Defined variables (choose "variable" from these; dotted paths into them are allowed): ${knownVariables.join(', ')}` : 'Use the variable name mentioned in the description.',
         `Allowed operators: ${CONDITION_OPERATOR_SUBSET.join(', ')}. Value-less operators (exists, is_number, …) take an empty value "".`,
         'Variable is the bare name or dotted path WITHOUT {{ }} braces.',
+        'Value is the bare literal only — write "50", never ">50" or "=50"; the operator field already carries the comparison.',
+        'When the description refers to an HTTP outcome (forbidden, unauthorized, not found), prefer a status-code variable with the numeric code (e.g. httpStatus equals 403) over a word literal.',
     ].filter(Boolean).join('\n\n');
     return structuredWithRepair(
         { system: SYSTEM_BASE, prompt, schema },

@@ -81,6 +81,10 @@ describe('validateAssertions', () => {
         expect(out[0]).toEqual({ target: 'status', operator: 'equals', value: '200' });
         expect(out[1]).toEqual({ target: 'body.user.id', operator: 'exists', value: '' });
     });
+    test('extracts the 3-digit code from a wrapped status value (eval case "?:403")', () => {
+        const out = validateAssertions({ assertions: [{ path: 'status', operator: 'equals', value: '?:403' }] });
+        expect(out[0].value).toBe('403');
+    });
     test('rejects out-of-subset operators and bad targets', () => {
         expect(() => validateAssertions({ assertions: [{ path: 'status', operator: 'is_number', value: '' }] })).toThrow(/allowed assertion operators/);
         expect(() => validateAssertions({ assertions: [{ path: 'weird', operator: 'equals', value: '1' }] })).toThrow(/Target/);

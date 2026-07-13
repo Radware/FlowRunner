@@ -8,6 +8,14 @@
 
 ---
 
+## v1.5.0-beta.1 — prompt-effectiveness eval (60 real on-device generations, blind-judged)
+Ran a controlled system-prompt matrix on the ACTUAL Gemma 4 E2B: 5 variants (current baseline verbatim + role-expert + rules-first + few-shot + quality-checklist) x 12 fixtures across all 4 task families, auto-graded by the app's own validators, quality-scored by 3 blind judges (eval/ harness kept in-repo).
+- **Finding: the minimal baseline SYSTEM prompt WON.** Longer/cleverer system prompts made the 2-5B grammar-constrained model worse (bare `body.`-less targets, empty-array refusals). SYSTEM_BASE stays verbatim.
+- **Finding: example-anchoring is causal.** An inline example steers operator choice and value shape almost verbatim — so micro-examples moved into the per-task USER prompts (assertions, extractions) where each task picks the right example.
+- **Applied fixes (all evidence-backed):** `minItems:1` on suggestion arrays (grammar forbids empty-array refusals); deterministic `body.`-prefix auto-repair for bare assertion targets (the dominant failure — repaired when the prefixed path resolves on the real response, saving the retry); 3-digit status-value guard ("?:403" → "403"); condition prompt rules (bare literal values — never ">50"; HTTP outcomes → numeric status codes); dynamic GRAMMAR ENUM of the flow's variable names in NL→condition when ≤20 vars (undefined variables become impossible to emit).
+- **Ranked next methods (documented for the beta period):** dynamic few-shot from the user's own accepted suggestions; prewarm the model when a response arrives; accept/reject + repair-rate counters as a live quality signal; task→model routing (Qwen3-4B structured / Gemma prose) on ≥16GB machines; ground NL→condition with the last run's status + variable values.
+- Jest 509/509. Caveat: single-model single-quant eval; rerun the matrix before routing decisions.
+
 ## v1.5.0-beta.1 — the AI Copilot (opt-in, fully local) — branch beta/1.5-local-ai
 An optional local language model inside FlowRunner: helps AUTHOR and UNDERSTAND flows; the engine still RUNS them (small models are grounded helpers, not agents). Everything is opt-in, on-device, offline after one model download — nothing ever leaves the machine.
 - **Engine (`llmService.js`, main process only):** node-llama-cpp v3.19 (prebuilt Node-API binaries per platform — NO MSVC/node-gyp/electron-rebuild; renderer use would crash, hence main-only). Lazy import (zero startup cost when off), models download on enable into userData/models via the built-in resumable downloader (progress → IPC), one-generation-at-a-time queue, model auto-unloads after 5 idle minutes, teardown on quit. Windows forces CPU (`gpu:false`) because the beta packages CPU binaries only; mac gets Metal via auto.

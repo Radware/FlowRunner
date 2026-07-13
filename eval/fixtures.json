@@ -1,0 +1,651 @@
+{
+ "cases": [
+  {
+   "task": "extractions",
+   "fixtureId": "login",
+   "prompt": "Suggest 1-4 useful values to extract from this API response into variables for LATER steps (ids, tokens, counts, statuses).\n\nREQUEST: POST https://api.demoapp.radware.io/auth/login\n\nRESPONSE BODY SHAPE (keys and value types from the real response):\n{\n \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1LTEwNDIi…\",\n \"refreshToken\": \"rt-8f3a2c1d-77e0-4b9a-b1f2-3c4d5e6f7a8b\",\n \"user\": {\n  \"id\": \"u-1042\",\n  \"role\": \"admin\",\n  \"email\": \"sarah.chen@example.com\"\n },\n \"expiresIn\": 3600\n}\n\nPaths must start with \"body.\" (JSON path into the body, e.g. body.user.id or body.items[0].name), or be \".status\" for the HTTP status.\n\nVariable names: short camelCase identifiers.",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "extractions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "type": "object",
+       "properties": {
+        "variable": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "path": {
+         "type": "string",
+         "maxLength": 160
+        }
+       }
+      }
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 200,
+     "body": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1LTEwNDIiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTIzODQwMDB9.4kX9mQ2vL7pDzR8wN1cY6tA3bE5fG0hJ",
+      "refreshToken": "rt-8f3a2c1d-77e0-4b9a-b1f2-3c4d5e6f7a8b",
+      "user": {
+       "id": "u-1042",
+       "role": "admin",
+       "email": "sarah.chen@example.com"
+      },
+      "expiresIn": 3600
+     }
+    },
+    "knownVariables": []
+   }
+  },
+  {
+   "task": "extractions",
+   "fixtureId": "orders",
+   "prompt": "Suggest 1-4 useful values to extract from this API response into variables for LATER steps (ids, tokens, counts, statuses).\n\nREQUEST: GET https://api.demoapp.radware.io/api/orders?page=1\n\nRESPONSE BODY SHAPE (keys and value types from the real response):\n{\n \"orders\": [\n  {\n   \"id\": \"ord-90311\",\n   \"total\": 249.99,\n   \"currency\": \"USD\",\n   \"status\": \"shipped\",\n   \"items\": [\n    {\n     \"sku\": \"…\",\n     \"name\": \"…\",\n     \"qty\": \"…\",\n     \"price\": \"…\"\n    }\n   ]\n  },\n  \"…(3 items)\"\n ],\n \"page\": 1,\n \"totalCount\": 57\n}\n\nPaths must start with \"body.\" (JSON path into the body, e.g. body.user.id or body.items[0].name), or be \".status\" for the HTTP status.\n\nNames already in use (do NOT reuse): token, userRole\n\nVariable names: short camelCase identifiers.",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "extractions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "type": "object",
+       "properties": {
+        "variable": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "path": {
+         "type": "string",
+         "maxLength": 160
+        }
+       }
+      }
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 200,
+     "body": {
+      "orders": [
+       {
+        "id": "ord-90311",
+        "total": 249.99,
+        "currency": "USD",
+        "status": "shipped",
+        "items": [
+         {
+          "sku": "WAF-PRO-1Y",
+          "name": "Cloud WAF Pro (1 yr)",
+          "qty": 1,
+          "price": 249.99
+         }
+        ]
+       },
+       {
+        "id": "ord-90312",
+        "total": 1188,
+        "currency": "USD",
+        "status": "processing",
+        "items": [
+         {
+          "sku": "BOT-MGR-1Y",
+          "name": "Bot Manager (1 yr)",
+          "qty": 2,
+          "price": 594
+         }
+        ]
+       },
+       {
+        "id": "ord-90315",
+        "total": 79.5,
+        "currency": "USD",
+        "status": "cancelled",
+        "items": [
+         {
+          "sku": "DDOS-RPT",
+          "name": "DDoS Assessment Report",
+          "qty": 1,
+          "price": 79.5
+         }
+        ]
+       }
+      ],
+      "page": 1,
+      "totalCount": 57
+     }
+    },
+    "knownVariables": [
+     "token",
+     "userRole"
+    ]
+   }
+  },
+  {
+   "task": "extractions",
+   "fixtureId": "failure",
+   "prompt": "Suggest 1-4 useful values to extract from this API response into variables for LATER steps (ids, tokens, counts, statuses).\n\nREQUEST: POST https://api.demoapp.radware.io/api/transfer\n\nRESPONSE BODY SHAPE (keys and value types from the real response):\n{\n \"error\": \"insufficient_permissions\",\n \"required_role\": \"admin\",\n \"request_id\": \"req-7c2f9a41\"\n}\n\nPaths must start with \"body.\" (JSON path into the body, e.g. body.user.id or body.items[0].name), or be \".status\" for the HTTP status.\n\nNames already in use (do NOT reuse): token, userRole, orderId\n\nVariable names: short camelCase identifiers.",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "extractions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "type": "object",
+       "properties": {
+        "variable": {
+         "type": "string",
+         "maxLength": 40
+        },
+        "path": {
+         "type": "string",
+         "maxLength": 160
+        }
+       }
+      }
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 403,
+     "body": {
+      "error": "insufficient_permissions",
+      "required_role": "admin",
+      "request_id": "req-7c2f9a41"
+     }
+    },
+    "knownVariables": [
+     "token",
+     "userRole",
+     "orderId"
+    ]
+   }
+  },
+  {
+   "task": "assertions",
+   "fixtureId": "login",
+   "prompt": "Suggest 1-4 assertions that verify this API response is healthy. Prefer stable checks (status code, required fields existing, types) over brittle exact values.\n\nREQUEST: POST https://api.demoapp.radware.io/auth/login\n\nACTUAL HTTP STATUS: 200\n\nRESPONSE BODY SHAPE (keys and value types from the real response):\n{\n \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1LTEwNDIi…\",\n \"refreshToken\": \"rt-8f3a2c1d-77e0-4b9a-b1f2-3c4d5e6f7a8b\",\n \"user\": {\n  \"id\": \"u-1042\",\n  \"role\": \"admin\",\n  \"email\": \"sarah.chen@example.com\"\n },\n \"expiresIn\": 3600\n}\n\nTarget paths: \"status\" for the HTTP status code, \"duration\" for elapsed ms, \"body.…\" for body fields, \"headers.…\" for headers.\n\nAllowed operators: equals, not_equals, greater_than, less_than, greater_equals, less_equals, contains, not_contains, starts_with, ends_with, matches_regex, exists, not_exists, is_empty, is_not_empty. Operators exists/not_exists/is_empty/is_not_empty take an empty value \"\".",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "assertions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "maxLength": 160
+        },
+        "operator": {
+         "enum": [
+          "equals",
+          "not_equals",
+          "greater_than",
+          "less_than",
+          "greater_equals",
+          "less_equals",
+          "contains",
+          "not_contains",
+          "starts_with",
+          "ends_with",
+          "matches_regex",
+          "exists",
+          "not_exists",
+          "is_empty",
+          "is_not_empty"
+         ]
+        },
+        "value": {
+         "type": "string",
+         "maxLength": 120
+        }
+       }
+      }
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 200,
+     "body": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1LTEwNDIiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTIzODQwMDB9.4kX9mQ2vL7pDzR8wN1cY6tA3bE5fG0hJ",
+      "refreshToken": "rt-8f3a2c1d-77e0-4b9a-b1f2-3c4d5e6f7a8b",
+      "user": {
+       "id": "u-1042",
+       "role": "admin",
+       "email": "sarah.chen@example.com"
+      },
+      "expiresIn": 3600
+     }
+    },
+    "knownVariables": []
+   }
+  },
+  {
+   "task": "assertions",
+   "fixtureId": "orders",
+   "prompt": "Suggest 1-4 assertions that verify this API response is healthy. Prefer stable checks (status code, required fields existing, types) over brittle exact values.\n\nREQUEST: GET https://api.demoapp.radware.io/api/orders?page=1\n\nACTUAL HTTP STATUS: 200\n\nRESPONSE BODY SHAPE (keys and value types from the real response):\n{\n \"orders\": [\n  {\n   \"id\": \"ord-90311\",\n   \"total\": 249.99,\n   \"currency\": \"USD\",\n   \"status\": \"shipped\",\n   \"items\": [\n    {\n     \"sku\": \"…\",\n     \"name\": \"…\",\n     \"qty\": \"…\",\n     \"price\": \"…\"\n    }\n   ]\n  },\n  \"…(3 items)\"\n ],\n \"page\": 1,\n \"totalCount\": 57\n}\n\nTarget paths: \"status\" for the HTTP status code, \"duration\" for elapsed ms, \"body.…\" for body fields, \"headers.…\" for headers.\n\nAllowed operators: equals, not_equals, greater_than, less_than, greater_equals, less_equals, contains, not_contains, starts_with, ends_with, matches_regex, exists, not_exists, is_empty, is_not_empty. Operators exists/not_exists/is_empty/is_not_empty take an empty value \"\".",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "assertions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "maxLength": 160
+        },
+        "operator": {
+         "enum": [
+          "equals",
+          "not_equals",
+          "greater_than",
+          "less_than",
+          "greater_equals",
+          "less_equals",
+          "contains",
+          "not_contains",
+          "starts_with",
+          "ends_with",
+          "matches_regex",
+          "exists",
+          "not_exists",
+          "is_empty",
+          "is_not_empty"
+         ]
+        },
+        "value": {
+         "type": "string",
+         "maxLength": 120
+        }
+       }
+      }
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 200,
+     "body": {
+      "orders": [
+       {
+        "id": "ord-90311",
+        "total": 249.99,
+        "currency": "USD",
+        "status": "shipped",
+        "items": [
+         {
+          "sku": "WAF-PRO-1Y",
+          "name": "Cloud WAF Pro (1 yr)",
+          "qty": 1,
+          "price": 249.99
+         }
+        ]
+       },
+       {
+        "id": "ord-90312",
+        "total": 1188,
+        "currency": "USD",
+        "status": "processing",
+        "items": [
+         {
+          "sku": "BOT-MGR-1Y",
+          "name": "Bot Manager (1 yr)",
+          "qty": 2,
+          "price": 594
+         }
+        ]
+       },
+       {
+        "id": "ord-90315",
+        "total": 79.5,
+        "currency": "USD",
+        "status": "cancelled",
+        "items": [
+         {
+          "sku": "DDOS-RPT",
+          "name": "DDoS Assessment Report",
+          "qty": 1,
+          "price": 79.5
+         }
+        ]
+       }
+      ],
+      "page": 1,
+      "totalCount": 57
+     }
+    },
+    "knownVariables": []
+   }
+  },
+  {
+   "task": "assertions",
+   "fixtureId": "failure",
+   "prompt": "Suggest 1-4 assertions that verify this API response is healthy. Prefer stable checks (status code, required fields existing, types) over brittle exact values.\n\nREQUEST: POST https://api.demoapp.radware.io/api/transfer\n\nACTUAL HTTP STATUS: 403\n\nRESPONSE BODY SHAPE (keys and value types from the real response):\n{\n \"error\": \"insufficient_permissions\",\n \"required_role\": \"admin\",\n \"request_id\": \"req-7c2f9a41\"\n}\n\nTarget paths: \"status\" for the HTTP status code, \"duration\" for elapsed ms, \"body.…\" for body fields, \"headers.…\" for headers.\n\nAllowed operators: equals, not_equals, greater_than, less_than, greater_equals, less_equals, contains, not_contains, starts_with, ends_with, matches_regex, exists, not_exists, is_empty, is_not_empty. Operators exists/not_exists/is_empty/is_not_empty take an empty value \"\".",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "assertions": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "type": "object",
+       "properties": {
+        "path": {
+         "type": "string",
+         "maxLength": 160
+        },
+        "operator": {
+         "enum": [
+          "equals",
+          "not_equals",
+          "greater_than",
+          "less_than",
+          "greater_equals",
+          "less_equals",
+          "contains",
+          "not_contains",
+          "starts_with",
+          "ends_with",
+          "matches_regex",
+          "exists",
+          "not_exists",
+          "is_empty",
+          "is_not_empty"
+         ]
+        },
+        "value": {
+         "type": "string",
+         "maxLength": 120
+        }
+       }
+      }
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 403,
+     "body": {
+      "error": "insufficient_permissions",
+      "required_role": "admin",
+      "request_id": "req-7c2f9a41"
+     }
+    },
+    "knownVariables": []
+   }
+  },
+  {
+   "task": "condition",
+   "fixtureId": "login",
+   "prompt": "Convert this description into a single flow condition: \"the user is an admin\"\n\nDefined variables (choose \"variable\" from these; dotted paths into them are allowed): token, userRole, userId\n\nAllowed operators: equals, not_equals, greater_than, less_than, greater_equals, less_equals, contains, starts_with, ends_with, matches_regex, exists, not_exists, is_number, is_text, is_boolean, is_array, is_true, is_false. Value-less operators (exists, is_number, …) take an empty value \"\".\n\nVariable is the bare name or dotted path WITHOUT {{ }} braces.",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "variable": {
+      "type": "string",
+      "maxLength": 80
+     },
+     "operator": {
+      "enum": [
+       "equals",
+       "not_equals",
+       "greater_than",
+       "less_than",
+       "greater_equals",
+       "less_equals",
+       "contains",
+       "starts_with",
+       "ends_with",
+       "matches_regex",
+       "exists",
+       "not_exists",
+       "is_number",
+       "is_text",
+       "is_boolean",
+       "is_array",
+       "is_true",
+       "is_false"
+      ]
+     },
+     "value": {
+      "type": "string",
+      "maxLength": 120
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 200,
+     "body": {
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1LTEwNDIiLCJyb2xlIjoiYWRtaW4iLCJpYXQiOjE3NTIzODQwMDB9.4kX9mQ2vL7pDzR8wN1cY6tA3bE5fG0hJ",
+      "refreshToken": "rt-8f3a2c1d-77e0-4b9a-b1f2-3c4d5e6f7a8b",
+      "user": {
+       "id": "u-1042",
+       "role": "admin",
+       "email": "sarah.chen@example.com"
+      },
+      "expiresIn": 3600
+     }
+    },
+    "knownVariables": [
+     "token",
+     "userRole",
+     "userId"
+    ]
+   }
+  },
+  {
+   "task": "condition",
+   "fixtureId": "orders",
+   "prompt": "Convert this description into a single flow condition: \"there are more than 50 orders\"\n\nDefined variables (choose \"variable\" from these; dotted paths into them are allowed): orderCount, page\n\nAllowed operators: equals, not_equals, greater_than, less_than, greater_equals, less_equals, contains, starts_with, ends_with, matches_regex, exists, not_exists, is_number, is_text, is_boolean, is_array, is_true, is_false. Value-less operators (exists, is_number, …) take an empty value \"\".\n\nVariable is the bare name or dotted path WITHOUT {{ }} braces.",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "variable": {
+      "type": "string",
+      "maxLength": 80
+     },
+     "operator": {
+      "enum": [
+       "equals",
+       "not_equals",
+       "greater_than",
+       "less_than",
+       "greater_equals",
+       "less_equals",
+       "contains",
+       "starts_with",
+       "ends_with",
+       "matches_regex",
+       "exists",
+       "not_exists",
+       "is_number",
+       "is_text",
+       "is_boolean",
+       "is_array",
+       "is_true",
+       "is_false"
+      ]
+     },
+     "value": {
+      "type": "string",
+      "maxLength": 120
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 200,
+     "body": {
+      "orders": [
+       {
+        "id": "ord-90311",
+        "total": 249.99,
+        "currency": "USD",
+        "status": "shipped",
+        "items": [
+         {
+          "sku": "WAF-PRO-1Y",
+          "name": "Cloud WAF Pro (1 yr)",
+          "qty": 1,
+          "price": 249.99
+         }
+        ]
+       },
+       {
+        "id": "ord-90312",
+        "total": 1188,
+        "currency": "USD",
+        "status": "processing",
+        "items": [
+         {
+          "sku": "BOT-MGR-1Y",
+          "name": "Bot Manager (1 yr)",
+          "qty": 2,
+          "price": 594
+         }
+        ]
+       },
+       {
+        "id": "ord-90315",
+        "total": 79.5,
+        "currency": "USD",
+        "status": "cancelled",
+        "items": [
+         {
+          "sku": "DDOS-RPT",
+          "name": "DDoS Assessment Report",
+          "qty": 1,
+          "price": 79.5
+         }
+        ]
+       }
+      ],
+      "page": 1,
+      "totalCount": 57
+     }
+    },
+    "knownVariables": [
+     "orderCount",
+     "page"
+    ]
+   }
+  },
+  {
+   "task": "condition",
+   "fixtureId": "failure",
+   "prompt": "Convert this description into a single flow condition: \"the transfer was forbidden\"\n\nDefined variables (choose \"variable\" from these; dotted paths into them are allowed): transferStatus, httpStatus\n\nAllowed operators: equals, not_equals, greater_than, less_than, greater_equals, less_equals, contains, starts_with, ends_with, matches_regex, exists, not_exists, is_number, is_text, is_boolean, is_array, is_true, is_false. Value-less operators (exists, is_number, …) take an empty value \"\".\n\nVariable is the bare name or dotted path WITHOUT {{ }} braces.",
+   "schema": {
+    "type": "object",
+    "properties": {
+     "variable": {
+      "type": "string",
+      "maxLength": 80
+     },
+     "operator": {
+      "enum": [
+       "equals",
+       "not_equals",
+       "greater_than",
+       "less_than",
+       "greater_equals",
+       "less_equals",
+       "contains",
+       "starts_with",
+       "ends_with",
+       "matches_regex",
+       "exists",
+       "not_exists",
+       "is_number",
+       "is_text",
+       "is_boolean",
+       "is_array",
+       "is_true",
+       "is_false"
+      ]
+     },
+     "value": {
+      "type": "string",
+      "maxLength": 120
+     }
+    }
+   },
+   "context": {
+    "output": {
+     "status": 403,
+     "body": {
+      "error": "insufficient_permissions",
+      "required_role": "admin",
+      "request_id": "req-7c2f9a41"
+     }
+    },
+    "knownVariables": [
+     "transferStatus",
+     "httpStatus"
+    ]
+   }
+  },
+  {
+   "task": "explain",
+   "fixtureId": "failure",
+   "prompt": "A step in an API flow produced this result. Explain briefly what happened and what to check or try next.\n\nSTEP:\ntype: request\nmethod: POST\nurl: https://api.demoapp.radware.io/api/transfer\nheaders: {\"Content-Type\":\"application/json\",\"Authorization\":\"Bearer {{token}}\"}\nbody: {\n \"fromAccount\": \"acc-3311\",\n \"toAccount\": \"acc-9042\",\n \"amount\": 2500,\n \"currency\": \"USD\"\n}\n\nRESULT status: error (HTTP 403)\n\nERROR: Request failed with status 403\n\nRESPONSE BODY:\n{\n \"error\": \"insufficient_permissions\",\n \"required_role\": \"admin\",\n \"request_id\": \"req-7c2f9a41\"\n}\n\nAnswer in plain language, max 120 words: 1) what happened, 2) the most likely cause, 3) one concrete next step. No headings, no markdown.",
+   "context": {
+    "output": {
+     "status": 403,
+     "body": {
+      "error": "insufficient_permissions",
+      "required_role": "admin",
+      "request_id": "req-7c2f9a41"
+     }
+    },
+    "knownVariables": []
+   }
+  },
+  {
+   "task": "explain",
+   "fixtureId": "timeout-500",
+   "prompt": "A step in an API flow produced this result. Explain briefly what happened and what to check or try next.\n\nSTEP:\ntype: request\nmethod: GET\nurl: https://api.demoapp.radware.io/api/reports/latest\nheaders: {\"Authorization\":\"Bearer {{token}}\"}\n\nRESULT status: error (HTTP 500)\n\nERROR: Request failed with status 500\n\nRESPONSE BODY:\n{\n \"error\": \"upstream_timeout\",\n \"message\": \"The reporting service did not respond within 30 seconds.\",\n \"request_id\": \"req-5d18e2c7\"\n}\n\nAnswer in plain language, max 120 words: 1) what happened, 2) the most likely cause, 3) one concrete next step. No headings, no markdown.",
+   "context": {
+    "output": {
+     "status": 500,
+     "body": {
+      "error": "upstream_timeout",
+      "message": "The reporting service did not respond within 30 seconds.",
+      "request_id": "req-5d18e2c7"
+     }
+    },
+    "knownVariables": []
+   }
+  },
+  {
+   "task": "explain",
+   "fixtureId": "token-expired-401",
+   "prompt": "A step in an API flow produced this result. Explain briefly what happened and what to check or try next.\n\nSTEP:\ntype: request\nmethod: GET\nurl: https://api.demoapp.radware.io/api/orders?page=1\nheaders: {\"Authorization\":\"Bearer {{token}}\"}\n\nRESULT status: error (HTTP 401)\n\nERROR: Request failed with status 401\n\nRESPONSE BODY:\n{\n \"error\": \"token_expired\",\n \"message\": \"Access token expired at 2026-07-13T09:14:22Z.\",\n \"request_id\": \"req-2b91f3aa\"\n}\n\nAnswer in plain language, max 120 words: 1) what happened, 2) the most likely cause, 3) one concrete next step. No headings, no markdown.",
+   "context": {
+    "output": {
+     "status": 401,
+     "body": {
+      "error": "token_expired",
+      "message": "Access token expired at 2026-07-13T09:14:22Z.",
+      "request_id": "req-2b91f3aa"
+     }
+    },
+    "knownVariables": []
+   }
+  }
+ ]
+}
