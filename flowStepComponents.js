@@ -442,7 +442,7 @@ export function createStepEditor(step, options) {
           <button type="button" class="inspector-disclosure-btn" data-disclosure="power" role="tab" aria-selected="false" title="Reveal advanced fields">Power</button>
         </div>
       </div>
-      <div class="form-group"> <label for="step-editor-name-${localStep.id}">Step Name</label> <input type="text" id="step-editor-name-${localStep.id}" value="${escapeHTML(localStep.name || '')}" placeholder="Enter a descriptive name"> </div>
+      <div class="form-group"> <label for="step-editor-name-${localStep.id}">Step Name</label> <div class="ai-inline-field"><input type="text" id="step-editor-name-${localStep.id}" value="${escapeHTML(localStep.name || '')}" placeholder="Enter a descriptive name"> <button type="button" class="btn-ai-sparkle ai-only" data-ai-action="name-step" title="Suggest a name for this step"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg></button></div> </div>
       <div class="inspector-summary" data-ref="inspectorSummary" aria-live="polite"></div>
       <div class="step-save-message" style="display: none; color: var(--run-success); margin: 0.5rem 0; font-weight: 600;"> Step changes saved! </div>
       <div class="editor-type-content"> <!-- Type-specific fields go here --> </div>
@@ -728,11 +728,11 @@ function createRequestEditor(container, options) {
                 </div>
             </div>
             <div class="tab-content" id="tab-extract-${localStep.id}">
-                <div class="extract-editor"><div class="extracts-list"></div><button class="btn-add-extract" style="margin-top:10px;">+ Add Extraction</button><p class="form-hint">Extract values via dot notation (<code>body.data.token</code>), array index (<code>body.items[0].id</code>), or keywords (<code>.status</code>, <code>headers.Content-Type</code>, <code>body</code>).</p></div>
+                <div class="extract-editor"><div class="extracts-list"></div><button class="btn-add-extract" style="margin-top:10px;">+ Add Extraction</button><button type="button" class="btn btn-sm btn-secondary btn-ai-suggest ai-only" data-ai-action="suggest-extract" title="Suggest extractions from this step's last real response"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Suggest from last response</span></button><p class="form-hint">Extract values via dot notation (<code>body.data.token</code>), array index (<code>body.items[0].id</code>), or keywords (<code>.status</code>, <code>headers.Content-Type</code>, <code>body</code>).</p></div>
             </div>
             <!-- === WAVE3 assertions === -->
             <div class="tab-content" id="tab-assertions-${localStep.id}">
-                <div class="assertions-editor"><div class="assertions-list"></div><button class="btn-add-assertion" style="margin-top:10px;">+ Add Assertion</button><p class="form-hint">Assertions check a step's result after it runs. Target <code>status</code>, <code>duration</code> (ms), <code>headers.Name</code>, or <code>body.path</code> (e.g. <code>body.data.id</code>). A failed <em>critical</em> assertion stops the flow; others are non-blocking.</p></div>
+                <div class="assertions-editor"><div class="assertions-list"></div><button class="btn-add-assertion" style="margin-top:10px;">+ Add Assertion</button><button type="button" class="btn btn-sm btn-secondary btn-ai-suggest ai-only" data-ai-action="suggest-assert" title="Suggest assertions from this step's last real response"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Suggest from last response</span></button><p class="form-hint">Assertions check a step's result after it runs. Target <code>status</code>, <code>duration</code> (ms), <code>headers.Name</code>, or <code>body.path</code> (e.g. <code>body.data.id</code>). A failed <em>critical</em> assertion stops the flow; others are non-blocking.</p></div>
             </div>
             <!-- === END WAVE3 assertions === -->
              <div class="tab-content" id="tab-options-${localStep.id}">
@@ -914,6 +914,7 @@ function createConditionEditor(container, options) {
     // --- PATCH: Add Path input after Variable select ---
     const pathValue = localStep.conditionData.variable.split('.').slice(1).join('.') || '';
     container.innerHTML = `
+        <div class="form-group ai-nl-condition ai-only"><label>Describe it</label><div class="ai-inline-field"><input type="text" class="ai-nl-condition-input" placeholder="e.g. order total is above 1000"><button type="button" class="btn btn-sm btn-secondary btn-ai-suggest" data-ai-action="nl-condition" title="Turn the description into a condition"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Build condition</span></button></div></div>
         <div class="form-group"><label>Condition Logic</label><div class="condition-builder">
         <div class="condition-row">
             <div class="condition-item"><label for="cond-var-${localStep.id}">Variable</label><select id="cond-var-${localStep.id}"><option value="">-- Select --</option>${availableVarNames.sort().map(v => `<option value="${escapeHTML(v)}" ${localStep.conditionData.variable.split('.')[0] === v ? 'selected' : ''}>${escapeHTML(v)}</option>`).join('')}</select></div>

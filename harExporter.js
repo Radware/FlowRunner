@@ -209,7 +209,7 @@ export function generateHAR(executionResults, flowModel) {
             version: '1.2',
             creator: {
                 name: 'FlowRunner',
-                version: '1.4.1'
+                version: '1.5.0-beta.1'
             },
             entries: entries
         }

@@ -756,7 +756,7 @@ export function renderResultItemContent(listItem, resultData) {
         <div class="result-header" role="button" tabindex="0" title="${escapeHTML(stepName)} — ID: ${escapeHTML(stepId)}${hasDetail ? ' (click to expand)' : ''}">
             <span class="result-step-name">${escapeHTML(stepName)}</span>
             <span class="result-meta">${metaHtml}</span>
-            <span class="result-header-right">${headerBadgeHtml}<span class="result-status">${status.toUpperCase()}</span>${hasDetail ? '<svg class="icon icon-sm result-chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg>' : ''}</span>
+            <span class="result-header-right">${headerBadgeHtml}<button type="button" class="btn-ai-explain ai-only" data-ai-action="explain-result" title="Ask the AI Copilot what happened here"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg></button><span class="result-status">${status.toUpperCase()}</span>${hasDetail ? '<svg class="icon icon-sm result-chevron" aria-hidden="true"><use href="#i-chevron-down"/></svg>' : ''}</span>
         </div>
         <div class="result-detail">
         ${errorHtml}

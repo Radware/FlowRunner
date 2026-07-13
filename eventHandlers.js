@@ -53,6 +53,7 @@ import { initDemoMode } from './demoMode.js';
 import { maybeShowOnboarding, renderEmptyState } from './firstRun.js';
 import { startBackgroundRun, stopBackgroundRun, removeBackgroundRun, getBackgroundRuns } from './backgroundRuns.js';
 import { openRunPicker } from './runPicker.js';
+import { initAiUI, openAiModal } from './aiUI.js';
 import { openLaunchConfig } from './launchConfigPopover.js';
 import { launchCurrentFlow } from './launchFlows.js';
 
@@ -160,6 +161,8 @@ export function initializeEventListeners() {
     document.getElementById('bg-run-btn')?.addEventListener('click', (e) => openCurrentFlowConfig(e.currentTarget));
     // Runs page: the "New background run" button opens the full modal picker.
     document.getElementById('runs-new-run-btn')?.addEventListener('click', () => openRunPicker());
+    // Beta 1.5: AI Copilot (rail button, sparkle affordances, settings modal).
+    initAiUI();
     // Live re-render, COALESCED: notify() fires per step completion, which at a
     // 0ms continuous rate means hundreds of events/sec — rebuilding the board
     // (innerHTML) on each one janks the window and destroys the Stop/Remove
@@ -1196,6 +1199,7 @@ function buildCommandItems() {
         () => setActivePage(appState.activePage === 'runs' ? 'flow' : 'runs'),
         appState.activePage === 'runs' ? 'Return to the flow editor' : 'Launch + monitor flows in the background');
     push('Run flows in background…', () => openRunPicker(), 'Pick one or many flows to run');
+    push('AI Copilot…', () => openAiModal(), 'Local AI settings and models (beta)');
     if (hasFlow && (appState.currentFlowModel.steps || []).length) {
         push('Run current flow in background', () => launchCurrentFlow({}), 'Snapshot the open flow, keep editing');
     }

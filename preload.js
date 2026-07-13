@@ -90,6 +90,31 @@ const electronAPI = {
         return ipcRenderer.invoke('workspace:save', workspace);
     },
 
+    // --- Beta 1.5: AI Copilot (local model, opt-in) ---
+    ai: {
+        getState: () => ipcRenderer.invoke('ai:getState'),
+        setEnabled: (enabled) => ipcRenderer.invoke('ai:setEnabled', enabled),
+        selectModel: (id) => ipcRenderer.invoke('ai:selectModel', id),
+        downloadModel: (id) => ipcRenderer.invoke('ai:downloadModel', id),
+        cancelDownload: (id) => ipcRenderer.invoke('ai:cancelDownload', id),
+        deleteModel: (id) => ipcRenderer.invoke('ai:deleteModel', id),
+        generateStructured: (req) => ipcRenderer.invoke('ai:generateStructured', req),
+        generateProse: (req) => ipcRenderer.invoke('ai:generateProse', req),
+        cancelGeneration: (requestId) => ipcRenderer.invoke('ai:cancelGeneration', requestId),
+        onDownloadProgress: (callback) => {
+            ipcRenderer.removeAllListeners('ai:download-progress');
+            ipcRenderer.on('ai:download-progress', (event, payload) => callback(payload));
+        },
+        onChunk: (callback) => {
+            ipcRenderer.removeAllListeners('ai:chunk');
+            ipcRenderer.on('ai:chunk', (event, payload) => callback(payload));
+        },
+        onStateChanged: (callback) => {
+            ipcRenderer.removeAllListeners('ai:state-changed');
+            ipcRenderer.on('ai:state-changed', (event, payload) => callback(payload));
+        },
+    },
+
     // --- Dirty State Communication ---
     // Sets up a listener for messages from the main process asking for the dirty state
     onCheckDirtyState: (callback) => {

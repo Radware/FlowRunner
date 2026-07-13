@@ -19,6 +19,14 @@ import {
     WORKSPACE_DIR, WORKSPACE_FILE
 } from './config.js';
 import { parseWorkspace, serializeWorkspace } from './workspaceManager.js';
+// Beta 1.5: opt-in local AI copilot engine (lazy — imports node-llama-cpp on first use).
+import {
+    initLlmService, getState as llmGetState, setEnabled as llmSetEnabled,
+    selectModel as llmSelectModel, downloadModel as llmDownloadModel,
+    cancelDownload as llmCancelDownload, deleteModel as llmDeleteModel,
+    generateStructured as llmGenerateStructured, generateProse as llmGenerateProse,
+    cancelGeneration as llmCancelGeneration, shutdownLlm,
+} from './llmService.js';
 
 // ------------------------------------------------------------------
 // Provide a CommonJS‑style `require` helper for Playwright E2E tests
@@ -146,7 +154,7 @@ async function checkUnsavedChanges() {
 // --- Application Information ---
 const appName = 'FlowRunner';
 // Try reading version from package.json
-let appVersion = '1.4.1'; // Default version (Ensure this matches your actual package.json)
+let appVersion = '1.5.0-beta.1'; // Default version (Ensure this matches your actual package.json)
 try {
     const packageJsonPath = path.join(__dirname, 'package.json');
     const packageJsonContent = await fs.readFile(packageJsonPath, 'utf-8');
@@ -698,6 +706,33 @@ app.whenReady().then(async () => {
       }
   });
 
+  // --- Beta 1.5: AI Copilot IPC (thin pass-throughs to llmService) ---
+  initLlmService({
+      getStore,
+      userDataPath: app.getPath('userData'),
+      sendToRenderer: (channel, payload) => {
+          try {
+              if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+          } catch (e) { logger.warn('[IPC Main] ai send failed:', e); }
+      },
+  });
+  const aiHandle = (channel, fn) => ipcMain.handle(channel, async (event, ...args) => {
+      try { return { success: true, data: await fn(...args) }; }
+      catch (error) {
+          logger.warn(`[IPC Main] ${channel} error:`, error?.message || error);
+          return { success: false, error: error?.message || String(error) };
+      }
+  });
+  aiHandle('ai:getState', () => llmGetState());
+  aiHandle('ai:setEnabled', (enabled) => llmSetEnabled(enabled));
+  aiHandle('ai:selectModel', (id) => llmSelectModel(id));
+  aiHandle('ai:downloadModel', (id) => llmDownloadModel(id));
+  aiHandle('ai:cancelDownload', (id) => llmCancelDownload(id));
+  aiHandle('ai:deleteModel', (id) => llmDeleteModel(id));
+  aiHandle('ai:generateStructured', (req) => llmGenerateStructured(req));
+  aiHandle('ai:generateProse', (req) => llmGenerateProse(req));
+  aiHandle('ai:cancelGeneration', (requestId) => llmCancelGeneration(requestId));
+
   // +++ IPC LISTENER FOR OPENING EXTERNAL LINKS +++
   ipcMain.on('app:open-external-link', (event, urlToOpen) => {
       logger.info(`[IPC Main] Received 'app:open-external-link' request for: ${urlToOpen}`);
@@ -819,6 +854,7 @@ app.on('window-all-closed', function () {
 });
 
 app.on('before-quit', async (event) => {
+  shutdownLlm().catch(() => {}); // abort AI downloads/generations, free the model
   logger.info(`[Main app.on('before-quit')] Triggered. forceQuit: ${forceQuit}`);
   if (forceQuit) {
       logger.info('[Main before-quit] Force quitting enabled, proceeding to quit.');

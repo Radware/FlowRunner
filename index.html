@@ -25,6 +25,7 @@
         <symbol id="i-check-square" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></symbol>
         <symbol id="i-expand-h" viewBox="0 0 24 24"><path d="M9 6l-5 6 5 6M15 6l5 6-5 6"/></symbol>
         <symbol id="i-collapse-h" viewBox="0 0 24 24"><path d="M4 6l5 6-5 6M20 6l-5 6 5 6"/></symbol>
+        <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9zM19 15l.95 2.55L22.5 18.5l-2.55.95L19 22l-.95-2.55-2.55-.95 2.55-.95z"/></symbol>
         <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></symbol>
         <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></symbol>
         <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
@@ -85,6 +86,10 @@
                 title="Background Runs — launch flows and monitor them while you keep working">
                 <svg class="icon" aria-hidden="true"><use href="#i-repeat"/></svg>
                 <span class="rail-badge" id="rail-runs-badge" aria-hidden="true" hidden></span>
+            </button>
+            <button id="rail-ai-btn" class="rail-btn" aria-label="AI Copilot"
+                title="AI Copilot (beta) — a local model that helps you author and understand flows">
+                <svg class="icon" aria-hidden="true"><use href="#i-sparkle"/></svg>
             </button>
             <span class="rail-spacer" aria-hidden="true"></span>
             <button id="theme-toggle-btn" class="rail-btn theme-toggle" aria-pressed="false" title="Toggle light/dark theme">
@@ -335,6 +340,7 @@
                                 <option value="stopped">Stopped</option>
                             </select>
                             <div class="results-actions">
+                                <button type="button" class="btn btn-sm btn-secondary ai-only" data-ai-action="run-digest" title="Summarize this run with the AI Copilot"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg><span>Digest</span></button>
                                 <button id="export-results-json-btn" class="btn btn-sm btn-secondary" title="Export results to JSON" disabled>JSON</button>
                                 <button id="export-results-csv-btn" class="btn btn-sm btn-secondary" title="Export results to CSV" disabled>CSV</button>
                             </div>
@@ -355,7 +361,9 @@
                         <input type="text" id="global-flow-name" data-ref="flowNameInput" placeholder="Enter a name for this flow">
                     </div>
                     <div class="form-group">
-                        <label for="global-flow-description">Description</label>
+                        <label for="global-flow-description">Description
+                            <button type="button" class="btn-ai-sparkle ai-only" data-ai-action="describe-flow" title="Write a description from the flow's steps"><svg class="icon icon-sm" aria-hidden="true"><use href="#i-sparkle"/></svg></button>
+                        </label>
                         <textarea id="global-flow-description" data-ref="flowDescTextarea" rows="2" placeholder="Enter a description"></textarea>
                     </div>
 

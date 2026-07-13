@@ -65,6 +65,13 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 ### 2n. The launcher modules form intentional ES-module cycles (safe)
 - `fileOperations.js` <-> `launchFlows.js` <-> `flowIndex.js` import each other. This is fine ONLY because every cross-module reference is used inside a FUNCTION body, never at module-evaluation time (all top-level code is imports + literals + hoisted function declarations). If you add top-level code that calls across the cycle, it will read an undefined binding. Keep launcher cross-calls inside functions.
 
+### 2o. node-llama-cpp (AI Copilot) lifecycle + packaging traps
+- **Sequence slots leak if you create/dispose a session+sequence per request** — the 2nd `context.getSequence()` throws "No sequences left". Keep ONE persistent `LlamaChatSession` per loaded model and reset it per request with `setChatHistory([{type:'system',text}])`.
+- **Main process only.** Importing node-llama-cpp in the renderer crashes the app (documented upstream). All access goes through llmService + the `electronAPI.ai` bridge.
+- **asarUnpack is mandatory and `**/*.node` globs are NOT enough** — the loadable sidecars are .dll/.dylib in `bins/`; unpack the whole `node_modules/node-llama-cpp/bins` + `@node-llama-cpp/*` trees. Never move them with extraResources (breaks relative resolution).
+- **Windows: force `gpu:false`** while only CPU binaries are packaged, or the engine probes for Vulkan/CUDA builds that aren't shipped. The `${os}-${arch}*` file glob must keep the explicit `-vulkan/-cuda/-cuda-ext` excludes or the Windows installer grows ~300MB.
+- **Hybrid-"thinking" models are unsafe under grammar constraint** — Qwen3-1.7B emitted `</think>` garbage INTO schema-valid string fields (`/no_think` did not save it). Only put non-thinking instruct models in the catalog, and always semantically validate values in code.
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*

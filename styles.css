@@ -4524,3 +4524,112 @@ html.demo-mode .app-topbar #workspace-title { font-size: var(--fs-h3); }
 .app-container.inspector-expanded #runner-panel { width: min(900px, 60vw); }
 .app-container.inspector-expanded #runner-panel.collapsed { width: 46px; }
 @media (prefers-reduced-motion: reduce) { #runner-panel { transition: none; } }
+
+/* ==========================================================================
+   AI COPILOT (beta 1.5) — rail entry, settings modal + model catalog,
+   sparkle affordances, streaming answer panel. Opt-in: html.ai-ready gates
+   every affordance; the surface stays projector-clean when the copilot is off.
+   ========================================================================== */
+
+/* Gating: sparkle affordances exist in markup but only show when ready. */
+.ai-only { display: none !important; }
+html.ai-ready .ai-only { display: inline-flex !important; }
+#rail-ai-btn.active { color: var(--accent); }
+
+/* Inline sparkle buttons (name field, description, result rows) */
+.btn-ai-sparkle, .btn-ai-explain {
+    align-items: center; justify-content: center;
+    width: 26px; height: 26px; padding: 0;
+    background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm);
+    color: var(--text-muted); cursor: pointer;
+    transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.btn-ai-sparkle:hover, .btn-ai-explain:hover { background: var(--accent-soft); color: var(--accent); }
+.btn-ai-explain { width: 22px; height: 22px; }
+.ai-inline-field { display: flex; align-items: center; gap: 6px; }
+.ai-inline-field input { flex: 1; }
+.btn-ai-suggest { gap: 6px; margin-left: 8px; }
+.ai-working { opacity: 0.6; pointer-events: none; position: relative; }
+.ai-working .icon { animation: ai-spin 1.2s linear infinite; }
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+.ai-nl-condition .ai-inline-field input { font-family: var(--font-family); }
+
+/* Rows the copilot just filled in — a soft wash that fades as you touch them */
+.ai-suggested { background: var(--accent-soft); border-radius: var(--radius-sm); }
+
+/* --- settings modal --- */
+.ai-modal-overlay {
+    position: fixed; inset: 0;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding-top: 10vh;
+    background: color-mix(in oklab, var(--text) 45%, transparent);
+    z-index: 12500;
+}
+.ai-modal {
+    width: min(620px, 94vw); max-height: 80vh;
+    display: flex; flex-direction: column;
+    background: var(--surface-raised); color: var(--text);
+    border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-overlay); overflow: hidden;
+}
+.ai-modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-lg) var(--space-lg) var(--space-md);
+    border-bottom: 1px solid var(--border);
+}
+.ai-modal-title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--fs-h3); }
+.ai-modal-title .icon { color: var(--accent); }
+.ai-beta-tag {
+    font-size: var(--fs-caption); font-weight: 600; letter-spacing: 0.04em;
+    color: var(--accent); background: var(--accent-soft);
+    padding: 1px 8px; border-radius: var(--radius-full);
+}
+.ai-modal-body { padding: var(--space-lg); overflow-y: auto; display: flex; flex-direction: column; gap: var(--space-lg); }
+.ai-modal-note { color: var(--text-muted); margin: 0; }
+.ai-enable-row { display: flex; gap: var(--space-md); align-items: flex-start; cursor: pointer; }
+.ai-enable-row input { margin-top: 3px; accent-color: var(--accent); }
+.ai-enable-text { display: flex; flex-direction: column; gap: 2px; }
+.ai-enable-text small { color: var(--text-muted); }
+.ai-catalog { display: flex; flex-direction: column; gap: var(--space-sm); }
+.ai-catalog.disabled { opacity: 0.45; pointer-events: none; }
+.ai-model-card {
+    border: 1px solid var(--border); border-radius: var(--radius-md);
+    padding: var(--space-md); display: flex; flex-direction: column; gap: 6px;
+    background: var(--surface);
+}
+.ai-model-card.selected { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 4%, var(--surface)); }
+.ai-model-pick { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.ai-model-pick input { accent-color: var(--accent); }
+.ai-model-name { font-weight: 600; }
+.ai-model-detail { margin: 0; color: var(--text-muted); font-size: var(--fs-body); }
+.ai-model-meta { display: flex; gap: var(--space-md); color: var(--text-faint, var(--text-muted)); font-size: var(--fs-caption); font-variant-numeric: tabular-nums; }
+.ai-model-actions { display: flex; align-items: center; gap: var(--space-sm); margin-top: 2px; }
+.ai-model-ready { color: var(--run-success); font-size: var(--fs-caption); font-weight: 600; }
+.ai-dl-progress { flex: 1; height: 6px; border-radius: var(--radius-full); background: var(--surface-sunken); overflow: hidden; }
+.ai-dl-bar { display: block; height: 100%; width: 0; background: var(--accent); transition: width var(--dur-1) linear; }
+.ai-modal-status { color: var(--text-muted); font-size: var(--fs-caption); min-height: 1em; }
+
+/* --- streaming answer panel --- */
+.ai-answer {
+    margin: var(--space-sm) 0;
+    border: 1px solid color-mix(in oklab, var(--accent) 25%, var(--border));
+    border-radius: var(--radius-md);
+    background: color-mix(in oklab, var(--accent) 4%, var(--surface));
+    overflow: hidden;
+}
+.ai-answer-head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--accent); font-size: var(--fs-caption); font-weight: 600;
+}
+.ai-answer-head .ai-answer-close { margin-left: auto; }
+.ai-answer-text {
+    padding: var(--space-md);
+    font-size: var(--fs-body); line-height: 1.55;
+    white-space: pre-wrap; word-break: break-word;
+    max-height: 240px; overflow-y: auto;
+}
+.ai-answer.error .ai-answer-text { color: var(--run-error); }
+
+@media (prefers-reduced-motion: reduce) { .ai-working .icon { animation: none; } }

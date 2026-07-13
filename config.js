@@ -39,5 +39,5 @@ export const DEMO_MODE_KEY = 'flowrunnerDemoMode';
 export const LOG_LEVEL = 'info'; // Possible values: 'debug', 'info', 'warn', 'error'
 
 // --- Update Notification Config ---
-export const CURRENT_VERSION = '1.4.1'; // Update as needed for your release
+export const CURRENT_VERSION = '1.5.0-beta.1'; // Update as needed for your release
 export const GITHUB_RELEASES_API = 'https://api.github.com/repos/Radware/FlowRunner/releases/latest';

@@ -1,6 +1,6 @@
 # FlowRunner
 
-![Version](https://img.shields.io/badge/version-1.4.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.5.0--beta.1-8b5cf6.svg)
 
 <div align="center" style="margin-bottom: 25px; margin-top: 10px;">
   <div style="display: inline-block; background: #fff; border-radius: 18px; padding: 18px 36px; box-shadow: 0 2px 8px rgba(0,0,0,0.07);">
