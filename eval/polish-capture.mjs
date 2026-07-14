@@ -62,6 +62,13 @@ await sleep(400);
 await shot('05-editor-condition-light');
 await page.locator('.btn-cancel-step, .btn-save-step').last().click().catch(() => {});
 await sleep(200);
+// Drop the unconfigured condition step before running. An empty condition
+// legitimately errors at runtime ("Variable path is required") — that's
+// product-correct — but it would paint a red FAILED verdict across every
+// screenshot taken after the run. The condition editor is already captured (05).
+await page.locator('#flow-builder-mount .btn-delete-node').last().click().catch(() => {});
+await page.locator('#app-confirm-ok').click().catch(() => {}); // confirm "Delete step"
+await sleep(300);
 
 // 5. run -> results feed (collapsed + expanded + AI buttons)
 await page.locator('#run-flow-btn').click();
@@ -97,10 +104,19 @@ await sleep(300);
 
 // 9. drawer select mode + action bar + context menu
 await page.locator('#flow-select-toggle').click();
-await page.locator('#flow-list .recent-file-item').first().click().catch(() => {});
+await sleep(300); // let the list re-render with checkboxes (.select-mode)
+// Click the checkbox, not the row body: a row-body click while the working
+// flow is dirty falls through to a load and fires the discard guard. The
+// checkbox always toggles selection (fileOperations.js:450), never loads.
+const firstRow = page.locator('#flow-list .recent-file-item').first();
+await firstRow.locator('.flow-select-box').click().catch(() => firstRow.click().catch(() => {}));
 await sleep(200);
+// Keep the (dirty) working flow if a discard guard slipped in — selection
+// survives, so the shot shows a clean select-mode action bar, no modal.
+await page.locator('#app-confirm-cancel').click({ timeout: 700 }).catch(() => {});
+await sleep(150);
 await shot('11-select-mode-actionbar-light');
-await page.locator('#flow-list .recent-file-item').first().click({ button: 'right' }).catch(() => {});
+await firstRow.click({ button: 'right' }).catch(() => {});
 await sleep(200);
 await shot('12-context-menu-light');
 await page.keyboard.press('Escape');
