@@ -72,6 +72,11 @@ The `.flow.json` format is shared by **three independently-versioned apps**: Flo
 - **Windows: force `gpu:false`** while only CPU binaries are packaged, or the engine probes for Vulkan/CUDA builds that aren't shipped. The `${os}-${arch}*` file glob must keep the explicit `-vulkan/-cuda/-cuda-ext` excludes or the Windows installer grows ~300MB.
 - **Hybrid-"thinking" models are unsafe under grammar constraint** — Qwen3-1.7B emitted `</think>` garbage INTO schema-valid string fields (`/no_think` did not save it). Only put non-thinking instruct models in the catalog, and always semantically validate values in code.
 
+### 2p. macOS XProtect silently trashes the dev `Electron.app` — e2e fails ENOENT, then "malware"
+- **Symptom:** every e2e spec fails with `spawn node_modules/electron/dist/Electron.app/…/Electron ENOENT`; reinstalling via `node node_modules/electron/install.js` restores the file, but the next launch pops "Malware Blocked and Moved to Trash — Electron.app" and the binary vanishes again.
+- **Cause:** the npm-dist Electron (31.7.7) carries only a bare `linker-signed` ad-hoc signature with `Info.plist=not bound`. Modern macOS (seen on Darwin 25.2, 2026-07-31) scans executables on **every** launch — no quarantine xattr needed — and XProtect's heuristics match that weak-signature-Electron fingerprint (the same shape as Electron-repacked stealer malware). FlowRunner's code is never even loaded; the OS kills the generic launcher.
+- **Fix/lesson:** after any fresh electron install, deep re-sign the dev binary: `codesign --force --deep --sign - node_modules/electron/dist/Electron.app`. The bound ad-hoc signature changes the fingerprint and it launches clean (proven same-day: canary + full suite green immediately after). If e2e suddenly ENOENTs, `ls node_modules/electron/dist` first and suspect XProtect — don't debug the repo. **Release-relevant:** our shipped DMGs are unsigned and bundle the same Electron framework — before handing a build to testers, install it on a current-macOS machine and confirm it launches.
+
 ## Build & packaging
 
 ### 1. ⚠️ Missing files in `build.files` silently break packaged builds *(the #1 recurring mistake)*

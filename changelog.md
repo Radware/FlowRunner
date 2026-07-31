@@ -2,11 +2,18 @@
 
 > What we shipped and **why** (decisions + rationale). This is our decision record, not just a list of features. **Add an entry at the top whenever you land a meaningful change** — record the decision and the reasoning, not only the diff. Newest first.
 
-**Current version: 1.4.1.** A version bump touches 8 files — see [architecture.md](architecture.md) §9.
+**Current version: 1.5.0-beta.1** (this branch; latest stable is 1.4.1). A version bump touches 8 files — see [architecture.md](architecture.md) §9.
 
 > Dating note: README labels (e.g. v1.2.0 "Aug 2025") and git commit dates diverge (the v1.2.0 bump actually landed 2026-01-13, v1.2.1 on 2026-03-23). Git dates are authoritative for when code landed.
 
 ---
+
+## v1.5.0-beta.1 — first public beta: GitHub prerelease, cross-platform, semver-aware update check
+Shipped the AI-copilot branch to testers as a **GitHub prerelease** (`v1.5.0-beta.1`, explicitly *not* "latest"). Decisions and why:
+- **Built by the existing CI matrix, released by hand.** `build.yml`'s publish job only fires on push to main (by design — betas must never overwrite the stable release or its `release.md` body), so the flow is: `gh workflow run build.yml --ref beta/1.5-local-ai` → download the three artifacts → rename to the `FlowRunnerSetup-*` convention → `gh release create v1.5.0-beta.1 --prerelease --latest=false` with `release-v1.5.0-beta.1.md` as the body.
+- **Prerelease-not-latest is load-bearing:** the in-app update check reads `releases/latest`, so stable 1.4.1 users never see the beta.
+- **Fixed `compareVersions` to be semver-aware** (`appFeatures.js` + new `__tests__/compareVersions.test.js`). The old numeric split turned `"1.5.0-beta.1"` into `[1,5,NaN,1]`, which made GA `1.5.0` compare *lower* than its own beta — beta installs would never have been told the stable release exists. Prerelease now sorts below its GA core (and older stables still never trigger a downgrade nag). The fix only helps if it ships *inside* the beta, hence in scope for this release.
+- **README.md / release.md intentionally stay at 1.4.1** on this branch: both describe the stable channel (release.md is the body the main-branch publish job uses). They get bumped when 1.5.0 goes GA. Beta notes live in `release-v1.5.0-beta.1.md` (includes the IT note: unsigned builds, Windows CPU-only inference).
 
 ## v1.5.0-beta.1 — pixel-level polish audit (spacing, control heights, tokens) across every surface
 A multi-agent audit (6 surface specialists reading real screenshots + a computed-style dump of ~60 selectors in both themes, then an adversarial verify pass that had to locate each offending rule in `styles.css` and prove the numbers) surfaced 59 findings; 45 survived verification and were applied. Harness lives in `eval/polish-capture.mjs` (drives the installed app, writes screenshots + `styles-{light,dark}.json`); the before/after numeric diff is the proof of record. Themes shared: every changed selector moved byte-identically in light and dark. Highlights:

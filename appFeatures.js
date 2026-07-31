@@ -157,13 +157,39 @@ export async function manualCheckForUpdate() {
 
 // --- Version Comparison (Keep as is) ---
 export function compareVersions(a, b) {
-    const pa = a.split('.').map(Number);
-    const pb = b.split('.').map(Number);
-    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-        const na = pa[i] || 0;
-        const nb = pb[i] || 0;
+    // Semver-aware: "1.5.0" > "1.5.0-beta.1", so beta builds still hear about the GA release.
+    const parse = (v) => {
+        const [core, ...rest] = String(v).split('-');
+        return {
+            core: core.split('.').map(Number),
+            pre: rest.length ? rest.join('-').split('.') : null,
+        };
+    };
+    const va = parse(a);
+    const vb = parse(b);
+    for (let i = 0; i < Math.max(va.core.length, vb.core.length); i++) {
+        const na = va.core[i] || 0;
+        const nb = vb.core[i] || 0;
         if (na > nb) return 1;
         if (na < nb) return -1;
+    }
+    if (!va.pre && !vb.pre) return 0;
+    if (!va.pre) return 1;  // a release outranks any prerelease of the same core
+    if (!vb.pre) return -1;
+    for (let i = 0; i < Math.max(va.pre.length, vb.pre.length); i++) {
+        const ia = va.pre[i];
+        const ib = vb.pre[i];
+        if (ia === undefined) return -1; // shorter prerelease sorts first (semver)
+        if (ib === undefined) return 1;
+        const numA = /^\d+$/.test(ia);
+        const numB = /^\d+$/.test(ib);
+        if (numA && numB) {
+            if (Number(ia) !== Number(ib)) return Number(ia) < Number(ib) ? -1 : 1;
+        } else if (numA !== numB) {
+            return numA ? -1 : 1; // numeric identifiers sort before alphanumeric (semver)
+        } else if (ia !== ib) {
+            return ia < ib ? -1 : 1;
+        }
     }
     return 0;
 }
