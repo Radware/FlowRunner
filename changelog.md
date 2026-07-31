@@ -8,6 +8,12 @@
 
 ---
 
+## v1.5.0-beta.1 — ship-blocker same day: Apple revoked the stock Electron stub; mac app now re-signed at pack time
+Hours after the prerelease went up, launching FlowRunner on an up-to-date Mac died with *"'FlowRunner' was not opened because it contains malware"* — including the 18-day-old installed copy. Root cause (gotchas 2p): Apple deny-listed the cdhash of the **unsigned Electron 31.7.7 launcher stub**, which is byte-identical in every unsigned Electron app; `spctl --assess` reports "notarization indicates this code has been revoked", quarantine not required. Decisions:
+- **`scripts/afterPackMacSign.cjs`** (electron-builder `afterPack`, darwin-only): deep ad-hoc re-sign at pack time → fresh cdhashes off the deny-list → verdict returns to the plain "rejected" of any unsigned app (direct launch fine, quarantined downloads get the standard "Open Anyway" flow). Build-time script, deliberately **not** in `build.files`. Real Developer ID signing + notarization remains a GA task.
+- **Release + tag recreated** at the hook commit so the published DMG carries the re-signed app; win/linux rebuilt alongside for provenance (Apple-only issue, but one build → one commit).
+- **Lesson institutionalized:** a launch-alive canary lies — the revocation check is async/cached (our CI build launched fine, then assessed "revoked" minutes later). The pre-ship gate for mac builds is `spctl --assess --type execute` on the packed app.
+
 ## v1.5.0-beta.1 — first public beta: GitHub prerelease, cross-platform, semver-aware update check
 Shipped the AI-copilot branch to testers as a **GitHub prerelease** (`v1.5.0-beta.1`, explicitly *not* "latest"). Decisions and why:
 - **Built by the existing CI matrix, released by hand.** `build.yml`'s publish job only fires on push to main (by design — betas must never overwrite the stable release or its `release.md` body), so the flow is: `gh workflow run build.yml --ref beta/1.5-local-ai` → download the three artifacts → rename to the `FlowRunnerSetup-*` convention → `gh release create v1.5.0-beta.1 --prerelease --latest=false` with `release-v1.5.0-beta.1.md` as the body.

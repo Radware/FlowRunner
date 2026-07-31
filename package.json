@@ -69,6 +69,7 @@
   "build": {
     "appId": "com.radware.flowrunner",
     "productName": "FlowRunner",
+    "afterPack": "scripts/afterPackMacSign.cjs",
     "copyright": "Copyright \u00a9 2024 Radware ASE Team",
     "files": [
       "main.js",
