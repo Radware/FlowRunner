@@ -24,7 +24,7 @@ It also learns your taste locally: suggestions you accept are remembered per API
 
 ## Read before installing (beta notes)
 
-- **These builds are unsigned.** Windows SmartScreen will warn: choose *More info → Run anyway*. If your IT policy blocks unsigned installers, ask them to allowlist this build; signing is planned for the stable release.
+- **These builds are unsigned.** Windows SmartScreen will warn: choose *More info → Run anyway*. On macOS, if the first launch is blocked, allow it under *System Settings → Privacy & Security → "Open Anyway"* (recent macOS no longer honors right-click → Open). If your IT policy blocks unsigned installers, ask them to allowlist this build; signing is planned for the stable release.
 - **Windows runs the model on CPU in this beta.** Generations work but take noticeably longer than on macOS, where Apple Silicon's GPU is used. GPU builds for Windows come later.
 - The AI is **opt-in**. Until you enable it, nothing is downloaded and FlowRunner behaves exactly like 1.4.1.
 - This is a **pre-release**: it is not marked "latest" on GitHub, the in-app update check will never ask a stable install to "upgrade" to it, and beta installs will be notified when 1.5.0 stable ships.
